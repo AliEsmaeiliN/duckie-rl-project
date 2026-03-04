@@ -1,0 +1,43 @@
+# Core RL and Simulation
+gym==0.26.2
+gymnasium==1.2.3
+ale-py==0.11.2
+pygame==2.1.0
+PyOpenGL==3.1.0
+pyrender==0.1.45
+
+# Duckietown Ecosystem
+aido-protocols-daffy==6.1.1
+duckietown-serialization-ds1==1.1.1
+duckietown-world-daffy==6.4.3
+PyGeometry-z6==2.1.5
+zuper-commons-z6==6.2.4
+zuper-ipce-z6==6.1.2
+zuper-nodes-z6==6.2.17
+zuper-typing-z6==6.2.3
+
+# Utilities and Compatibility (Pinned to your working versions)
+protobuf==3.20.3
+absl-py==1.4.0
+wandb==0.13.11
+moviepy==1.0.3
+imageio-ffmpeg==0.3.0
+opencv-python==4.10.0.84
+pydantic<2.0
+
+click==8.1.3
+cloudpickle==3.1.0
+coloredlogs==15.0.1
+dataclasses-json==0.6.7
+docstring-parser==0.15
+typing-inspect==0.9.0
+tyro==0.5.10
+
+# Missing
+carnivalmirror==0.6.2
+pyglet==1.5.27
+pyzmq==26.2.0
+
+# CleanRL
+tensorboard
+tqdm
