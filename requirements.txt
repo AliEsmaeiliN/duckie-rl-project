@@ -39,5 +39,6 @@ pyglet==1.5.27
 pyzmq==26.2.0
 
 # CleanRL
+setuptools
 tensorboard
 tqdm

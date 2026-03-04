@@ -29,6 +29,13 @@ Welcome to <b>Duckietown</b>!
 </h2>
 
 ## Introduction
+Duckie-RL is a specialized fork of the Duckietown Universe simulator, optimized for Reinforcement Learning (SAC, TD3, PPO) using the CleanRL framework. Written in pure Python/OpenGL (Pyglet), it places your agent—a Duckiebot—inside a hectic environment featuring road loops, intersections, obstacles, and pedestrians.
+
+This version has been refactored to support:
+
+    Gymnasium API: Updated for compatibility with modern RL libraries.
+
+    Hardware Acceleration: Optimized for NVIDIA GPUs (GTX 1650/RTX series).
 
 Gym-Duckietown is a simulator for the [Duckietown](https://duckietown.org) Universe, written in pure Python/OpenGL (Pyglet). It places your agent, a Duckiebot, inside of an instance of a Duckietown: a loop of roads with turns, intersections, obstacles, Duckie pedestrians, and other Duckiebots. It can be a pretty hectic place!
 
@@ -80,8 +87,8 @@ Duckiebot-v0
 ## Installation
 
 Requirements:
-- Python 3.6+
-- OpenAI gym
+- Python 3.10+
+- Gymnasium
 - NumPy
 - Pyglet
 - PyYAML
@@ -104,15 +111,15 @@ should install [PyTorch](http://pytorch.org/).
 Alternatively, you can install all the dependencies, including PyTorch, using Conda as follows. For those trying to use this package on MILA machines, this is the way to go:
 
 ```
-git clone https://github.com/duckietown/gym-duckietown.git
-cd gym-duckietown
+git clone https://github.com/AliEsmaeiliN/duckie-rl-project.git
+cd duckie-rl-project
 conda env create -f environment.yaml
 ```
 
 Please note that if you use Conda to install this package instead of pip, you will need to activate your Conda environment and add the package to your Python path before you can use it:
 
 ```
-source activate gym-duckietown
+source activate duckie-rl
 export PYTHONPATH="${PYTHONPATH}:`pwd`"
 ```
 
@@ -168,14 +175,18 @@ There is a simple UI application which allows you to control the simulation or r
 ./manual_control.py --env-name Duckietown-udem1-v0
 ```
 
-There is also a script to run automated tests (`run_tests.py`) and a script to gather performance metrics (`benchmark.py`).
+There is also a script to run automated tests (`run_tests.py`).
+Verify your installation, CUDA status, and OpenGL vendor by running the integrated test suite:
+```
+./run_tests.py
+```
 
 ### Reinforcement Learning
 
-To train a reinforcement learning agent, you can use the code provided under [/pytorch_rl](/pytorch_rl). I recommend using the A2C or ACKTR algorithms. A sample command to launch training is:
+This workspace is designed to work with CleanRL. To train a SAC or TD3 agent, move your scripts to the [rl](/rl). folder and run:
 
 ```
-python3 pytorch_rl/main.py --no-vis --env-name Duckietown-small_loop-v0 --algo a2c --lr 0.0002 --max-grad-norm 0.5 --num-steps 20
+python rl/sac_continuous_action.py --env-id map
 ```
 
 Then, to visualize the results of training, you can run the following command. Note that you can do this while the training process is still running. Also note that if you are running this through SSH, you will need to enable X forwarding to get a display:
@@ -184,27 +195,6 @@ Then, to visualize the results of training, you can run the following command. N
 python3 pytorch_rl/enjoy.py --env-name Duckietown-small_loop-v0 --num-stack 1 --load-dir trained_models/a2c
 ```
 
-### Imitation Learning
-
-There is a script in the `experiments` directory which automatically generates a dataset of synthetic demonstrations. It uses hillclimbing to optimize the reward obtained, and outputs a JSON file:
-
-```
-experiments/gen_demos.py --map-name loop_obstacles
-```
-
-Then you can start training an imitation learning model (conv net) with:
-
-```
-experiments/train_imitation.py --map-name loop_obstacles
-```
-
-Finally, you can visualize what the trained model is doing with:
-
-```
-experiments/control_imitation.py --map-name loop_obstacles
-```
-
-Note that it is possible to have `gen_demos.py` and `train_imitate.py` running simultaneously, so that training takes place while new demonstrations are being generated. You can also run `control_imitate.py` periodically during training to check on learning progress.
 
 ## Design
 
@@ -251,10 +241,6 @@ The simulator uses continuous actions by default. Actions passed to the `step()`
 ### Reward Function
 
 The default reward function tries to encourage the agent to drive forward along the right lane in each tile. Each tile has an associated bezier curve defining the path the agent is expected to follow. The agent is rewarded for being as close to the curve as possible, and also for facing the same direction as the curve's tangent. The episode is terminated if the agent gets too far outside of a drivable tile, or if the `max_steps` parameter is exceeded. See the `step` function in [this source file](https://github.com/duckietown/gym-duckietown/blob/master/gym_duckietown/envs/simplesim_env.py).
-
-## Troubleshooting
-
-If you run into problems of any kind, don't hesitate to [open an issue](https://github.com/duckietown/gym-duckietown/issues) on this repository. It's quite possible that you've run into some bug we aren't aware of. Please make sure to give some details about your system configuration (ie: PC or Max, operating system), and to paste the command you used to run the simulator, as well as the complete error message that was produced, if any.
 
 ### ImportError: Library "GLU" not found
 
