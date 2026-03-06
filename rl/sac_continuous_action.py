@@ -50,7 +50,7 @@ class Args:
     """total timesteps of the experiments"""
     num_envs: int = 1
     """the number of parallel game environments"""
-    buffer_size: int = int(1e5) # image input: we can not have too many 1e6
+    buffer_size: int = int(3e4) # image input: we can not have too many 1e6
     """the replay memory buffer size"""
     gamma: float = 0.99
     """the discount factor gamma"""
