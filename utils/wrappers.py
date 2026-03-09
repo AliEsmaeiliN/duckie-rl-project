@@ -49,10 +49,6 @@ class ResizeWrapper(gym.ObservationWrapper):
         )
         self.shape = shape # (120, 160, 3)
     def observation(self, observation):
-        #from scipy.misc import imresize
-        from PIL import Image
-
-        #return imresize(observation, self.shape)
         
         resized = Image.fromarray(observation).resize((self.shape[1], self.shape[0]))
         return np.array(resized)
@@ -115,33 +111,3 @@ class ActionWrapper(gym.ActionWrapper):
     def action(self, action):
         action_ = [action[0] * 0.8, action[1]]
         return action_
-
-class CropResizeWrapper(gym.ObservationWrapper):
-    def __init__(self, env, shape=(84, 84)):
-        super().__init__(env)
-        self.shape = shape
-        # Update the observation space to the new dimensions
-        # Assuming RGB (3 channels)
-        self.observation_space = spaces.Box(
-            low=0, 
-            high=255, 
-            shape=(self.shape[0], self.shape[1], 3), 
-            dtype=np.uint8
-        )
-
-    def observation(self, obs):
-        # 1. Convert to PIL for easy manipulation
-        img = Image.fromarray(obs)
-        
-        width, height = img.size
-        
-        # 2. Crop: Keep the bottom 2/3
-        # PIL crop box is (left, top, right, bottom)
-        top_boundary = int(height * (1/3))
-        img = img.crop((0, top_boundary, width, height))
-        
-        # 3. Resize to target shape (84x84)
-        # Note: Image.resize takes (width, height)
-        img = img.resize((self.shape[1], self.shape[0]), Image.BILINEAR)
-        
-        return np.array(img)

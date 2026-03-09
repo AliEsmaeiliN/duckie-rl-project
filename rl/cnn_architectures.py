@@ -64,7 +64,7 @@ class ImpalaCNNLN(nn.Module):
 
 class ImpalaCNN(nn.Module):
     """A more efficient, high-stride CNN for faster feature extraction."""
-    def __init__(self, in_channels=12, feature_dim=256, default_init=True):
+    def __init__(self, in_channels=9, feature_dim=50, default_init=True):
 
         super().__init__()
 
