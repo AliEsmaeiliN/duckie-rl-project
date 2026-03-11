@@ -12,7 +12,7 @@ def parse_args():
                         help="The name of the Duckietown map")
     parser.add_argument("--num-episodes", type=int, default=5,
                         help="Number of evaluation episodes")
-    parser.add_argument("--render", action="store_true", default=True,
+    parser.add_argument("--render", action="store_true", default=False,
                         help="Whether to render the environment")
     parser.add_argument("--capture-video", type=bool, default=True,
                         help="Capture video of the evaluation episodes")

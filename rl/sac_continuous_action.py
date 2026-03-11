@@ -97,6 +97,7 @@ def save_model(actor, qf1, qf2, step, run_name, suffix=""):
 
 def make_env(seed, idx, capture_video, run_name):
     def thunk():
+        render_mode = "rgb_array" if (capture_video and idx == 0) else None
         # 1. Initializing the Duckietown env
         env = DuckietownEnv(
             seed=123,  # random seed
@@ -108,6 +109,7 @@ def make_env(seed, idx, capture_video, run_name):
             accept_start_angle_deg=4,  # start close to straight
             full_transparency=True,
             distortion=False,
+            render_mode=render_mode,
             frame_skip = 3
         )
         print("Initialized environment")

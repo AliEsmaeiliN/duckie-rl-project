@@ -196,7 +196,7 @@ class Simulator(gym.Env):
     basic differential-drive dynamics.
     """
 
-    metadata = {"render.modes": ["human", "rgb_array", "app"], "video.frames_per_second": 30}
+    metadata = {"render_modes": ["human", "rgb_array", "app"], "render.modes": ["human", "rgb_array", "app"], "video.frames_per_second": 30}
 
     cur_pos: np.ndarray
     cam_offset: np.ndarray
@@ -234,7 +234,8 @@ class Simulator(gym.Env):
         color_sky: Sequence[float] = BLUE_SKY,
         style: str = "photos",
         enable_leds: bool = False,
-        draw_trajectory: list[str] = None
+        draw_trajectory: list[str] = None,
+        render_mode: str = None
     ):
         """
 
@@ -267,7 +268,8 @@ class Simulator(gym.Env):
             information=information,
             nvidia_around=os.path.exists("/proc/driver/nvidia/version"),
         )
-
+        # adding render method 
+        self.render_mode= render_mode
         # first initialize the RNG
         self.seed_value = seed
         #self.seed(seed=self.seed_value)
@@ -2142,15 +2144,17 @@ class Simulator(gym.Env):
         gl.glLoadIdentity()
         gl.glOrtho(0, WINDOW_WIDTH, 0, WINDOW_HEIGHT, 0, 10)
 
+        display_img = np.ascontiguousarray(np.flip(img, axis=0))
+
         # Draw the image to the rendering window
         width = img.shape[1]
         height = img.shape[0]
-        img = np.ascontiguousarray(np.flip(img, axis=0))
+        #img = np.ascontiguousarray(np.flip(img, axis=0))
         img_data = image.ImageData(
             width,
             height,
             "RGB",
-            img.ctypes.data_as(POINTER(gl.GLubyte)),
+            display_img.ctypes.data_as(POINTER(gl.GLubyte)),
             pitch=width * 3,
         )
         img_data.blit(0, 0, 0, width=WINDOW_WIDTH, height=WINDOW_HEIGHT)
