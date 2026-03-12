@@ -39,7 +39,6 @@ class MotionBlurWrapper(Simulator):
 
 class ResizeWrapper(gym.ObservationWrapper):
     def __init__(self, env=None, shape=(120, 160, 3)):
-        #super(ResizeWrapper, self).__init__(env)
         super().__init__(env)
         self.observation_space = spaces.Box(
             low=0, 
@@ -59,7 +58,6 @@ class ResizeWrapper(gym.ObservationWrapper):
 
 class NormalizeWrapper(gym.ObservationWrapper):
     def __init__(self, env=None):
-        #super(NormalizeWrapper, self).__init__(env)
         super().__init__(env)
         self.obs_lo = self.observation_space.low[0, 0, 0]
         self.obs_hi = self.observation_space.high[0, 0, 0]
@@ -75,7 +73,6 @@ class NormalizeWrapper(gym.ObservationWrapper):
 
 class ImgWrapper(gym.ObservationWrapper):
     def __init__(self, env=None):
-        #super(ImgWrapper, self).__init__(env)
         super().__init__(env)
         obs_shape = self.observation_space.shape
         self.observation_space = spaces.Box(
@@ -91,16 +88,11 @@ class ImgWrapper(gym.ObservationWrapper):
 
 class DtRewardWrapper(gym.RewardWrapper):
     def __init__(self, env):
-        #super(DtRewardWrapper, self).__init__(env)
         super().__init__(env)
 
     def reward(self, reward):
         if reward == -1000:
             reward = -10
-        #elif reward > 0:
-        #    reward += 10
-        #else:
-        #    reward += 4
 
         return reward
 
@@ -108,7 +100,6 @@ class DtRewardWrapper(gym.RewardWrapper):
 # this is needed because at max speed the duckie can't turn anymore
 class ActionWrapper(gym.ActionWrapper):
     def __init__(self, env):
-        #super(ActionWrapper, self).__init__(env)
         super().__init__(env)
 
     def action(self, action):

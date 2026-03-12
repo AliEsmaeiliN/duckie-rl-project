@@ -444,75 +444,7 @@ class Simulator(gym.Env):
             normals.extend(normal)
             colors.extend(color)
 
-            #
-            # normals.extend([0.0, 1.0, 0.0] * 4)
 
-        # def get_quad_vertices(cx, cz, hs) -> Tuple[List[float], List[float], List[float]]:
-        #     v = [
-        #         -hs + cx,
-        #         0.0,
-        #         -hs + cz,
-        #         #
-        #         hs + cx,
-        #         0.0,
-        #         -hs + cz,
-        #         #
-        #         hs + cx,
-        #         0.0,
-        #         hs + cz,
-        #         #
-        #         -hs + cx,
-        #         0.0,
-        #         hs + cz,
-        #     ]
-        #     n = [0.0, 1.0, 0.0] * 4
-        #     t = [0.0, 1.0,
-        #          #
-        #          1.0, 1.0,
-        #          #
-        #          1.0, 0.0,
-        #          #
-        #          0.0, 0.0]
-        #     return v, n, t
-
-        # Create the vertex list for our road quad
-        # Note: the vertices are centered around the origin so we can easily
-        # rotate the tiles about their center
-
-        # verts = []
-        # texCoords = []
-        # normals = []
-        #
-        # v, n, t = get_quad_vertices(cx=0, cz=0, hs=half_size)
-        # verts.extend(v)
-        # normals.extend(n)
-        # texCoords.extend(t)
-
-        # verts = [
-        #     -half_size,
-        #     0.0,
-        #     -half_size,
-        #     #
-        #     half_size,
-        #     0.0,
-        #     -half_size,
-        #     #
-        #     half_size,
-        #     0.0,
-        #     half_size,
-        #     #
-        #     -half_size,
-        #     0.0,
-        #     half_size,
-        # ]
-        # texCoords = [1.0, 0.0,
-        #              0.0, 0.0,
-        #              0.0, 1.0,
-        #              1.0, 1.0]
-        # Previous choice would reflect the texture
-        # logger.info(nv=len(vertices), nt=len(textures), nn=len(normals), vertices=vertices,
-        # textures=textures,
-        #             normals=normals)
         total = len(vertices) // 3
         self.road_vlist = pyglet.graphics.vertex_list(
             total, ("v3f", vertices), ("t2f", textures), ("n3f", normals), ("c4B", colors)
@@ -785,29 +717,6 @@ class Simulator(gym.Env):
         
         # Return first observation
         return obs, info
-
-    '''def _load_map(self, map_name: str):
-        """
-        Load the map layout from a YAML file
-        """
-
-        # Store the map name
-        if os.path.exists(map_name) and os.path.isfile(map_name):
-            # if env is loaded using gym's register function, we need to extract the map name from the complete url
-            map_name = os.path.basename(map_name)
-            assert map_name.endswith(".yaml")
-            map_name = ".".join(map_name.split(".")[:-1])
-        self.map_name = map_name
-
-        # Get the full map file path
-        self.map_file_path = get_resource_path(f"{map_name}.yaml")
-
-        logger.debug(f'loading map file "{self.map_file_path}"')
-
-        with open(self.map_file_path, "r") as f:
-            self.map_data = yaml.load(f, Loader=yaml.Loader)
-
-        self._interpret_map(self.map_data)'''
         
     def _load_map(self, map_name: str):
      """
@@ -1753,23 +1662,23 @@ class Simulator(gym.Env):
                     
 
     def compute_reward(self, pos, angle, speed):
-        # Compute the collision avoidance penalty
-        #col_penalty = self.proximity_penalty2(pos, angle)
-        #print(col_penalty)
-
+        """
+        Refined reward function for oscillation reduction and lane alignment.
+        """
         # Get the position relative to the right lane tangent
         try:
             lp = self.get_lane_pos2(pos, angle)
         except NotInLane:
-            reward = -10
-        else:
+            return -10.0  
+        
+        reward_speed = 2.0 * speed
+        reward_alignment = 2.0 * (lp.dot_dir ** 2) if lp.dot_dir > 0 else 4.0 * lp.dot_dir # tanh like behaviour to add a higher gradint near 1
+        reward_distance = -10.0 * np.abs(lp.dist)
+        reward_angle = -0.1 * np.abs(lp.angle_deg)
 
-            speed_reward = 5.0 * speed * lp.dot_dir
-            dist_penalty = -2.0 * np.abs(lp.dist)
-            # Compute the reward
-            reward = speed_reward + dist_penalty            
+        reward = reward_speed + reward_alignment + reward_distance + reward_angle
+
         return reward
-    
 
     def step(self, action: np.ndarray):
         action = np.clip(action, -1, 1)
