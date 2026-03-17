@@ -25,7 +25,7 @@ def evaluate():
 
     # 1. Recreate the environment exactly as it was during training
     # Note: make_env returns a thunk, so we call it and then wrap it if needed
-    env_func = make_env(seed=42, idx=0, capture_video=args.capture_video, run_name="eval")
+    env_func = make_env(seed=42, idx=0, capture_video=args.capture_video, run_name="eval", max_steps_d = 5000)
     env = env_func()
 
     if args.capture_video:

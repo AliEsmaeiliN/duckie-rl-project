@@ -107,14 +107,14 @@ def save_model(actor, qf1, qf2, step, run_name, suffix=""):
     print(f"Saved: {model_path} at Step:{step}")
 
 
-def make_env(seed, idx, capture_video, run_name):
+def make_env(seed, idx, capture_video, run_name, max_steps_d = 1000):
     def thunk():
         render_mode = "rgb_array" if (capture_video and idx == 0) else None
         # 1. Initializing the Duckietown env
         env = DuckietownEnv(
             seed=123,  # random seed
             map_name="oval_loop",
-            max_steps=1000,  # we don't want the gym to reset itself
+            max_steps= max_steps_d,  # we don't want the gym to reset itself
             domain_rand=False,
             camera_width=160,
             camera_height=120,
