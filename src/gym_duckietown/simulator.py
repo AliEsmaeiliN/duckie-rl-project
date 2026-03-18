@@ -636,6 +636,35 @@ class Simulator(gym.Env):
             #logger.info(f"Using map pose start. \n Pose: {propose_pos}, Angle: {propose_angle}")
 
         else:
+
+            # ======================================================
+            # NEW PERFECT SPAWN LOGIC (Using Geometry)
+            # ======================================================
+
+            # Finding the coordinate and curves of the specific tile
+            i, j = tile["coords"]
+            curves = tile["curves"]
+
+            # Randomly picking one of the cureves 
+            curve_idx = self.np_random.integers(0, len(curves))
+            curve_rand = curves[curve_idx]
+
+            # Choosing a random point along the curve
+            t = self.np_random.uniform(0.2, 0.8)
+
+            # Getting the complete position and angles on the selected point
+            propose_pos = bezier_point(curve_rand, t)
+            tangent = bezier_tangent(curve_rand, t)
+
+            # Converting to heading angle
+            # In Duckietown's coordinate system, angle is math.atan2(-dz, dx)
+            propose_angle = math.atan2(-tangent[2], tangent[0]) 
+
+            # ======================================================
+            # ORIGINAL DUCKIETOWN SPAWN LOGIC (Commented out)
+            # ======================================================
+
+            '''
             # Keep trying to find a valid spawn position on this tile
             for _ in range(MAX_SPAWN_ATTEMPTS):
                 i, j = tile["coords"]
@@ -684,6 +713,7 @@ class Simulator(gym.Env):
                 propose_angle = 1
 
                 # raise Exception(msg)
+            '''
 
         self.cur_pos = propose_pos
         self.cur_angle = propose_angle
@@ -1719,7 +1749,7 @@ class Simulator(gym.Env):
             done_code = "max-steps-reached"
         else:
             done = False
-            reward = self.compute_reward(self.cur_pos, self.cur_angle, self.robot_speed, action)
+            reward = self.compute_reward(self.cur_pos, self.cur_angle, self.speed, action)
             msg = ""
             done_code = "in-progress"
         return DoneRewardInfo(done=done, done_why=msg, reward=reward, done_code=done_code)

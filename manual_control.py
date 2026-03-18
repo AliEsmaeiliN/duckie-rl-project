@@ -129,7 +129,7 @@ def update(dt):
         action *= 1.5
 
     obs, reward, done, truncated, info = env.step(action)
-    print("step_count = %s, reward=%.3f" % (env.unwrapped.step_count, reward))
+    #print("step_count = %s, reward=%.3f" % (env.unwrapped.step_count, reward))
     #print(f"Observation shape: {obs.shape}")
 
     if key_handler[key.RETURN]:

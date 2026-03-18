@@ -149,7 +149,7 @@ class DebugRewardWrapper(gym.Wrapper):
             lp = sim.get_lane_pos2(sim.cur_pos, sim.cur_angle)
             
             # Calculate your components
-            r_speed = 2.0 * sim.robot_speed
+            r_speed = 2.0 * sim.speed
             r_align = 2.0 * (lp.dot_dir ** 2) if lp.dot_dir > 0 else 4.0 * lp.dot_dir
             r_dist  = -10.0 * np.abs(lp.dist)
             r_angle = -0.1 * np.abs(lp.angle_deg)
