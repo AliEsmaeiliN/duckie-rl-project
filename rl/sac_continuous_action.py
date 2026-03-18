@@ -58,7 +58,7 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Oval-v1.2"
     """the environment id of the task"""
-    total_timesteps: int = 1000000
+    total_timesteps: int = 1000001
     """total timesteps of the experiments"""
     num_envs: int = 1
     """the number of parallel game environments"""
@@ -84,7 +84,7 @@ class Args:
     """Entropy regularization coefficient."""
     autotune: bool = True
     """automatic tuning of the entropy coefficient"""
-    save_interval: int = 50000
+    save_interval: int = 1e5
     """the interval to save the Actor periodically"""
     save_model: bool = True
     """whether to save model into the `runs/{run_name}` folder"""
@@ -96,7 +96,7 @@ def save_model(actor, qf1, qf2, step, run_name, suffix=""):
         os.makedirs(model_dir)
 
     label = suffix if suffix else "latest"
-    model_path = f"{model_dir}/sac_step_{label}.cleanrl_model"
+    model_path = f"{model_dir}/{args.env_id}_sac_{label}.cleanrl_model"
 
     torch.save({
         'actor_state_dict': actor.state_dict(),
@@ -107,12 +107,12 @@ def save_model(actor, qf1, qf2, step, run_name, suffix=""):
     print(f"Saved: {model_path} at Step:{step}")
 
 
-def make_env(seed, idx, capture_video, run_name, max_steps_d = 1000):
+def make_env(seed, idx, capture_video, run_name, max_steps_d = 2000):
     def thunk():
         render_mode = "rgb_array" if (capture_video and idx == 0) else None
         # 1. Initializing the Duckietown env
         env = DuckietownEnv(
-            seed=123,  # random seed
+            seed=seed,  # random seed
             map_name="oval_loop",
             max_steps= max_steps_d,  # we don't want the gym to reset itself
             domain_rand=False,
