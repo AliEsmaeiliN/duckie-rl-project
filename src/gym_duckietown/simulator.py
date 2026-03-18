@@ -636,7 +636,7 @@ class Simulator(gym.Env):
             #logger.info(f"Using map pose start. \n Pose: {propose_pos}, Angle: {propose_angle}")
 
         else:
-            
+
             # ======================================================
             # NEW PERFECT SPAWN LOGIC (Using Geometry)
             # ======================================================
@@ -659,11 +659,11 @@ class Simulator(gym.Env):
             # Converting to heading angle
             # In Duckietown's coordinate system, angle is math.atan2(-dz, dx)
             propose_angle = math.atan2(-tangent[2], tangent[0]) 
-            
+
             # ======================================================
             # ORIGINAL DUCKIETOWN SPAWN LOGIC (Commented out)
             # ======================================================
-            
+
             '''
             # Keep trying to find a valid spawn position on this tile
             for _ in range(MAX_SPAWN_ATTEMPTS):
@@ -1709,7 +1709,7 @@ class Simulator(gym.Env):
         # Jerk Penalty: Penalize sudden changes in angle
         # self.last_action stores the [v, omega] from the PREVIOUS step
         action_diff = np.linalg.norm(action - self.last_action)
-        reward_jerk = -0.5 * action_diff  # Start with -0.5 and tune if needed
+        reward_jerk = -0.5 * action_diff  # Start with -0.5 
 
         reward = reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
 
@@ -1749,7 +1749,7 @@ class Simulator(gym.Env):
             done_code = "max-steps-reached"
         else:
             done = False
-            reward = self.compute_reward(self.cur_pos, self.cur_angle, self.robot_speed, action)
+            reward = self.compute_reward(self.cur_pos, self.cur_angle, self.speed, action)
             msg = ""
             done_code = "in-progress"
         return DoneRewardInfo(done=done, done_why=msg, reward=reward, done_code=done_code)
