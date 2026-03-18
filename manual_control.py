@@ -15,7 +15,7 @@ import pyglet
 from pyglet.window import key
 
 from src.gym_duckietown.envs import DuckietownEnv
-from utils.wrappers import CropResizeWrapper
+from utils.wrappers import CropResizeWrapper, DebugRewardWrapper
 
 # from experiments.utils import save_img
 
@@ -44,10 +44,9 @@ if args.env_name and args.env_name.find("Duckietown") != -1:
         distortion=args.distortion,
         camera_rand=args.camera_rand,
         dynamics_rand=args.dynamics_rand,
-        camera_width=160,
-        camera_height=120,
     )
-    env = CropResizeWrapper(env, shape=(84, 84))
+    #env = CropResizeWrapper(env, shape=(84, 84))
+    env = DebugRewardWrapper(env)
 else:
     env = gym.make(args.env_name)
 
@@ -59,7 +58,7 @@ env.reset(seed=args.seed)
 pure_internal_obs = env.unwrapped.render_obs()
 print(f"Internal Renderer Shape: {pure_internal_obs.shape}")
 
-env.unwrapped.render(view)
+env.render()
 
 
 @env.unwrapped.window.event
@@ -72,7 +71,7 @@ def on_key_press(symbol, modifiers):
     if symbol == key.BACKSPACE or symbol == key.SLASH:
         print("RESET")
         env.reset(seed=args.seed)
-        env.unwrapped.render(view)
+        env.render()
     elif symbol == key.PAGEUP:
         env.unwrapped.cam_angle[0] = 0
     elif symbol == key.ESCAPE:
@@ -131,7 +130,7 @@ def update(dt):
 
     obs, reward, done, truncated, info = env.step(action)
     print("step_count = %s, reward=%.3f" % (env.unwrapped.step_count, reward))
-    print(f"Observation shape: {obs.shape}")
+    #print(f"Observation shape: {obs.shape}")
 
     if key_handler[key.RETURN]:
 
@@ -142,9 +141,9 @@ def update(dt):
     if done:
         print("done!")
         env.reset(seed=args.seed)
-        env.unwrapped.render(view)
+        env.render()
 
-    env.unwrapped.render(view)
+    env.render()
 
 
 pyglet.clock.schedule_interval(update, 1.0 / env.unwrapped.frame_rate)

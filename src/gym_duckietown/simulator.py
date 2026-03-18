@@ -1679,7 +1679,7 @@ class Simulator(gym.Env):
         # Jerk Penalty: Penalize sudden changes in angle
         # self.last_action stores the [v, omega] from the PREVIOUS step
         action_diff = np.linalg.norm(action - self.last_action)
-        reward_jerk = -0.5 * action_diff  # Start with -0.5 and tune if needed
+        reward_jerk = -0.5 * action_diff  # Start with -0.5 
 
         reward = reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
 
