@@ -150,17 +150,23 @@ class DebugRewardWrapper(gym.Wrapper):
             
             # Calculate your components
             r_speed = 2.0 * sim.speed
-            r_align = 2.0 * (lp.dot_dir ** 2) if lp.dot_dir > 0 else 4.0 * lp.dot_dir
+            k = 50
+            r_align = np.exp(k * (lp.dot_dir - 1.0))
             r_dist  = -10.0 * np.abs(lp.dist)
             r_angle = -0.1 * np.abs(lp.angle_deg)
             
-            action_diff = np.linalg.norm(action - self.last_action)
+            action_diff = np.linalg.norm(action[0] - self.last_action[0])
             r_jerk = -0.5 * action_diff
             
             total = r_speed + r_align + r_dist + r_angle + r_jerk
             
             # 3. Print the breakdown (only every 15 steps to avoid flickering)
-            print(f"\rDEBUG | Total: {total:6.2f} | Spd: {r_speed:4.1f} | Dist: {r_dist:5.1f} | Aln: {r_align:4.1f} | Jrk: {r_jerk:4.1f}", end="", flush=True)
+            msg = (
+                f"\rDEBUG | Total: {total:6.2f} | Spd: {r_speed:4.1f} | Dist: {r_dist:5.1f} "
+                f"| Aln: {r_align:4.1f} | Jrk: {r_jerk:4.1f} "
+                f"| dir:{lp.dot_dir} | angle:{lp.angle_deg} | "
+            )   
+            print(msg, end="", flush=True)
                 
         except Exception:
             # Handle 'NotInLane' or other issues during manual driving
