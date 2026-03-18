@@ -160,9 +160,7 @@ class DebugRewardWrapper(gym.Wrapper):
             total = r_speed + r_align + r_dist + r_angle + r_jerk
             
             # 3. Print the breakdown (only every 15 steps to avoid flickering)
-            if sim.step_count % 15 == 0:
-                print(f"DEBUG | Total: {total:6.2f} | Spd: {r_speed:4.1f} | "
-                    f"Dist: {r_dist:5.1f} | Aln: {r_align:4.1f} | Jrk: {r_jerk:4.1f}")
+            print(f"\rDEBUG | Total: {total:6.2f} | Spd: {r_speed:4.1f} | Dist: {r_dist:5.1f} | Aln: {r_align:4.1f} | Jrk: {r_jerk:4.1f}", end="", flush=True)
                 
         except Exception:
             # Handle 'NotInLane' or other issues during manual driving
