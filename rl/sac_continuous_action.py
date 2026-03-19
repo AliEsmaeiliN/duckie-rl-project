@@ -89,7 +89,8 @@ class Args:
     """the interval to save the Actor periodically"""
     save_model: bool = True
     """whether to save model into the `runs/{run_name}` folder"""
-    grayscale: bool = False
+    grayscale: bool = True
+    """whether to convert the observation to grayscale"""
 
 # ALGO LOGIC: initialize agent here:
 class SoftQNetwork(nn.Module):

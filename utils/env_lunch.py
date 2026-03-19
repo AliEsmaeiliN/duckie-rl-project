@@ -20,7 +20,7 @@ def create_dt_env(seed, max_steps, render_mode=None):
         )
     return env
 
-def apply_wrappers(env, run_name, capture_video=False, grayscale=False):
+def apply_wrappers(env, run_name, capture_video=False, grayscale=True):
 
     if capture_video:
         env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
@@ -54,7 +54,7 @@ def apply_wrappers(env, run_name, capture_video=False, grayscale=False):
 
     return env
 
-def make_env(seed, idx, capture_video, run_name, max_steps = 1000, grayscale=False):
+def make_env(seed, idx, capture_video, run_name, max_steps = 1000, grayscale=True):
     def thunk():
 
         render_mode = "rgb_array" if (capture_video and idx == 0) else None
