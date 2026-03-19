@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=duckie_oval
+#SBATCH --job-name=duckie_rl
 #SBATCH --output=output/duckie_%j.out
 #SBATCH -e output/duckie_%j.err
 #SBATCH --time=20:00:00
@@ -27,5 +27,5 @@ python rl/sac_continuous_action.py \
     --env-id FastR \
     --total-timesteps 1000001 \
     --track \
-    --grayscale\
-    --exp-name "Speed Reward"\
+    --grayscale \
+    --exp-name "Speed Reward"
