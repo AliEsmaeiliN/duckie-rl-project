@@ -3,7 +3,9 @@ import torch
 import numpy as np
 import gymnasium as gym
 import argparse
-from sac_continuous_action import Actor, make_env
+from sac_continuous_action import Actor
+from utils.env_lunch import make_env
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate SAC Agent in Duckietown")
@@ -17,6 +19,10 @@ def parse_args():
                         help="Whether to render the environment")
     parser.add_argument("--capture-video", type=bool, default=True,
                         help="Capture video of the evaluation episodes")
+    parser.add_argument("--max-steps", type=int, default=1000,
+                        help="Maximum number of steps for each episode" )
+    parser.add_argument("--grayscale", type=bool, default=False,
+                        help="Maximum number of steps for each episode" )
     return parser.parse_args()
 
 def evaluate():
@@ -25,11 +31,12 @@ def evaluate():
 
     # 1. Recreate the environment exactly as it was during training
     # Note: make_env returns a thunk, so we call it and then wrap it if needed
-    env_func = make_env(seed=42, idx=0, capture_video=args.capture_video, run_name="eval", max_steps_d = 5000)
+    env_func = make_env(seed=42, idx=0, capture_video=args.capture_video, run_name="eval", max_steps=args.max_steps, grayscale=args.grayscale)
     env = env_func()
 
     if args.capture_video:
-        video_folder = f"videos/{args.env_id}"
+        suffix = "_grayscale" if args.grayscale else ""
+        video_folder = f"videos/{args.env_id}{suffix}"
         if not os.path.exists(video_folder):
             os.makedirs(video_folder)
 
@@ -51,7 +58,7 @@ def evaluate():
             self.single_action_space = env.action_space
     
     dummy = DummyEnv(env)
-    actor = Actor(dummy).to(device)
+    actor = Actor(dummy, grayscale=args.grayscale).to(device)
 
     # 3. Load the weights
     print(f"Loading model from {args.model_path}")

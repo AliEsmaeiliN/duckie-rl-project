@@ -19,12 +19,13 @@ from torch.utils.tensorboard import SummaryWriter
 from cleanrl_utils.buffers import ReplayBuffer
 from cleanrl_utils.atari_wrappers import MaxAndSkipEnv
 
-# Duckietown Specific
-from gym_duckietown.envs import DuckietownEnv
-from utils.wrappers import NormalizeWrapper, ImgWrapper, DtRewardWrapper, ActionWrapper, ResizeWrapper, CropResizeWrapper
 
 # CNN Architucture 
-from rl.cnn_architectures import DQNEncoder, ImpalaCNN
+from rl.cnn_architectures import ImpalaCNN
+
+# Utilities
+from utils.env_lunch import make_env
+from utils.debug_tools import save_model
 
 # Target the specific logger used in the simulator
 import logging
@@ -48,7 +49,7 @@ class Args:
     """if toggled, cuda will be enabled by default"""
     track: bool = False
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "DT_RL"
+    wandb_project_name: str = "DT_RL_SAC"
     """the wandb's project name"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
@@ -56,7 +57,7 @@ class Args:
     """whether to capture videos of the agent performances (check out `videos` folder)"""
 
     # Algorithm specific arguments
-    env_id: str = "Oval-v1.2"
+    env_id: str = "Oval-"
     """the environment id of the task"""
     total_timesteps: int = 1000001
     """total timesteps of the experiments"""
@@ -84,89 +85,21 @@ class Args:
     """Entropy regularization coefficient."""
     autotune: bool = True
     """automatic tuning of the entropy coefficient"""
-    save_interval: int = 1e5
+    save_interval: int = 100000
     """the interval to save the Actor periodically"""
     save_model: bool = True
     """whether to save model into the `runs/{run_name}` folder"""
-
-def save_model(actor, qf1, qf2, step, run_name, suffix=""):
-    
-    model_dir = f"runs/{run_name}/models"
-    if not os.path.exists(model_dir):
-        os.makedirs(model_dir)
-
-    label = suffix if suffix else "latest"
-    model_path = f"{model_dir}/{args.env_id}_sac_{label}.cleanrl_model"
-
-    torch.save({
-        'actor_state_dict': actor.state_dict(),
-        'qf1_state_dict': qf1.state_dict(),
-        'qf2_state_dict': qf2.state_dict(),
-        'global_step': step,
-    }, model_path)
-    print(f"Saved: {model_path} at Step:{step}")
-
-
-def make_env(seed, idx, capture_video, run_name, max_steps_d = 2000):
-    def thunk():
-        render_mode = "rgb_array" if (capture_video and idx == 0) else None
-        # 1. Initializing the Duckietown env
-        env = DuckietownEnv(
-            seed=seed,  # random seed
-            map_name="oval_loop",
-            max_steps= max_steps_d,  # we don't want the gym to reset itself
-            domain_rand=False,
-            camera_width=160,
-            camera_height=120,
-            accept_start_angle_deg=4,  # start close to straight
-            full_transparency=True,
-            distortion=False,
-            render_mode=render_mode,
-            frame_skip = 3
-        )
-        print("Initialized environment")
-
-        # 2. Record video if requested (CleanRL standard)   
-        if capture_video and idx == 0:
-            env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
-
-        # 3. Crop and Resize first (from 120x160 to 84x84)
-        env = CropResizeWrapper(env, shape=(84, 84))
-
-        # 4. To make the images from W*H*C into C*W*H
-        env = ImgWrapper(env)
-
-
-        env = ActionWrapper(env)
-        env = DtRewardWrapper(env)
-        print("Initialized Wrappers")
-
-        # 5. Stack 4 frames
-        env = gym.wrappers.FrameStackObservation(env, stack_size=4)
-        #Flatten the 4x3 channels into 12 for the DQNEncoder
-        new_obs_space = gym.spaces.Box(low=0.0, high=1.0, shape=(12, 84, 84), dtype=np.uint8)
-        
-        env = gym.wrappers.TransformObservation(
-            env, 
-            lambda obs: obs.reshape(12, 84, 84),
-            observation_space=new_obs_space  
-        )   
-        # 6. Basic RL statistics for Tensorboard
-        env = gym.wrappers.RecordEpisodeStatistics(env)
-
-        env.action_space.seed(seed)
-        return env
-
-    return thunk
-
+    grayscale: bool = False
 
 # ALGO LOGIC: initialize agent here:
 class SoftQNetwork(nn.Module):
     def __init__(self, env, feature_dim=256):
         super().__init__()
-        
+
+        self.channels = 4 if args.grayscale else 12
         # Independent Visual Encoder
         self.encoder = ImpalaCNN(
+            in_channels=self.channels,
             obs_shape=env.single_observation_space.shape,
             feature_dim=feature_dim
         )
@@ -201,12 +134,13 @@ LOG_STD_MIN = -5
 
 
 class Actor(nn.Module):
-    def __init__(self, env):
+    def __init__(self, env, grayscale=False):
         super().__init__()
 
-        # Modified DQNEncoder
+        self.channels = 4 if grayscale else 12
+        # Modified Encoder
         self.encoder = ImpalaCNN(
-            in_channels=12,
+            in_channels=self.channels,
             obs_shape=env.single_observation_space.shape,
             feature_dim=256
         )
@@ -283,7 +217,8 @@ class Actor(nn.Module):
 if __name__ == "__main__":
 
     args = tyro.cli(Args)
-    run_name = f"{args.env_id}__sac__{args.seed}__{int(time.time())}"
+    input_mode = "_GrayScale" if args.grayscale else "_RGB"
+    run_name = f"{args.env_id}{input_mode}__sac__{args.seed}__{int(time.time())}"
     if args.track:
         import wandb
 
@@ -312,13 +247,13 @@ if __name__ == "__main__":
 
     # env setup
     envs = gym.vector.SyncVectorEnv(
-        [make_env(args.seed + i, i, args.capture_video, run_name) for i in range(args.num_envs)]
+        [make_env(args.seed + i, i, args.capture_video, run_name, grayscale=args.grayscale) for i in range(args.num_envs)]
     )
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
     max_action = float(envs.single_action_space.high[0])
 
-    actor = Actor(envs).to(device)
+    actor = Actor(envs, grayscale=args.grayscale).to(device)
     qf1 = SoftQNetwork(envs, feature_dim=256).to(device)
     qf2 = SoftQNetwork(envs, feature_dim=256).to(device)
     qf1_target = SoftQNetwork(envs, feature_dim=256).to(device)

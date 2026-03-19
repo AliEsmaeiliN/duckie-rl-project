@@ -135,3 +135,43 @@ class CropResizeWrapper(gym.ObservationWrapper):
         img = img.resize((self.shape[1], self.shape[0]), Image.BILINEAR)
         
         return np.array(img)
+    
+class DebugRewardWrapper(gym.Wrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        self.last_action = np.array([0.0, 0.0])
+
+    def step(self, action):
+        obs, reward, terminated, truncated, info = self.env.step(action)
+
+        sim = self.env.unwrapped
+        try:
+            lp = sim.get_lane_pos2(sim.cur_pos, sim.cur_angle)
+            
+            # Calculate your components
+            r_speed = 2.0 * sim.speed
+            k = 50
+            r_align = np.exp(k * (lp.dot_dir - 1.0))
+            r_dist  = -10.0 * np.abs(lp.dist)
+            r_angle = -0.1 * np.abs(lp.angle_deg)
+            
+            action_diff = np.linalg.norm(action[0] - self.last_action[0])
+            r_jerk = -0.5 * action_diff
+            
+            total = r_speed + r_align + r_dist + r_angle + r_jerk
+            
+            # 3. Print the breakdown (only every 15 steps to avoid flickering)
+            msg = (
+                f"\rDEBUG | Total: {total:6.2f} | Spd: {r_speed:4.1f} | Dist: {r_dist:5.1f} "
+                f"| Aln: {r_align:4.1f} | Jrk: {r_jerk:4.1f} "
+                f"| dir:{lp.dot_dir} | angle:{lp.angle_deg} | "
+            )   
+            print(msg, end="", flush=True)
+                
+        except Exception:
+            # Handle 'NotInLane' or other issues during manual driving
+            if sim.step_count % 15 == 0:
+                print("DEBUG | NOT IN LANE")
+
+        self.last_action = action.copy()
+        return obs, reward, terminated, truncated, info
