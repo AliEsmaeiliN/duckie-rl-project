@@ -24,7 +24,7 @@ fi
 # --- 4. Launch Training ---
 python rl/sac_continuous_action.py \
     --seed 2 \
-    --env-id FastR \
+    --env-id FastR_V2 \
     --total-timesteps 1000001 \
     --track \
     --grayscale \
