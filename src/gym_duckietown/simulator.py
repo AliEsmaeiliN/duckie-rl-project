@@ -1714,6 +1714,7 @@ class Simulator(gym.Env):
         
         # Smoothness
         action_diff = np.linalg.norm(action - self.last_action)
+        self.jerk_alpha =0.5
         reward_jerk = -self.jerk_alpha * action_diff 
 
         reward = reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
