@@ -658,7 +658,9 @@ class Simulator(gym.Env):
 
             # Converting to heading angle
             # In Duckietown's coordinate system, angle is math.atan2(-dz, dx)
-            propose_angle = math.atan2(-tangent[2], tangent[0]) 
+            curve_angle = math.atan2(-tangent[2], tangent[0]) #in radian
+            accept_limit_rad = np.deg2rad(self.accept_start_angle_deg)
+            propose_angle = self.np_random.uniform(curve_angle - accept_limit_rad, curve_angle + accept_limit_rad)
 
             # ======================================================
             # ORIGINAL DUCKIETOWN SPAWN LOGIC (Commented out)
