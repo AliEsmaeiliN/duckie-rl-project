@@ -1705,16 +1705,18 @@ class Simulator(gym.Env):
             return -10.0  
         
         reward_speed = 2.0 * speed
-        reward_alignment = 2.0 * (lp.dot_dir ** 2) if lp.dot_dir > 0 else 4.0 * lp.dot_dir # tanh like behaviour to add a higher gradint near 1
+        # Squared term creates a smooth gradient toward perfect alignment
+        reward_alignment = 2.0 * (lp.dot_dir ** 2) if lp.dot_dir > 0 else 4.0 * lp.dot_dir
+        
+        # Penalties
         reward_distance = -10.0 * np.abs(lp.dist)
         reward_angle = -0.1 * np.abs(lp.angle_deg)
-        # Jerk Penalty: Penalize sudden changes in angle
-        # self.last_action stores the [v, omega] from the PREVIOUS step
+        
+        # Smoothness
         action_diff = np.linalg.norm(action - self.last_action)
-        reward_jerk = -0.5 * action_diff  # Start with -0.5 
+        reward_jerk = -self.jerk_alpha * action_diff 
 
         reward = reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
-
         return reward
 
     def step(self, action: np.ndarray):
