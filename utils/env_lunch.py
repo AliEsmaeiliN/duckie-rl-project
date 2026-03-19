@@ -7,18 +7,24 @@ from utils.wrappers import NormalizeWrapper, ImgWrapper, DtRewardWrapper, Action
 def create_dt_env(seed, max_steps, render_mode=None):
     env = DuckietownEnv(
             seed=seed,
-            map_name="oval_loop",
-            max_steps= max_steps,  # we don't want the gym to reset itself
-            domain_rand=False,
+            map_name="oval_loop", 
+            max_steps=max_steps,
+            domain_rand=True,        # for texture/light randomization
             camera_width=160,
             camera_height=120,
-            accept_start_angle_deg=4,  # start close to straight
+            
+            # FOR SIM-TO-REAL
+            #distortion=True,         # Simulates the fisheye lens
+            #dynamics_rand=True,      # Simulates motor/trim imbalances
+            #camera_rand=True,        # Simulates mounting misalignments
+            
+            accept_start_angle_deg=4, # Forces learning of recovery
+            
             full_transparency=True,
-            distortion=False,
             render_mode=render_mode,
-            frame_skip = 3,
-            #camera_rand = True, #for future 
+            frame_skip=3             
         )
+    
     return env
 
 def apply_wrappers(env, run_name, capture_video=False, grayscale=True):
