@@ -21,7 +21,7 @@ from cleanrl_utils.atari_wrappers import MaxAndSkipEnv
 
 
 # CNN Architucture 
-from rl.cnn_architectures import DQNEncoder, ImpalaCNN
+from rl.cnn_architectures import ImpalaCNN
 
 # Utilities
 from utils.env_lunch import make_env
@@ -89,14 +89,17 @@ class Args:
     """the interval to save the Actor periodically"""
     save_model: bool = True
     """whether to save model into the `runs/{run_name}` folder"""
+    grayscale: bool = False
 
 # ALGO LOGIC: initialize agent here:
 class SoftQNetwork(nn.Module):
     def __init__(self, env, feature_dim=256):
         super().__init__()
-        
+
+        self.channels = 4 if args.grayscale else 12
         # Independent Visual Encoder
         self.encoder = ImpalaCNN(
+            in_channels=self.channels,
             obs_shape=env.single_observation_space.shape,
             feature_dim=feature_dim
         )
@@ -131,12 +134,13 @@ LOG_STD_MIN = -5
 
 
 class Actor(nn.Module):
-    def __init__(self, env):
+    def __init__(self, env, grayscale=False):
         super().__init__()
 
-        # Modified DQNEncoder
+        self.channels = 4 if grayscale else 12
+        # Modified Encoder
         self.encoder = ImpalaCNN(
-            in_channels=12,
+            in_channels=self.channels,
             obs_shape=env.single_observation_space.shape,
             feature_dim=256
         )
@@ -242,13 +246,13 @@ if __name__ == "__main__":
 
     # env setup
     envs = gym.vector.SyncVectorEnv(
-        [make_env(args.seed + i, i, args.capture_video, run_name) for i in range(args.num_envs)]
+        [make_env(args.seed + i, i, args.capture_video, run_name, grayscale=args.grayscale) for i in range(args.num_envs)]
     )
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
     max_action = float(envs.single_action_space.high[0])
 
-    actor = Actor(envs).to(device)
+    actor = Actor(envs, grayscale=args.grayscale).to(device)
     qf1 = SoftQNetwork(envs, feature_dim=256).to(device)
     qf2 = SoftQNetwork(envs, feature_dim=256).to(device)
     qf1_target = SoftQNetwork(envs, feature_dim=256).to(device)
