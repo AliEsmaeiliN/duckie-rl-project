@@ -9,14 +9,15 @@ def create_dt_env(seed, max_steps, render_mode=None):
             seed=seed,
             map_name="oval_loop",
             max_steps= max_steps,  # we don't want the gym to reset itself
-            domain_rand=False,
+            domain_rand=True,
             camera_width=160,
             camera_height=120,
-            #accept_start_angle_deg=4,  # start close to straight
+            accept_start_angle_deg=4,  # start close to straight
             full_transparency=True,
-            distortion=False,
+            distortion=True,
             render_mode=render_mode,
             frame_skip = 3
+            #camera_rand = True # for future generalization
         )
     return env
 
