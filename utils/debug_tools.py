@@ -22,8 +22,8 @@ def save_model(actor, qf1, qf2, step, run_name, suffix=""):
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
 
-    label = suffix if suffix else "latest"
-    model_path = f"{model_dir}/sac_step_{label}.cleanrl_model"
+    label = suffix if suffix else "latest_step"
+    model_path = f"{model_dir}/sac_{label}.cleanrl_model"
 
     save({
         'actor_state_dict': actor.state_dict(),

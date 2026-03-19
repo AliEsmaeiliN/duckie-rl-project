@@ -49,7 +49,7 @@ class Args:
     """if toggled, cuda will be enabled by default"""
     track: bool = False
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "cleanRL"
+    wandb_project_name: str = "DT_RL_SAC"
     """the wandb's project name"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
@@ -57,7 +57,7 @@ class Args:
     """whether to capture videos of the agent performances (check out `videos` folder)"""
 
     # Algorithm specific arguments
-    env_id: str = "Oval-v1.2"
+    env_id: str = "Oval-"
     """the environment id of the task"""
     total_timesteps: int = 1000001
     """total timesteps of the experiments"""
@@ -85,7 +85,7 @@ class Args:
     """Entropy regularization coefficient."""
     autotune: bool = True
     """automatic tuning of the entropy coefficient"""
-    save_interval: int = 50000
+    save_interval: int = 100000
     """the interval to save the Actor periodically"""
     save_model: bool = True
     """whether to save model into the `runs/{run_name}` folder"""
@@ -217,7 +217,8 @@ class Actor(nn.Module):
 if __name__ == "__main__":
 
     args = tyro.cli(Args)
-    run_name = f"{args.env_id}__sac__{args.seed}__{int(time.time())}"
+    input_mode = "_GrayScale" if args.grayscale else "_RGB"
+    run_name = f"{args.env_id}{input_mode}__sac__{args.seed}__{int(time.time())}"
     if args.track:
         import wandb
 
