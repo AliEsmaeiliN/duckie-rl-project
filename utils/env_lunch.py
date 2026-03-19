@@ -12,11 +12,12 @@ def create_dt_env(seed, max_steps, render_mode=None):
             domain_rand=False,
             camera_width=160,
             camera_height=120,
-            #accept_start_angle_deg=4,  # start close to straight
+            accept_start_angle_deg=4,  # start close to straight
             full_transparency=True,
             distortion=False,
             render_mode=render_mode,
-            frame_skip = 3
+            frame_skip = 3,
+            #camera_rand = True, #for future 
         )
     return env
 
