@@ -658,7 +658,9 @@ class Simulator(gym.Env):
 
             # Converting to heading angle
             # In Duckietown's coordinate system, angle is math.atan2(-dz, dx)
-            propose_angle = math.atan2(-tangent[2], tangent[0]) 
+            curve_angle = math.atan2(-tangent[2], tangent[0]) #in radian
+            accept_limit_rad = np.deg2rad(self.accept_start_angle_deg)
+            propose_angle = self.np_random.uniform(curve_angle - accept_limit_rad, curve_angle + accept_limit_rad)
 
             # ======================================================
             # ORIGINAL DUCKIETOWN SPAWN LOGIC (Commented out)
@@ -1703,14 +1705,13 @@ class Simulator(gym.Env):
             return -10.0  
         
         reward_speed = 2.0 * speed
-        k = 15
-        reward_alignment = np.exp(k * (lp.dot_dir - 1.0)) # tanh like behaviour to add a higher gradint near 1
+        reward_alignment = 2.0 * (lp.dot_dir ** 2) if lp.dot_dir > 0 else 4.0 * lp.dot_dir # tanh like behaviour to add a higher gradint near 1
         reward_distance = -10.0 * np.abs(lp.dist)
         reward_angle = -0.1 * np.abs(lp.angle_deg)
         # Jerk Penalty: Penalize sudden changes in angle
         # self.last_action stores the [v, omega] from the PREVIOUS step
         action_diff = np.linalg.norm(action - self.last_action)
-        reward_jerk = -1.5 * action_diff  # Start with -0.5 
+        reward_jerk = -0.5 * action_diff  # Start with -0.5 
 
         reward = reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
 
