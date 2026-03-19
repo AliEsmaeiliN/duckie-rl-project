@@ -1702,16 +1702,16 @@ class Simulator(gym.Env):
         except NotInLane:
             return -10.0  
         
-        reward_speed = 2.0 * speed
-        reward_alignment = 2.0 * (lp.dot_dir ** 2) if lp.dot_dir > 0 else 4.0 * lp.dot_dir # tanh like behaviour to add a higher gradint near 1
+        reward_speed = 2.5 * speed
+        k = 20
+        reward_alignment = np.exp(k * (lp.dot_dir - 1.0)) # tanh like behaviour to add a higher gradint near 1
         reward_distance = -10.0 * np.abs(lp.dist)
-        reward_angle = -0.1 * np.abs(lp.angle_deg)
         # Jerk Penalty: Penalize sudden changes in angle
         # self.last_action stores the [v, omega] from the PREVIOUS step
         action_diff = np.linalg.norm(action - self.last_action)
         reward_jerk = -0.5 * action_diff  # Start with -0.5 
 
-        reward = reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
+        reward = reward_speed + reward_alignment + reward_distance + reward_jerk
 
         return reward
 

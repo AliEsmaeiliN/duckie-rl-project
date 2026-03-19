@@ -10,7 +10,7 @@ trained_models
 dist
 requirements.resolved
 # RL Training Outputs
-outputs/
+output/
 models/
 wandb/
 runs/
