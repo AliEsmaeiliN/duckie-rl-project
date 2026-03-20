@@ -2,18 +2,18 @@ import gymnasium as gym
 import numpy as np
 # Duckietown Specific
 from gym_duckietown.envs import DuckietownEnv
-from utils.wrappers import NormalizeWrapper, ImgWrapper, DtRewardWrapper, ActionWrapper, ResizeWrapper, CropResizeWrapper
+from utils.wrappers import NormalizeWrapper, ImgWrapper, DtRewardWrapper, ActionWrapper, ResizeWrapper, CropResizeWrapper, CustomRewardWrapper
 
 def create_dt_env(seed, max_steps, render_mode=None):
     env = DuckietownEnv(
             seed=seed,
             map_name="oval_loop", 
             max_steps=max_steps,
-            domain_rand=True,        # for texture/light randomization
             camera_width=160,
             camera_height=120,
             
             # FOR SIM-TO-REAL
+            domain_rand=False,        # for texture/light randomization
             #distortion=True,         # Simulates the fisheye lens
             #dynamics_rand=True,      # Simulates motor/trim imbalances
             #camera_rand=True,        # Simulates mounting misalignments
@@ -42,7 +42,7 @@ def apply_wrappers(env, run_name, capture_video=False, grayscale=True):
     # To make the images from W*H*C into C*W*H
     env = ImgWrapper(env)
     env = ActionWrapper(env)
-    env = DtRewardWrapper(env)
+    env = CustomRewardWrapper(env)
 
     # Stack 4 frames
     stack_size=4

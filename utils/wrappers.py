@@ -177,7 +177,7 @@ class DebugRewardWrapper(gym.Wrapper):
         return obs, reward, terminated, truncated, info
     
     
-class CustomReward(gym.RewardWrapper):
+class CustomRewardWrapper(gym.RewardWrapper):
     def __init__(self, env):
         super().__init__(env)
         self.jerk_penalty_coeff = - 0.5
@@ -197,12 +197,11 @@ class CustomReward(gym.RewardWrapper):
             return -10.0 
             
         reward_speed = 2.0 * speed
-        k = 20
-        reward_alignment = np.exp(k * (lp.dot_dir - 1.0)) 
+        reward_alignment = 2.0 * (lp.dot_dir ** 2) if lp.dot_dir > 0 else 4.0 * lp.dot_dir
         reward_distance = -10.0 * np.abs(lp.dist)
         reward_angle = -0.1 * np.abs(lp.angle_deg)
         
-        action_diff = np.linalg.norm(sim.last_action - sim.action_space.sample()) # Example logic
+        action_diff = np.linalg.norm(current_action - self.prev_action) 
         reward_jerk = self.jerk_penalty_coeff * action_diff
 
         self.prev_action = current_action.copy()
