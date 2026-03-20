@@ -175,3 +175,35 @@ class DebugRewardWrapper(gym.Wrapper):
 
         self.last_action = action.copy()
         return obs, reward, terminated, truncated, info
+    
+    
+class CustomRewardWrapper(gym.RewardWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        self.jerk_penalty_coeff = - 0.5
+        self.prev_action = np.zeros(2)
+
+    def reward(self, reward):
+        # Get internal simulator state for custom math
+        sim = self.env.unwrapped 
+        pos = sim.cur_pos
+        angle = sim.cur_angle
+        speed = sim.speed
+        current_action = sim.last_action
+        
+        try:
+            lp = sim.get_lane_pos2(pos, angle)
+        except Exception:
+            return -10.0 
+            
+        reward_speed = 2.0 * speed
+        reward_alignment = 2.0 * (lp.dot_dir ** 2) if lp.dot_dir > 0 else 4.0 * lp.dot_dir
+        reward_distance = -10.0 * np.abs(lp.dist)
+        reward_angle = -0.1 * np.abs(lp.angle_deg)
+        
+        action_diff = np.linalg.norm(current_action - self.prev_action) 
+        reward_jerk = self.jerk_penalty_coeff * action_diff
+
+        self.prev_action = current_action.copy()
+
+        return reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
