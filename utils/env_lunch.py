@@ -13,7 +13,7 @@ def create_dt_env(seed, max_steps, render_mode=None):
             camera_height=120,
             
             # FOR SIM-TO-REAL
-            domain_rand=False,        # for texture/light randomization
+            domain_rand=True,        # for texture/light randomization
             #distortion=True,         # Simulates the fisheye lens
             #dynamics_rand=True,      # Simulates motor/trim imbalances
             #camera_rand=True,        # Simulates mounting misalignments
