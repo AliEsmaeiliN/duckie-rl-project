@@ -21,7 +21,7 @@ def parse_args():
                         help="Capture video of the evaluation episodes")
     parser.add_argument("--max-steps", type=int, default=1000,
                         help="Maximum number of steps for each episode" )
-    parser.add_argument("--grayscale", type=bool, default=False,
+    parser.add_argument("--grayscale", type=bool, default=True,
                         help="Maximum number of steps for each episode" )
     return parser.parse_args()
 
@@ -51,7 +51,7 @@ def evaluate():
     # 2. Instantiate the Actor
     # We use env.single_observation_space because it's a VectorEnv in training, 
     # but here we might need to simulate that or adjust for a single env.
-    # To keep it simple and compatible with your Actor class:
+    # To keep it simple and compatible with Actor class:
     class DummyEnv:
         def __init__(self, env):
             self.single_observation_space = env.observation_space
