@@ -233,7 +233,7 @@ if __name__ == "__main__":
             save_code=True,
         )
         reward_logic = wandb.Artifact('rl-logic-files', type='code')
-        reward_logic.add_file('rl/wrappers.py') 
+        reward_logic.add_file('utils/wrappers.py') 
         reward_logic.add_file('utils/env_lunch.py')
         run.log_artifact(reward_logic)
     
