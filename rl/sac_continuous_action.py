@@ -223,7 +223,7 @@ if __name__ == "__main__":
     if args.track:
         import wandb
 
-        wandb.init(
+        run = wandb.init(
             project=args.wandb_project_name,
             entity=args.wandb_entity,
             sync_tensorboard=True,
@@ -232,6 +232,11 @@ if __name__ == "__main__":
             monitor_gym=True,
             save_code=True,
         )
+        reward_logic = wandb.Artifact('rl-logic-files', type='code')
+        reward_logic.add_file('rl/wrappers.py') 
+        reward_logic.add_file('utils/env_lunch.py')
+        run.log_artifact(reward_logic)
+    
     writer = SummaryWriter(f"runs/{run_name}")
     writer.add_text(
         "hyperparameters",
