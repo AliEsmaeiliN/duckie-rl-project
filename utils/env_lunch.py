@@ -61,7 +61,7 @@ def apply_wrappers(env, run_name, capture_video=False, grayscale=True):
 
     return env
 
-def make_env(seed, idx, capture_video, run_name, max_steps = 1000, grayscale=True):
+def make_env(seed, idx, capture_video, run_name, max_steps = 1500, grayscale=True):
     def thunk():
 
         render_mode = "rgb_array" if (capture_video and idx == 0) else None
