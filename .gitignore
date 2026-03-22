@@ -11,6 +11,8 @@ dist
 requirements.resolved
 # RL Training Outputs
 output/
+outputs/
+artifacts/
 models/
 wandb/
 runs/
