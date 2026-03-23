@@ -1,5 +1,7 @@
 # docs and experiment results can be found at https://docs.cleanrl.dev/rl-algorithms/td3/#td3_continuous_actionpy
 import os
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
 import random
 import time
 from dataclasses import dataclass
@@ -15,6 +17,22 @@ from torch.utils.tensorboard import SummaryWriter
 
 from cleanrl_utils.buffers import ReplayBuffer
 
+# CNN Architucture 
+from rl.cnn_architectures import ImpalaCNN as cnn_encoder
+
+# Utilities
+from utils.env_lunch import make_env
+from utils.debug_tools import save_models
+
+# Target the specific logger used in the simulator
+import logging
+duckietown_logger = logging.getLogger("gym-duckietown")
+duckietown_logger.setLevel(logging.WARNING)
+
+# Disable error checking for maximum training throughput
+import pyglet
+pyglet.options['debug_gl'] = False
+
 
 @dataclass
 class Args:
@@ -28,7 +46,7 @@ class Args:
     """if toggled, cuda will be enabled by default"""
     track: bool = False
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "cleanRL"
+    wandb_project_name: str = "DT_RL_TD3"
     """the wandb's project name"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
@@ -40,17 +58,20 @@ class Args:
     """whether to upload the saved model to huggingface"""
     hf_entity: str = ""
     """the user or org name of the model repository from the Hugging Face Hub"""
+    run_notes: str = ""
+    """for wandb tracking notes"""
+
 
     # Algorithm specific arguments
-    env_id: str = "Hopper-v4"
+    env_id: str = "Oval_td3"
     """the id of the environment"""
-    total_timesteps: int = 1000000
+    total_timesteps: int = 1000001
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
     num_envs: int = 1
     """the number of parallel game environments"""
-    buffer_size: int = int(1e6)
+    buffer_size: int = int(5e4)
     """the replay memory buffer size"""
     gamma: float = 0.99
     """the discount factor gamma"""
@@ -68,47 +89,64 @@ class Args:
     """the frequency of training policy (delayed)"""
     noise_clip: float = 0.5
     """noise clip parameter of the Target Policy Smoothing Regularization"""
+    save_model: bool = True
+    """whether to save model into the `runs/{run_name}` folder"""
+    grayscale: bool = True
+    """whether to convert the observation to grayscale"""
 
-
-def make_env(env_id, seed, idx, capture_video, run_name):
-    def thunk():
-        if capture_video and idx == 0:
-            env = gym.make(env_id, render_mode="rgb_array")
-            env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
-        else:
-            env = gym.make(env_id)
-        env = gym.wrappers.RecordEpisodeStatistics(env)
-        env.action_space.seed(seed)
-        return env
-
-    return thunk
+    #Duckietown specific arguments
+    domain_rand: bool = False
+    """texture/light randomization"""
+    distortion: bool = False 
+    """Simulates the fisheye lens"""
+    dynamics_rand: bool = False
+    """Simulates motor/trim imbalances"""
+    camera_rand: bool = False 
+    """Simulates mounting misalignments"""
 
 
 # ALGO LOGIC: initialize agent here:
 class QNetwork(nn.Module):
-    def __init__(self, env):
+    def __init__(self, env, feature_dim=256):
         super().__init__()
-        self.fc1 = nn.Linear(
-            np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape),
-            256,
+        in_channels = 4 if args.grayscale else 12
+
+        self.encoder = cnn_encoder(
+            in_channels=in_channels,
+            obs_shape=env.single_observation_space.shape,
+            feature_dim=feature_dim
         )
-        self.fc2 = nn.Linear(256, 256)
+        
+        action_dim = np.prod(env.single_action_space.shape)
+
+        self.fc1 = nn.Linear(feature_dim + action_dim, 512)
+        self.fc2 = nn.Linear(512, 256)
         self.fc3 = nn.Linear(256, 1)
 
     def forward(self, x, a):
-        x = torch.cat([x, a], 1)
-        x = F.relu(self.fc1(x))
+        visual_features = self.encoder(x)
+        combined = torch.cat([visual_features, a], 1)
+        x = F.relu(self.fc1(combined))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
         return x
 
 
 class Actor(nn.Module):
-    def __init__(self, env):
+    def __init__(self, env, feature_dim=256 , grayscale=True):
         super().__init__()
-        self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod(), 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc_mu = nn.Linear(256, np.prod(env.single_action_space.shape))
+        in_channels = 4 if grayscale else 12
+
+        self.encoder = cnn_encoder(
+            in_channels=in_channels,
+            obs_shape=env.single_observation_space.shape,
+            feature_dim=feature_dim
+        )
+
+        #self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod(), 256)
+        #self.fc2 = nn.Linear(256, 256)
+        
+        self.fc_mu = nn.Linear(feature_dim, np.prod(env.single_action_space.shape))
         # action rescaling
         self.register_buffer(
             "action_scale",
@@ -126,9 +164,8 @@ class Actor(nn.Module):
         )
 
     def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = torch.tanh(self.fc_mu(x))
+        visual_features = F.relu(self.encoder(x))
+        x = torch.tanh(self.fc_mu(visual_features))
         return x * self.action_scale + self.action_bias
 
 
@@ -163,8 +200,14 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
     # env setup
+    env_params = {
+        "domain_rand": args.domain_rand,
+        "distortion": args.distortion,
+        "dynamics_rand": args.dynamics_rand,
+        "camera_rand": args.camera_rand,
+    }
     envs = gym.vector.SyncVectorEnv(
-        [make_env(args.env_id, args.seed + i, i, args.capture_video, run_name) for i in range(args.num_envs)]
+        [make_env(args.env_id, args.seed + i, i, args.capture_video, run_name, grayscale=args.grayscale, **env_params) for i in range(args.num_envs)]
     )
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
@@ -180,7 +223,7 @@ if __name__ == "__main__":
     q_optimizer = optim.Adam(list(qf1.parameters()) + list(qf2.parameters()), lr=args.learning_rate)
     actor_optimizer = optim.Adam(list(actor.parameters()), lr=args.learning_rate)
 
-    envs.single_observation_space.dtype = np.float32
+    envs.single_observation_space.dtype = np.uint8
     rb = ReplayBuffer(
         args.buffer_size,
         envs.single_observation_space,
@@ -207,13 +250,13 @@ if __name__ == "__main__":
         next_obs, rewards, terminations, truncations, infos = envs.step(actions)
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
-        if "final_info" in infos:
-            for info in infos["final_info"]:
-                if info is not None:
-                    print(f"global_step={global_step}, episodic_return={info['episode']['r']}")
-                    writer.add_scalar("charts/episodic_return", info["episode"]["r"], global_step)
-                    writer.add_scalar("charts/episodic_length", info["episode"]["l"], global_step)
-                    break
+        if "episode" in infos:
+            for i in range(envs.num_envs):
+                # Using the mask '_episode' to see which sub-env actually finished
+                if "_episode" in infos and infos["_episode"][i]:
+                    print(f"global_step={global_step}, episodic_return={infos['episode']['r'][i]}")
+                    writer.add_scalar("charts/episodic_return", infos['episode']['r'][i], global_step)
+                    writer.add_scalar("charts/episodic_length", infos['episode']['l'][i], global_step)  
 
         # TRY NOT TO MODIFY: save data to reply buffer; handle `final_observation`
         real_next_obs = next_obs.copy()
@@ -280,38 +323,6 @@ if __name__ == "__main__":
                     global_step,
                 )
 
-    if args.save_model:
-        model_path = f"runs/{run_name}/{args.exp_name}.cleanrl_model"
-        torch.save((actor.state_dict(), qf1.state_dict(), qf2.state_dict()), model_path)
-        print(f"model saved to {model_path}")
-        from cleanrl_utils.evals.td3_eval import evaluate
-
-        episodic_returns = evaluate(
-            model_path,
-            make_env,
-            args.env_id,
-            eval_episodes=10,
-            run_name=f"{run_name}-eval",
-            Model=(Actor, QNetwork),
-            device=device,
-            exploration_noise=args.exploration_noise,
-        )
-        for idx, episodic_return in enumerate(episodic_returns):
-            writer.add_scalar("eval/episodic_return", episodic_return, idx)
-
-        if args.upload_model:
-            from cleanrl_utils.huggingface import push_to_hub
-
-            repo_name = f"{args.env_id}-{args.exp_name}-seed{args.seed}"
-            repo_id = f"{args.hf_entity}/{repo_name}" if args.hf_entity else repo_name
-            push_to_hub(
-                args,
-                episodic_returns,
-                repo_id,
-                "TD3",
-                f"runs/{run_name}",
-                f"videos/{run_name}-eval",
-            )
-
+    save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix="Final")    
     envs.close()
     writer.close()
