@@ -16,7 +16,7 @@ def plot_model_input(s_obs, global_step):
     plt.title(f"Input to Model - Step {global_step}")
     plt.show() 
 
-def save_model(actor, qf1, qf2, step, run_name, suffix=""):
+def save_models(actor, qf1, qf2, step, run_name, args, env_params, suffix=""):
     
     model_dir = f"runs/{run_name}/models"
     if not os.path.exists(model_dir):
@@ -30,15 +30,17 @@ def save_model(actor, qf1, qf2, step, run_name, suffix=""):
         'qf1_state_dict': qf1.state_dict(),
         'qf2_state_dict': qf2.state_dict(),
         'global_step': step,
+        'env_id': args.env_id,
+        'run_notes': args.run_notes,
     }, model_path)
 
     if wandb.run is not None:
         # Use the suffix or the global step to make the artifact version clear
-        label = suffix if suffix else f"step_{step}"
-        artifact = wandb.Artifact(name=f"{run_name}_model", type="model")
+        artifact_name = f"{run_name}_{label}"
+        artifact = wandb.Artifact(name=artifact_name, type="model")
         artifact.add_file(model_path)      
-        artifact.metadata = {"global_step": step, "suffix": suffix}
+        artifact.metadata = {"global_step": step, "suffix": suffix, "env_id": args.env_id, **env_params}
         
         wandb.log_artifact(artifact)
     
-    print(f"Saved: {model_path} at Step:{step}")
+    print(f"Saved: {model_path} | Metadata: {args.env_id}, Grayscale={args.grayscale}")

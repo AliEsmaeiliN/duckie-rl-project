@@ -17,15 +17,13 @@ import tyro
 from torch.utils.tensorboard import SummaryWriter
 
 from cleanrl_utils.buffers import ReplayBuffer
-from cleanrl_utils.atari_wrappers import MaxAndSkipEnv
-
 
 # CNN Architucture 
 from rl.cnn_architectures import ImpalaCNN
 
 # Utilities
 from utils.env_lunch import make_env
-from utils.debug_tools import save_model
+from utils.debug_tools import save_models
 
 # Target the specific logger used in the simulator
 import logging
@@ -53,6 +51,8 @@ class Args:
     """the wandb's project name"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
+    run_notes: str = ""
+    """for wandb tracking notes"""
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
 
@@ -91,6 +91,16 @@ class Args:
     """whether to save model into the `runs/{run_name}` folder"""
     grayscale: bool = True
     """whether to convert the observation to grayscale"""
+
+    #Duckietown specific arguments
+    domain_rand: bool = False
+    """texture/light randomization"""
+    distortion: bool = False 
+    """Simulates the fisheye lens"""
+    dynamics_rand: bool = False
+    """Simulates motor/trim imbalances"""
+    camera_rand: bool = False 
+    """Simulates mounting misalignments"""
 
 # ALGO LOGIC: initialize agent here:
 class SoftQNetwork(nn.Module):
@@ -252,8 +262,15 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
     # env setup
+    env_params = {
+        "domain_rand": args.domain_rand,
+        "distortion": args.distortion,
+        "dynamics_rand": args.dynamics_rand,
+        "camera_rand": args.camera_rand,
+    }
+
     envs = gym.vector.SyncVectorEnv(
-        [make_env(args.seed + i, i, args.capture_video, run_name, grayscale=args.grayscale) for i in range(args.num_envs)]
+        [make_env(args.seed + i, i, args.capture_video, run_name, grayscale=args.grayscale, **env_params) for i in range(args.num_envs)]
     )
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
@@ -400,8 +417,8 @@ if __name__ == "__main__":
 
             # Periodic Model Saving 
             if global_step > 0 and global_step % args.save_interval == 0:
-                save_model(actor, qf1, qf2, global_step, run_name)
+                save_models(actor, qf1, qf2, global_step, run_name, args, env_params)
 
-    save_model(actor, qf1, qf2, global_step, run_name, suffix="Final")    
+    save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix="Final")    
     envs.close()
     writer.close()
