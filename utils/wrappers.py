@@ -197,7 +197,8 @@ class CustomRewardWrapper(gym.RewardWrapper):
             return -10.0 
             
         reward_speed = 2.0 * speed
-        reward_alignment = 2.0 * (lp.dot_dir ** 2) if lp.dot_dir > 0 else 4.0 * lp.dot_dir
+        k = 2
+        reward_alignment = np.exp(k * (lp.dot_dir - 1.0)) # tanh like behaviour to add a higher gradint near 1
         reward_distance = -10.0 * np.abs(lp.dist)
         reward_angle = -0.1 * np.abs(lp.angle_deg)
         
