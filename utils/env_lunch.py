@@ -28,7 +28,7 @@ def create_dt_env(seed, max_steps, render_mode=None):
     return env
 
 def apply_wrappers(env, run_name, capture_video=False, grayscale=True):
-    env = MotionBlurWrapper(env, frame_skip=env.frameskip)
+    env = MotionBlurWrapper(env, frame_skip=env.frame_skip)
 
     if capture_video:
         env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
