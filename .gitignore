@@ -1,25 +1,36 @@
+# macOS
+.DS_Store
 *.DS_Store
+
+# Python
 *.pyc
+__pycache__/
 *.egg-info
+.conda/
+
+# IDE
 .idea/
+.vscode/
 
+# Logs
+*.log
 xvfb.log
-bin
 
-trained_models
-dist
+# Build / packaging
+dist/
+bin/
 requirements.resolved
+
 # RL Training Outputs
 output/
 outputs/
 artifacts/
 models/
+trained_models/
 wandb/
 runs/
 videos/
-*.log
-__pycache__/
-.conda/
 
+# Ignore specific local scripts
 job_duckie.sh
 rl/eval_sac.py
