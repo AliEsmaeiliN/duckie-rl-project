@@ -2,7 +2,7 @@ import gymnasium as gym
 import numpy as np
 # Duckietown Specific
 from gym_duckietown.envs import DuckietownEnv
-from utils.wrappers import NormalizeWrapper, ImgWrapper, DtRewardWrapper, ActionWrapper, ResizeWrapper, CropResizeWrapper, CustomRewardWrapper
+from utils.wrappers import ImgWrapper, ActionWrapper, CropResizeWrapper, CustomRewardWrapper
 
 def create_dt_env(seed, max_steps, render_mode=None, **kwargs):
     env = DuckietownEnv(
