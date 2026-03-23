@@ -1,5 +1,6 @@
 import os 
 import torch
+import wandb
 import numpy as np
 import gymnasium as gym
 import argparse
@@ -13,24 +14,24 @@ def parse_args():
                         help="Path to the .cleanrl_model file")
     parser.add_argument("--env-id", type=str, default="oval_loop",
                         help="The name of the Duckietown map")
-    parser.add_argument("--num-episodes", type=int, default=5,
+    parser.add_argument("--num-episodes", type=int, default=10,
                         help="Number of evaluation episodes")
     parser.add_argument("--render", action="store_true", default=False,
                         help="Whether to render the environment")
     parser.add_argument("--capture-video", type=bool, default=True,
                         help="Capture video of the evaluation episodes")
-    parser.add_argument("--max-steps", type=int, default=1000,
+    parser.add_argument("--max-steps", type=int, default=1500,
                         help="Maximum number of steps for each episode" )
     parser.add_argument("--grayscale", type=bool, default=True,
                         help="Maximum number of steps for each episode" )
+    parser.add_argument("--local", type=bool, default=False,
+                        help="Whether the model path is the wandb artifact or local")
     return parser.parse_args()
 
 def evaluate():
     args = parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # 1. Recreate the environment exactly as it was during training
-    # Note: make_env returns a thunk, so we call it and then wrap it if needed
     env_func = make_env(seed=42, idx=0, capture_video=args.capture_video, run_name="eval", max_steps=args.max_steps, grayscale=args.grayscale)
     env = env_func()
 
@@ -43,14 +44,12 @@ def evaluate():
         env = gym.wrappers.RecordVideo(
             env, 
             video_folder, 
-            # This is the key: it tells the wrapper to record if episode_id >= 0
+            # it tells the wrapper to record if episode_id >= 0
             episode_trigger=lambda x: True 
         )
         print(f"Recording videos to {video_folder}")
     
-    # 2. Instantiate the Actor
     # We use env.single_observation_space because it's a VectorEnv in training, 
-    # but here we might need to simulate that or adjust for a single env.
     # To keep it simple and compatible with Actor class:
     class DummyEnv:
         def __init__(self, env):
@@ -61,11 +60,19 @@ def evaluate():
     actor = Actor(dummy, grayscale=args.grayscale).to(device)
 
     # 3. Load the weights
-    print(f"Loading model from {args.model_path}")
-    checkpoint = torch.load(args.model_path, map_location=device)
+    if args.local: 
+        model_path = args.model_path
+    else:
+        api = wandb.Api()
+        artifact = api.artifact(args.model_path)
+        artifact_dir = artifact.download()
+        model_path = f"{artifact_dir}/sac_Final.cleanrl_model"
+    
+    print(f"Loading model from {model_path}")
+    checkpoint = torch.load(model_path, map_location=device)
     actor.load_state_dict(checkpoint['actor_state_dict'])
     actor.eval()
-
+    all_rewards = []
     # 4. Evaluation Loop
     for episode in range(args.num_episodes):
         obs, info = env.reset()
@@ -90,7 +97,12 @@ def evaluate():
             if args.render:
                 env.render()
 
+        all_rewards.append(episodic_reward)
         print(f"Episode {episode + 1}: Reward = {episodic_reward:.2f}")
+    
+    print(f"\n--- Final Evaluation Over {args.num_episodes} Episodes ---")
+    print(f"Mean Reward: {np.mean(all_rewards):.2f}")
+    print(f"Std Deviation: {np.std(all_rewards):.2f}")
 
     env.close()
 
