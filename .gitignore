@@ -20,3 +20,6 @@ videos/
 *.log
 __pycache__/
 .conda/
+
+job_duckie.sh
+rl/eval_sac.py
