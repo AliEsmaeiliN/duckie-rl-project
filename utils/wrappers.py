@@ -6,35 +6,38 @@ from PIL import Image
 from gym_duckietown.simulator import Simulator
 
 
-class MotionBlurWrapper(Simulator):
-    def __init__(self, env=None):
-        Simulator.__init__(self)
-        self.env = env
-        self.frame_skip = 3
-        self.env.delta_time = self.env.delta_time / self.frame_skip
-
+class MotionBlurWrapper(gym.Wrapper):
+    def __init__(self, env=None, frame_skip=3):
+        super().__init__(env)
+        self.frame_skip = frame_skip
+        self.env.unwrapped.delta_time = self.env.unwrapped.delta_time / (self.frame_skip + 1)
+        
+        # Weights must match frame_skip + 1 (the current frame + skipped frames)
+        # These weights represent the "decay" of the light on the sensor
+        self.weights = [0.01, 0.04, 0.15, 0.8]
     def step(self, action: np.ndarray):
-        action = np.clip(action, -1, 1)
+        action = np.clip(action, self.action_space.low, self.action_space.high)
         # Actions could be a Python list
-        action = np.array(action)
         motion_blur_window = []
+
         for _ in range(self.frame_skip):
-            obs = self.env.render_obs()
+            obs = self.env.unwrapped.render_obs()
             motion_blur_window.append(obs)
-            self.env.update_physics(action)
+            self.env.unwrapped.update_physics(action)
 
         # Generate the current camera image
 
-        obs = self.env.render_obs()
+        obs = self.env.unwrapped.render_obs()
         motion_blur_window.append(obs)
-        obs = np.average(motion_blur_window, axis=0, weights=[0.8, 0.15, 0.04, 0.01])
 
-        misc = self.env.get_agent_info()
+        # axis=0 averages the pixel values across the time dimension
+        blurred_obs = np.average(motion_blur_window, axis=0, weights=self.weights).astype(np.uint8)
 
-        d = self.env._compute_done_reward()
-        misc["Simulator"]["msg"] = d.done_why
+        d_info = self.env.unwrapped._compute_done_reward(action)
+        misc = self.env.unwrapped.get_agent_info()
+        misc["Simulator"]["msg"] = d_info.done_why
 
-        return obs, d.reward, d.done, misc
+        return blurred_obs, d_info.reward, d_info.done, False, misc
 
 
 class ResizeWrapper(gym.ObservationWrapper):
@@ -195,7 +198,6 @@ class CustomRewardWrapper(gym.RewardWrapper):
             lp = sim.get_lane_pos2(pos, angle)
         except Exception:
             return -10.0 
-            
         reward_speed = 2.5 * speed
         k = 2
         reward_alignment = np.exp(k * (lp.dot_dir - 1.0)) # tanh like behaviour to add a higher gradint near 1

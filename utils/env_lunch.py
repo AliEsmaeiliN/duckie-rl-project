@@ -2,7 +2,7 @@ import gymnasium as gym
 import numpy as np
 # Duckietown Specific
 from gym_duckietown.envs import DuckietownEnv
-from utils.wrappers import NormalizeWrapper, ImgWrapper, DtRewardWrapper, ActionWrapper, ResizeWrapper, CropResizeWrapper, CustomRewardWrapper
+from utils.wrappers import ImgWrapper, ActionWrapper, CropResizeWrapper, CustomRewardWrapper, MotionBlurWrapper
 
 def create_dt_env(seed, max_steps, render_mode=None, **kwargs):
     env = DuckietownEnv(
@@ -29,10 +29,12 @@ def create_dt_env(seed, max_steps, render_mode=None, **kwargs):
     return env
 
 def apply_wrappers(env, run_name, capture_video=False, grayscale=True):
+    env = MotionBlurWrapper(env, frame_skip=env.frame_skip)
 
     if capture_video:
         env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
 
+    env = ActionWrapper(env)
     # Crop and Resize first (from 120x160 to 84x84)
     env = CropResizeWrapper(env, shape=(84, 84))
 
@@ -42,12 +44,12 @@ def apply_wrappers(env, run_name, capture_video=False, grayscale=True):
 
     # To make the images from W*H*C into C*W*H
     env = ImgWrapper(env)
-    env = ActionWrapper(env)
-    env = CustomRewardWrapper(env)
 
     # Stack 4 frames
     stack_size=4
     env = gym.wrappers.FrameStackObservation(env, stack_size=stack_size)
+
+    env = CustomRewardWrapper(env)
 
     #Flatten the channels for the Encoder
     base_channels = 1 if grayscale else 3
