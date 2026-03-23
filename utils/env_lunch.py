@@ -4,7 +4,7 @@ import numpy as np
 from gym_duckietown.envs import DuckietownEnv
 from utils.wrappers import NormalizeWrapper, ImgWrapper, DtRewardWrapper, ActionWrapper, ResizeWrapper, CropResizeWrapper, CustomRewardWrapper
 
-def create_dt_env(seed, max_steps, render_mode=None):
+def create_dt_env(seed, max_steps, render_mode=None, **kwargs):
     env = DuckietownEnv(
             seed=seed,
             map_name="oval_loop", 
@@ -12,17 +12,18 @@ def create_dt_env(seed, max_steps, render_mode=None):
             camera_width=160,
             camera_height=120,
             
-            # FOR SIM-TO-REAL
-            domain_rand=False,        # for texture/light randomization
-            #distortion=True,         # Simulates the fisheye lens
-            #dynamics_rand=True,      # Simulates motor/trim imbalances
-            #camera_rand=True,        # Simulates mounting misalignments
-            
             accept_start_angle_deg=4, # Forces learning of recovery
             
             full_transparency=True,
             render_mode=render_mode,
-            frame_skip=3             
+            frame_skip=3,             
+
+            # FOR SIM-TO-REAL
+            #domain_rand=domain_rand,        # for texture/light randomization
+            #distortion=True,         # Simulates the fisheye lens
+            #dynamics_rand=True,      # Simulates motor/trim imbalances
+            #camera_rand=True,        # Simulates mounting misalignments
+            **kwargs
         )
     
     return env
@@ -61,12 +62,12 @@ def apply_wrappers(env, run_name, capture_video=False, grayscale=True):
 
     return env
 
-def make_env(seed, idx, capture_video, run_name, max_steps = 1000, grayscale=True):
+def make_env(seed, idx, capture_video, run_name, max_steps = 1000, grayscale=True, **kwargs):
     def thunk():
 
         render_mode = "rgb_array" if (capture_video and idx == 0) else None
 
-        env = create_dt_env(seed=seed, max_steps=max_steps, render_mode=render_mode)
+        env = create_dt_env(seed=seed, max_steps=max_steps, render_mode=render_mode, **kwargs)
         env = apply_wrappers(env, run_name, capture_video, grayscale)
         
         env = gym.wrappers.RecordEpisodeStatistics(env)

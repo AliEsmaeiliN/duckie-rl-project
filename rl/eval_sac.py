@@ -12,7 +12,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate SAC Agent in Duckietown")
     parser.add_argument("--model-path", type=str, required=True,
                         help="Path to the .cleanrl_model file")
-    parser.add_argument("--env-id", type=str, default="oval_loop",
+    parser.add_argument("--env-id", type=str, default=None,
                         help="The name of the Duckietown map")
     parser.add_argument("--num-episodes", type=int, default=10,
                         help="Number of evaluation episodes")
@@ -34,10 +34,10 @@ def evaluate():
 
     env_func = make_env(seed=42, idx=0, capture_video=args.capture_video, run_name="eval", max_steps=args.max_steps, grayscale=args.grayscale)
     env = env_func()
-
+    path_parts = args.model_path.split('/')
+    run_name_short = path_parts[-1].split(':')[0] if not args.local else os.path.basename(args.model_path)
     if args.capture_video:
-        suffix = "_grayscale" if args.grayscale else ""
-        video_folder = f"videos/{args.env_id}{suffix}"
+        video_folder = f"videos/{run_name_short}"
         if not os.path.exists(video_folder):
             os.makedirs(video_folder)
 
@@ -63,6 +63,7 @@ def evaluate():
     if args.local: 
         model_path = args.model_path
     else:
+        print("Downloading Artifact")
         api = wandb.Api()
         artifact = api.artifact(args.model_path)
         artifact_dir = artifact.download()
