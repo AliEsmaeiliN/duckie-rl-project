@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import sys
 import os
 from torch import save
 import wandb
@@ -22,8 +23,16 @@ def save_models(actor, qf1, qf2, step, run_name, args, env_params, suffix=""):
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
 
+    main_script = sys.argv[0].lower()
+    if "td3" in main_script:
+        algo_prefix = "td3"
+    elif "sac" in main_script:
+        algo_prefix = "sac"
+    else:
+        algo_prefix = "model" # Fallback
+
     label = suffix if suffix else "latest_step"
-    model_path = f"{model_dir}/sac_{label}.cleanrl_model"
+    model_path = f"{model_dir}/{algo_prefix}_{label}.cleanrl_model"
 
     save({
         'actor_state_dict': actor.state_dict(),
@@ -32,10 +41,10 @@ def save_models(actor, qf1, qf2, step, run_name, args, env_params, suffix=""):
         'global_step': step,
         'env_id': args.env_id,
         'run_notes': args.run_notes,
+        'env_params': env_params,
     }, model_path)
 
     if wandb.run is not None:
-        # Use the suffix or the global step to make the artifact version clear
         artifact_name = f"{run_name}_{label}"
         artifact = wandb.Artifact(name=artifact_name, type="model")
         artifact.add_file(model_path)      
