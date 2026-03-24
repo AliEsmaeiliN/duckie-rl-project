@@ -168,7 +168,7 @@ class Actor(nn.Module):
         mu = self.fc_mu(visual_features)
         v_raw = mu[:, 0:1]
         omega_raw = mu[:, 1:2]
-        v = torch.sigmoid(v_raw)
+        v = torch.tanh(v_raw).clamp(min=0.1)
         omega = torch.tanh(omega_raw)
         x = torch.cat([v, omega], dim=-1)
         return x * self.action_scale + self.action_bias
