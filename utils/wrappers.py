@@ -180,7 +180,7 @@ class DebugRewardWrapper(gym.Wrapper):
 class CustomRewardWrapper(gym.RewardWrapper):
     def __init__(self, env):
         super().__init__(env)
-        self.jerk_penalty_coeff = - 0.5=3
+        self.jerk_penalty_coeff = - 0.3
         self.prev_action = np.zeros(2)
 
     def reward(self, reward):
