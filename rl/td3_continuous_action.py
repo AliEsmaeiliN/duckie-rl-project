@@ -170,7 +170,7 @@ class Actor(nn.Module):
         omega_raw = mu[:, 1:2]
         v = torch.sigmoid(v_raw)
         omega = torch.tanh(omega_raw)
-        x = torch.cot([v, omega], dim=-1)
+        x = torch.cat([v, omega], dim=-1)
         return x * self.action_scale + self.action_bias
 
 
