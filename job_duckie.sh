@@ -24,7 +24,7 @@ fi
 # --- 4. Launch Training ---
 python rl/td3_continuous_action.py \
     --seed 1 \
-    --env-id FastR_V3_withDR \
+    --env-id AsymetricR \
     --total-timesteps 1000001 \
     --track \
-    --run-notes ""
+    --run-notes "Trying a new reward function which depends on the right/left turn"
