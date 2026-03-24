@@ -180,7 +180,7 @@ class DebugRewardWrapper(gym.Wrapper):
 class CustomRewardWrapper(gym.RewardWrapper):
     def __init__(self, env):
         super().__init__(env)
-        self.jerk_penalty_coeff = - 0.5
+        self.jerk_penalty_coeff = - 0.5=3
         self.prev_action = np.zeros(2)
 
     def reward(self, reward):
@@ -196,10 +196,27 @@ class CustomRewardWrapper(gym.RewardWrapper):
         except Exception:
             return -10.0 
             
-        reward_speed = 2.0 * speed
-        k = 2
+        # Asymmetric Logic
+        coords = sim.get_grid_coords(pos) #
+        tile = sim._get_tile(*coords) #
+        tile_kind = tile["kind"] if tile else ""
+
+        # Default
+        dist_penalty_coeff = -10.0
+        speed_coeff = 2.0
+
+        # "Tight Right" vs "Wide Left"
+        if tile_kind == "curve_right":
+            dist_penalty_coeff = -25.0 
+            speed_coeff = 1.5
+        elif tile_kind == "curve_left":
+            dist_penalty_coeff = -8.0
+            speed_coeff = 2.5 #
+
+        reward_speed = speed_coeff * speed
+        k = 5
         reward_alignment = np.exp(k * (lp.dot_dir - 1.0)) # tanh like behaviour to add a higher gradint near 1
-        reward_distance = -10.0 * np.abs(lp.dist)
+        reward_distance = dist_penalty_coeff * np.abs(lp.dist)
         reward_angle = -0.1 * np.abs(lp.angle_deg)
         
         action_diff = np.linalg.norm(current_action - self.prev_action) 
