@@ -50,9 +50,10 @@ def evaluate():
     # 3. Handle randomization toggles (env_params)
     # Check if it's in the file; otherwise, try to get flat keys (if you downloaded from WandB)
     if "env_params" in checkpoint:
+        print("Using the parameters inside the checkpoint")
         sim_params = checkpoint["env_params"]
     else:
-        # Fallback for models where keys were saved flat in WandB metadata
+        print("Could not find the metadata")
         sim_params = {
             "domain_rand": checkpoint.get("domain_rand", False),
             "distortion": checkpoint.get("distortion", False),
