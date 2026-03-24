@@ -67,7 +67,7 @@ def evaluate():
         api = wandb.Api()
         artifact = api.artifact(args.model_path)
         artifact_dir = artifact.download()
-        model_path = f"{artifact_dir}/sac_Final.cleanrl_model"
+        model_path = f"{artifact_dir}/td3_Final.cleanrl_model"
     
     print(f"Loading model from {model_path}")
     checkpoint = torch.load(model_path, map_location=device)
