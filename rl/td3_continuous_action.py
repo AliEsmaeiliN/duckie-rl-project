@@ -165,7 +165,12 @@ class Actor(nn.Module):
 
     def forward(self, x):
         visual_features = F.relu(self.encoder(x))
-        x = torch.tanh(self.fc_mu(visual_features))
+        mu = self.fc_mu(visual_features)
+        v_raw = mu[:, 0:1]
+        omega_raw = mu[:, 1:2]
+        v = torch.sigmoid(v_raw)
+        omega = torch.tanh(omega_raw)
+        x = torch.cot([v, omega], dim=-1)
         return x * self.action_scale + self.action_bias
 
 
@@ -176,7 +181,7 @@ if __name__ == "__main__":
     if args.track:
         import wandb
 
-        wandb.init(
+        run = wandb.init(
             project=args.wandb_project_name,
             entity=args.wandb_entity,
             sync_tensorboard=True,
@@ -185,6 +190,12 @@ if __name__ == "__main__":
             monitor_gym=True,
             save_code=True,
         )
+        reward_logic = wandb.Artifact('rl-logic-files', type='code')
+        reward_logic
+        reward_logic.add_file('utils/wrappers.py') 
+        reward_logic.add_file('utils/env_lunch.py')
+        run.log_artifact(reward_logic)
+
     writer = SummaryWriter(f"runs/{run_name}")
     writer.add_text(
         "hyperparameters",
