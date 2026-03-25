@@ -52,8 +52,6 @@ class Args:
     """the entity (team) of wandb's project"""
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
-    save_model: bool = True
-    """whether to save model into the `runs/{run_name}` folder"""
     eval_model: bool = True
     """whether to upload the saved model to huggingface"""
     run_notes: str = ""
@@ -185,7 +183,7 @@ if __name__ == "__main__":
             sync_tensorboard=True,
             config=vars(args),
             name=run_name,
-            monitor_gym=True,
+            monitor_gym=False,
             save_code=True,
         )
         reward_logic = wandb.Artifact('rl-logic-files', type='code')

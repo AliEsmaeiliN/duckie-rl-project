@@ -108,31 +108,34 @@ def evaluate_policy(actor, args, device, algo_name, run_name = "run_name", num_e
 
     avg_reward = np.mean(all_rewards)
     std_reward = np.std(all_rewards)
-    avg_length = np.mean(all_lengths)
-    print(f"Evaluation Average Reward: {avg_reward:.2f}")
-    
+    print(f"Evaluation Average Reward: {avg_reward:.2f}, with Std: {std_reward}")
+    eval_env.close()
     # Log to WandB
     if args.track:
+        columns = ["episode", "reward", "length"]
+        data = [[i + 1, all_rewards[i], all_lengths[i]] for i in range(len(all_rewards))]
+        table = wandb.Table(data=data, columns=columns)
         metrics = {
-            "eval/avg_reward": avg_reward,
-            "eval/std_reward": std_reward,
-            "eval/avg_episodic_length": avg_length
+            "final_eval/episode_table": table # Scatter data: Episode vs Reward
             }
-        best_idx = np.argmax(all_rewards)
-        worst_idx = np.argmin(all_rewards)
+        
+        import time
+        time.sleep(1)
+        best_idx, worst_idx = np.argmax(all_rewards), np.argmin(all_rewards)
+
+        print(f"best: {best_idx}, worst: {worst_idx}")
 
         def get_video_path(idx):
             return f"videos/{custom_run_name}/rl-video-episode-{idx}.mp4"
 
         best_path = get_video_path(best_idx)
         if os.path.exists(best_path):
-            metrics[f"eval/best_video"] = wandb.Video(best_path, caption=f"Best (Rew: {all_rewards[best_idx]:.2f})")
+            metrics[f"final_eval/best_video"] = wandb.Video(best_path, format="mp4", caption=f"Best Run (Reward: {all_rewards[best_idx]:.2f})")
     
         worst_path = get_video_path(worst_idx)
         if os.path.exists(worst_path) and worst_idx != best_idx:
-            metrics[f"eval/worst_video"] = wandb.Video(worst_path, caption=f"Worst (Rew: {all_rewards[worst_idx]:.2f})")
+            metrics[f"final_eval/worst_video"] = wandb.Video(worst_path, format="mp4", caption=f"Worst Run (Reward: {all_rewards[worst_idx]:.2f})")
         
         wandb.log(metrics)
         
-    eval_env.close()
     actor.train() # just in case
