@@ -5,7 +5,7 @@ import numpy as np
 import gymnasium as gym
 import argparse
 from td3_continuous_action import Actor
-from utils.env_lunch import make_env
+from utils.env_lunch import EnvLunch
 
 
 def parse_args():
@@ -64,12 +64,19 @@ def evaluate():
     print(f"Map: {env_id} | Grayscale: {grayscale}")
     print(f"Randomizations: {sim_params}")
 
-
-    env_func = make_env(seed=1, idx=0, capture_video=args.capture_video, run_name="eval", 
-                        max_steps=args.max_steps, grayscale=args.grayscale,
-                        **sim_params
-                        )
+    env_luncher = EnvLunch(
+        run_name="eval",
+        max_steps=3000,
+        grayscale=args.grayscale,
+        **sim_params
+    )
+    env_func = env_luncher.make_env_fn(
+        seed=1, 
+        idx=0,
+        capture_video=True,
+    )
     env = env_func()
+    
     path_parts = args.model_path.split('/')
     run_name_short = path_parts[-1].split(':')[0] if not args.local else os.path.basename(args.model_path)
     if args.capture_video:
