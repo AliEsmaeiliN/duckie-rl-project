@@ -22,7 +22,7 @@ from rl.cnn_architectures import ImpalaCNN as cnn_encoder
 
 # Utilities
 from utils.env_lunch import make_env
-from utils.debug_tools import save_models
+from utils.debug_tools import save_models, evaluate_policy
 
 # Target the specific logger used in the simulator
 import logging
@@ -52,14 +52,16 @@ class Args:
     """the entity (team) of wandb's project"""
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
-    save_model: bool = False
+    save_model: bool = True
     """whether to save model into the `runs/{run_name}` folder"""
-    upload_model: bool = False
+    eval_model: bool = True
     """whether to upload the saved model to huggingface"""
-    hf_entity: str = ""
-    """the user or org name of the model repository from the Hugging Face Hub"""
     run_notes: str = ""
     """for wandb tracking notes"""
+    save_model: bool = True
+    """whether to save model into the `runs/{run_name}` folder"""
+    grayscale: bool = True
+    """whether to convert the observation to grayscale"""
 
 
     # Algorithm specific arguments
@@ -89,10 +91,6 @@ class Args:
     """the frequency of training policy (delayed)"""
     noise_clip: float = 0.5
     """noise clip parameter of the Target Policy Smoothing Regularization"""
-    save_model: bool = True
-    """whether to save model into the `runs/{run_name}` folder"""
-    grayscale: bool = True
-    """whether to convert the observation to grayscale"""
 
     #Duckietown specific arguments
     domain_rand: bool = False
@@ -335,6 +333,18 @@ if __name__ == "__main__":
                     global_step,
                 )
 
-    save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix="Final")    
+    if args.save_model:
+        save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix="Final")
+    if args.eval_model:
+        evaluate_policy(
+            actor=actor,
+            args=args,
+            device=device,
+            algo_name="TD3",
+            num_episodes=10,
+            run_name=run_name,
+            **env_params
+        )
+
     envs.close()
     writer.close()

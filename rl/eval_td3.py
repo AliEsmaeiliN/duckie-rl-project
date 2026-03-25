@@ -47,8 +47,7 @@ def evaluate():
     env_id = args.env_id or checkpoint.get("env_id", "oval_loop")
     grayscale = args.grayscale if args.grayscale is not None else checkpoint.get("grayscale", True)
 
-    # 3. Handle randomization toggles (env_params)
-    # Check if it's in the file; otherwise, try to get flat keys (if you downloaded from WandB)
+    # Handle randomization toggles (env_params)
     if "env_params" in checkpoint:
         print("Using the parameters inside the checkpoint")
         sim_params = checkpoint["env_params"]

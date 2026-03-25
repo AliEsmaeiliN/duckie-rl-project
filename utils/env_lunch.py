@@ -1,3 +1,4 @@
+import os
 import gymnasium as gym
 import numpy as np
 # Duckietown Specific
@@ -31,7 +32,10 @@ def create_dt_env(seed, max_steps, render_mode=None, **kwargs):
 def apply_wrappers(env, run_name, capture_video=False, grayscale=True):
 
     if capture_video:
-        env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
+        video_folder = f"videos/{run_name}"
+        if not os.path.exists(video_folder):
+            os.makedirs(video_folder)
+        env = gym.wrappers.RecordVideo(env, video_folder, episode_trigger=lambda x: True)
 
     # Crop and Resize first (from 120x160 to 84x84)
     env = CropResizeWrapper(env, shape=(84, 84))
