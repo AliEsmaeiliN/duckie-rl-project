@@ -8,6 +8,8 @@ using the keyboard arrows.
 from PIL import Image
 import argparse
 import sys
+import os
+from datetime import datetime
 
 import gymnasium as gym
 import numpy as np
@@ -16,6 +18,7 @@ from pyglet.window import key
 
 from src.gym_duckietown.envs import DuckietownEnv
 from utils.wrappers import CropResizeWrapper, DebugRewardWrapper
+from utils.env_lunch import EnvLunch
 
 # from experiments.utils import save_img
 
@@ -30,6 +33,7 @@ parser.add_argument("--domain-rand", action="store_true", help="enable domain ra
 parser.add_argument("--dynamics_rand", action="store_true", help="enable dynamics randomization")
 parser.add_argument("--frame-skip", default=1, type=int, help="number of frames to skip")
 parser.add_argument("--seed", default=1, type=int, help="seed")
+parser.add_argument("--no-grayscale", dest="grayscale", action="store_false", help="Disable the grayscale wrapper (default is True)")
 args = parser.parse_args()
 
 
@@ -40,15 +44,26 @@ if args.env_name and args.env_name.find("Duckietown") != -1:
         draw_curve=args.draw_curve,
         draw_bbox=args.draw_bbox,
         domain_rand=args.domain_rand,
-        frame_skip=args.frame_skip,
+        frame_skip=4,
         distortion=args.distortion,
         camera_rand=args.camera_rand,
         dynamics_rand=args.dynamics_rand,
     )
-    #env = CropResizeWrapper(env, shape=(84, 84))
+    env = CropResizeWrapper(env, shape=(84, 84))
     env = DebugRewardWrapper(env)
 else:
-    env = gym.make(args.env_name)
+    env_lunch = EnvLunch(
+        run_name="manaul_control",
+        max_steps=5000,
+        grayscale=args.grayscale,
+        domain_rand = args.domain_rand,
+        distortion = args.distortion,
+        camera_rand=args.camera_rand,
+        dynamics_rand=args.dynamics_rand,
+        )
+    env_func = env_lunch.make_env_fn(seed=1, idx=0)
+    env = env_func()
+    
 
 render_modes = ["human", "top_down", "free_cam", "rgb_array"]
 view = render_modes[0]
@@ -78,12 +93,6 @@ def on_key_press(symbol, modifiers):
         env.close()
         sys.exit(0)
 
-    # Take a screenshot
-    # UNCOMMENT IF NEEDED - Skimage dependency
-    # elif symbol == key.RETURN:
-    #     print('saving screenshot')
-    #     img = env.render('rgb_array')
-    #     save_img('screenshot.png', img)
 
 
 # Register a keyboard handler
@@ -133,10 +142,38 @@ def update(dt):
     #print(f"Observation shape: {obs.shape}")
 
     if key_handler[key.RETURN]:
+        os.makedirs("screenshots", exist_ok=True)
 
-        im = Image.fromarray(obs)
+        if obs.shape[0] in [1, 3, 4, 9, 12]:
+            cnn_view = obs.transpose(1, 2, 0)
+        else:
+            cnn_view = obs
+        
+        suffix = "GrayScale"
+        if args.grayscale:
+            cnn_view_final = cnn_view[:, :, -1] 
+            mode = 'L'
+        else:
+            cnn_view_final = cnn_view[:, :, -3:]
+            mode = 'RGB'
+            suffix = "RGB"
+        
+        raw_view = env.unwrapped.render_obs()
 
-        im.save("screen.png")
+        cnn_img = Image.fromarray(cnn_view_final, mode=mode).convert('RGB')
+        cnn_img = cnn_img.resize((160, 120), Image.NEAREST)
+        raw_img = Image.fromarray(raw_view).resize((160, 120), Image.NEAREST)
+
+        # Combine into one image
+        combined = Image.new('RGB', (320, 120))
+        combined.paste(cnn_img, (0, 0))
+        combined.paste(raw_img, (160, 0))
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        file_path = f"screenshots/debug_{suffix}_{timestamp}.png"
+        combined.save(file_path)
+        print(f"Comparison saved! Mode: {'Grayscale' if args.grayscale else 'RGB'}")
+        print(f"CNN Input Shape: {obs.shape} | Visualized Shape: {cnn_view_final.shape}")
 
     if done:
         print("done!")
