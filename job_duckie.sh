@@ -6,7 +6,7 @@
 #SBATCH --partition=pgpu_most
 #SBATCH --account=dei_most
 #SBATCH --gpus=1
-#SBATCH --mem=16G
+#SBATCH --mem=32G
 #SBATCH --cpus-per-task=4
 
 source $(conda info --base)/etc/profile.d/conda.sh
@@ -22,11 +22,11 @@ if [ ! -f $CONDA_PREFIX/lib/libtiff.so.5 ]; then
     ln -s $CONDA_PREFIX/lib/libtiff.so.6 $CONDA_PREFIX/lib/libtiff.so.5
 fi
 
-# --- 4. Launch Training ---
 python rl/sac_continuous_action.py \
-    --seed 2 \
-    --env-id FastR_V3_withDR \
+    --seed 3 \
+    --env-id AsymmetricR_v2 \
     --total-timesteps 1000001 \
     --track \
-    --grayscale \
-    --exp-name "Speed Reward"
+    --buffer-size 1000000 \
+    --learning-starts 20000 \
+    --run-notes "Trying sac with the new reward and bigger buffer size" 
