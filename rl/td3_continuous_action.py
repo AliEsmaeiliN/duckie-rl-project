@@ -53,7 +53,7 @@ class Args:
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
     eval_model: bool = True
-    """whether to upload the saved model to huggingface"""
+    """whether to evaluate the saved model at the end of training"""
     run_notes: str = ""
     """for wandb tracking notes"""
     save_model: bool = True
