@@ -230,7 +230,7 @@ class Actor(nn.Module):
 if __name__ == "__main__":
 
     args = tyro.cli(Args)
-    input_mode = "_GrayScale" if args.grayscale else "_RGB"
+    input_mode = "" if args.grayscale else "_RGB"
     run_name = f"{args.env_id}{input_mode}__sac__{args.seed}__{int(time.time())}"
     if args.track:
         import wandb
