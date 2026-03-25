@@ -5,7 +5,7 @@ import glob
 import torch
 import numpy as np
 import wandb
-from utils.env_lunch import make_env
+from utils.env_lunch import EnvLunch
 
 def plot_model_input(s_obs, global_step):
     # Take the first environment's observation from the batch
@@ -63,15 +63,16 @@ def evaluate_policy(actor, args, device, algo_name, run_name = "run_name", num_e
     custom_run_name = f"{algo_name}/{run_name}"
     
     # Create a separate evaluation environment
-    eval_env_func = make_env(
+    env_luncher = EnvLunch(
+        run_name=custom_run_name,
+        max_steps=3000,
+        grayscale=args.grayscale,
+        **env_params
+    )
+    eval_env_func = env_luncher.make_env_fn(
         seed=args.seed + 100, 
         idx=0,
         capture_video=True,
-        max_steps=3000, 
-        run_name=custom_run_name, 
-        grayscale=args.grayscale,
-        **env_params
-        
     )
 
     eval_env = eval_env_func()

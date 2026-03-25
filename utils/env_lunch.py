@@ -3,79 +3,84 @@ import gymnasium as gym
 import numpy as np
 # Duckietown Specific
 from gym_duckietown.envs import DuckietownEnv
-from utils.wrappers import ImgWrapper, ActionWrapper, CropResizeWrapper, CustomRewardWrapper
+from utils.wrappers import ImgWrapper, ActionWrapper, CropResizeWrapper, CustomRewardWrapper, MotionBlurWrapper
 
-def create_dt_env(seed, max_steps, render_mode=None, **kwargs):
-    env = DuckietownEnv(
+class EnvLunch:
+    def __init__(self, 
+                 run_name: str, 
+                 max_steps: int = 1500, 
+                 grayscale: bool = True, 
+                 frame_stack: int = 4, 
+                 img_shape: tuple = (84, 84),
+                 **sim_to_real_kwargs):
+        self.run_name = run_name
+        self.max_steps = max_steps
+        self.grayscale = grayscale
+        self.frame_stack = frame_stack
+        self.img_shape = img_shape
+        self.sim_to_real_kwargs = sim_to_real_kwargs
+
+    def _create_base_env(self, seed, render_mode=None):
+        """Initializes the raw Duckietown simulator."""
+        return DuckietownEnv(
             seed=seed,
-            map_name="oval_loop", 
-            max_steps=max_steps,
+            map_name="oval_loop",
+            max_steps=self.max_steps,
             camera_width=160,
             camera_height=120,
-            
-            accept_start_angle_deg=4, # Forces learning of recovery
-            
+            accept_start_angle_deg=4,
             full_transparency=True,
             render_mode=render_mode,
-            frame_skip=3,             
-
-            # FOR SIM-TO-REAL
-            #domain_rand=domain_rand,        # for texture/light randomization
-            #distortion=True,         # Simulates the fisheye lens
-            #dynamics_rand=True,      # Simulates motor/trim imbalances
-            #camera_rand=True,        # Simulates mounting misalignments
-            **kwargs
+            frame_skip=3,
+            **self.sim_to_real_kwargs
         )
-    
-    return env
 
-def apply_wrappers(env, run_name, capture_video=False, grayscale=True):
+    def _apply_wrappers(self, env, capture_video=False):
+        """Sequentially applies Gymnasium wrappers."""
+        if capture_video:
+            video_folder = f"videos/{self.run_name}"
+            os.makedirs(video_folder, exist_ok=True)
+            env = gym.wrappers.RecordVideo(env, video_folder, episode_trigger=lambda x: True)
 
-    if capture_video:
-        video_folder = f"videos/{run_name}"
-        if not os.path.exists(video_folder):
-            os.makedirs(video_folder)
-        env = gym.wrappers.RecordVideo(env, video_folder, episode_trigger=lambda x: True)
-
-    # Crop and Resize first (from 120x160 to 84x84)
-    env = CropResizeWrapper(env, shape=(84, 84))
-
-    # Converting to Grayscale if needed
-    if grayscale:
-        env = gym.wrappers.GrayscaleObservation(env, keep_dim=True)
-
-    # To make the images from W*H*C into C*W*H
-    env = ImgWrapper(env)
-    env = ActionWrapper(env)
-    env = CustomRewardWrapper(env)
-
-    # Stack 4 frames
-    stack_size=4
-    env = gym.wrappers.FrameStackObservation(env, stack_size=stack_size)
-
-    #Flatten the channels for the Encoder
-    base_channels = 1 if grayscale else 3
-    final_channels = base_channels * stack_size
-    new_obs_space = gym.spaces.Box(low=0.0, high=1.0, shape=(final_channels, 84, 84), dtype=np.uint8)
-    
-    env = gym.wrappers.TransformObservation(
-        env, 
-        lambda obs: obs.reshape(final_channels, 84, 84),
-        observation_space=new_obs_space  
-    )   
-
-    return env
-
-def make_env(seed, idx, capture_video, run_name, max_steps = 1500, grayscale=True, **kwargs):
-    def thunk():
-
-        render_mode = "rgb_array" if (capture_video and idx == 0) else None
-
-        env = create_dt_env(seed=seed, max_steps=max_steps, render_mode=render_mode, **kwargs)
-        env = apply_wrappers(env, run_name, capture_video, grayscale)
+        # Vision Preprocessing
+        env = CropResizeWrapper(env, shape=self.img_shape)
+        if self.grayscale:
+            env = gym.wrappers.GrayscaleObservation(env, keep_dim=True)
         
-        env = gym.wrappers.RecordEpisodeStatistics(env)
-        env.action_space.seed(seed)
-        return env
+        env = ImgWrapper(env) # CHW format
+        
+        # Dynamics & Rewards
+        env = ActionWrapper(env)
+        env = CustomRewardWrapper(env)
 
-    return thunk
+        # Temporal Stacking
+        if self.frame_stack > 1:
+            env = gym.wrappers.FrameStackObservation(env, stack_size=self.frame_stack)
+            
+            # Reshape for CNN input
+            base_channels = 1 if self.grayscale else 3
+            final_channels = base_channels * self.frame_stack
+            
+            new_obs_space = gym.spaces.Box(
+                low=0, high=255, 
+                shape=(final_channels, *self.img_shape), 
+                dtype=np.uint8
+            )
+            
+            env = gym.wrappers.TransformObservation(
+                env, 
+                lambda obs: np.array(obs).reshape(final_channels, *self.img_shape),
+                observation_space=new_obs_space
+            )
+
+        return gym.wrappers.RecordEpisodeStatistics(env)
+
+    def make_env_fn(self, seed, idx, capture_video=False):
+        """Returns a 'thunk' function for VectorEnv integration."""
+        def thunk():
+            render_mode = "rgb_array" if (capture_video and idx == 0) else None
+            env = self._create_base_env(seed, render_mode)
+            env = self._apply_wrappers(env, capture_video)
+            env.action_space.seed(seed)
+            return env
+        return thunk

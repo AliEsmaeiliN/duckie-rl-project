@@ -21,7 +21,7 @@ from cleanrl_utils.buffers import ReplayBuffer
 from rl.cnn_architectures import ImpalaCNN as cnn_encoder
 
 # Utilities
-from utils.env_lunch import make_env
+from utils.env_lunch import EnvLunch
 from utils.debug_tools import save_models, evaluate_policy
 
 # Target the specific logger used in the simulator
@@ -187,10 +187,12 @@ if __name__ == "__main__":
             save_code=True,
         )
         reward_logic = wandb.Artifact('rl-logic-files', type='code')
-        reward_logic
         reward_logic.add_file('utils/wrappers.py') 
         reward_logic.add_file('utils/env_lunch.py')
-        reward_logic.add_file('job_duckie.sh')
+        try:
+            reward_logic.add_file('job_duckie.sh')
+        except FileNotFoundError as e:
+            print(f"Warning: Could not find job file for artifact logging: {e}")
         run.log_artifact(reward_logic)
 
     writer = SummaryWriter(f"runs/{run_name}")
@@ -214,8 +216,14 @@ if __name__ == "__main__":
         "dynamics_rand": args.dynamics_rand,
         "camera_rand": args.camera_rand,
     }
+    env_luncher = EnvLunch(
+        run_name=run_name,
+        grayscale=args.grayscale,
+        **env_params
+    )
+    
     envs = gym.vector.SyncVectorEnv(
-        [make_env(args.seed + i, i, args.capture_video, run_name, grayscale=args.grayscale, **env_params) for i in range(args.num_envs)]
+        [env_luncher.make_env_fn(args.seed + i, i, args.capture_video) for i in range(args.num_envs)]
     )
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
