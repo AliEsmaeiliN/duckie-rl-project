@@ -30,7 +30,3 @@ trained_models/
 wandb/
 runs/
 videos/
-
-# Ignore specific local scripts
-job_duckie.sh
-rl/eval_sac.py
