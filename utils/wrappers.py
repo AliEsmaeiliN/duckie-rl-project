@@ -12,12 +12,10 @@ class MotionBlurWrapper(gym.Wrapper):
         self.frame_skip = frame_skip
         self.env.unwrapped.delta_time = self.env.unwrapped.delta_time / (self.frame_skip + 1)
         
-        # Weights must match frame_skip + 1 (the current frame + skipped frames)
-        # These weights represent the "decay" of the light on the sensor
+        
         self.weights = [0.01, 0.04, 0.15, 0.8]
     def step(self, action: np.ndarray):
         action = np.clip(action, self.action_space.low, self.action_space.high)
-        # Actions could be a Python list
         motion_blur_window = []
 
         for _ in range(self.frame_skip):
@@ -25,7 +23,6 @@ class MotionBlurWrapper(gym.Wrapper):
             motion_blur_window.append(obs)
             self.env.unwrapped.update_physics(action)
 
-        # Generate the current camera image
 
         obs = self.env.unwrapped.render_obs()
         motion_blur_window.append(obs)
