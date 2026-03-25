@@ -194,6 +194,7 @@ if __name__ == "__main__":
         reward_logic
         reward_logic.add_file('utils/wrappers.py') 
         reward_logic.add_file('utils/env_lunch.py')
+        reward_logic.add_file('job_duckie.sh')
         run.log_artifact(reward_logic)
 
     writer = SummaryWriter(f"runs/{run_name}")

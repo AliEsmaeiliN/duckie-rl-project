@@ -28,4 +28,5 @@ python rl/td3_continuous_action.py \
     --env-id AsymetricR \
     --total-timesteps 1000001 \
     --track \
-    --run-notes "Trying a new reward function which depends on the right/left turn"
+    --domain-rand\
+    --run-notes "Adding Domain Randomization to the Asymmetric Reward"
