@@ -21,8 +21,8 @@ from cleanrl_utils.buffers import ReplayBuffer
 from rl.cnn_architectures import ImpalaCNN as cnn_encoder
 
 # Utilities
-from utils.env_lunch import make_env
-from utils.debug_tools import save_models
+from utils.env_lunch import EnvLunch
+from utils.debug_tools import save_models, evaluate_policy
 
 # Target the specific logger used in the simulator
 import logging
@@ -52,14 +52,14 @@ class Args:
     """the entity (team) of wandb's project"""
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
-    save_model: bool = False
-    """whether to save model into the `runs/{run_name}` folder"""
-    upload_model: bool = False
+    eval_model: bool = True
     """whether to upload the saved model to huggingface"""
-    hf_entity: str = ""
-    """the user or org name of the model repository from the Hugging Face Hub"""
     run_notes: str = ""
     """for wandb tracking notes"""
+    save_model: bool = True
+    """whether to save model into the `runs/{run_name}` folder"""
+    grayscale: bool = True
+    """whether to convert the observation to grayscale"""
 
 
     # Algorithm specific arguments
@@ -89,10 +89,6 @@ class Args:
     """the frequency of training policy (delayed)"""
     noise_clip: float = 0.5
     """noise clip parameter of the Target Policy Smoothing Regularization"""
-    save_model: bool = True
-    """whether to save model into the `runs/{run_name}` folder"""
-    grayscale: bool = True
-    """whether to convert the observation to grayscale"""
 
     #Duckietown specific arguments
     domain_rand: bool = False
@@ -165,7 +161,12 @@ class Actor(nn.Module):
 
     def forward(self, x):
         visual_features = F.relu(self.encoder(x))
-        x = torch.tanh(self.fc_mu(visual_features))
+        mu = self.fc_mu(visual_features)
+        v_raw = mu[:, 0:1]
+        omega_raw = mu[:, 1:2]
+        v = torch.tanh(v_raw).clamp(min=0.1)
+        omega = torch.tanh(omega_raw)
+        x = torch.cat([v, omega], dim=-1)
         return x * self.action_scale + self.action_bias
 
 
@@ -176,15 +177,24 @@ if __name__ == "__main__":
     if args.track:
         import wandb
 
-        wandb.init(
+        run = wandb.init(
             project=args.wandb_project_name,
             entity=args.wandb_entity,
             sync_tensorboard=True,
             config=vars(args),
             name=run_name,
-            monitor_gym=True,
+            monitor_gym=False,
             save_code=True,
         )
+        reward_logic = wandb.Artifact('rl-logic-files', type='code')
+        reward_logic.add_file('utils/wrappers.py') 
+        reward_logic.add_file('utils/env_lunch.py')
+        try:
+            reward_logic.add_file('job_duckie.sh')
+        except FileNotFoundError as e:
+            print(f"Warning: Could not find job file for artifact logging: {e}")
+        run.log_artifact(reward_logic)
+
     writer = SummaryWriter(f"runs/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -206,8 +216,14 @@ if __name__ == "__main__":
         "dynamics_rand": args.dynamics_rand,
         "camera_rand": args.camera_rand,
     }
+    env_luncher = EnvLunch(
+        run_name=run_name,
+        grayscale=args.grayscale,
+        **env_params
+    )
+    
     envs = gym.vector.SyncVectorEnv(
-        [make_env(args.env_id, args.seed + i, i, args.capture_video, run_name, grayscale=args.grayscale, **env_params) for i in range(args.num_envs)]
+        [env_luncher.make_env_fn(args.seed + i, i, args.capture_video) for i in range(args.num_envs)]
     )
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
@@ -323,6 +339,18 @@ if __name__ == "__main__":
                     global_step,
                 )
 
-    save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix="Final")    
+    if args.save_model:
+        save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix="Final")
+    if args.eval_model:
+        evaluate_policy(
+            actor=actor,
+            args=args,
+            device=device,
+            algo_name="TD3",
+            num_episodes=10,
+            run_name=run_name,
+            **env_params
+        )
+
     envs.close()
     writer.close()

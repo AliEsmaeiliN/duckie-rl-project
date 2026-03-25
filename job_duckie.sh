@@ -9,13 +9,14 @@
 #SBATCH --mem=16G
 #SBATCH --cpus-per-task=4
 
-# --- 1. Environment Setup ---
 source $(conda info --base)/etc/profile.d/conda.sh
 conda activate duckie-rl
 
-# --- 2. Path Configuration ---
+echo "Using Python from: $(which python)"
 export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
+export PYGLET_DEBUG_GL=False
+export PYGLET_HEADLESS=True
 
 if [ ! -f $CONDA_PREFIX/lib/libtiff.so.5 ]; then
     ln -s $CONDA_PREFIX/lib/libtiff.so.6 $CONDA_PREFIX/lib/libtiff.so.5

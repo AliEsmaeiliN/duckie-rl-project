@@ -5,7 +5,7 @@ import numpy as np
 import gymnasium as gym
 import argparse
 from td3_continuous_action import Actor
-from utils.env_lunch import make_env
+from utils.env_lunch import EnvLunch
 
 
 def parse_args():
@@ -32,11 +32,51 @@ def evaluate():
     args = parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    env_func = make_env(seed=42, idx=0, capture_video=args.capture_video, run_name="eval", 
-                        max_steps=args.max_steps, grayscale=args.grayscale,
-                        domain_rand=False, distortion=False, camera_rand=False, dynamics_rand=False
-                        )
+    if args.local: 
+        model_path = args.model_path
+    else:
+        print("Downloading Artifact")
+        api = wandb.Api()
+        artifact = api.artifact(args.model_path)
+        artifact_dir = artifact.download()
+        model_path = f"{artifact_dir}/td3_Final.cleanrl_model"
+    
+    print(f"Loading model from {model_path}")
+    checkpoint = torch.load(model_path, map_location=device)
+
+    env_id = args.env_id or checkpoint.get("env_id", "oval_loop")
+    grayscale = args.grayscale if args.grayscale is not None else checkpoint.get("grayscale", True)
+
+    # Handle randomization toggles (env_params)
+    if "env_params" in checkpoint:
+        print("Using the parameters inside the checkpoint")
+        sim_params = checkpoint["env_params"]
+    else:
+        print("Could not find the metadata")
+        sim_params = {
+            "domain_rand": checkpoint.get("domain_rand", False),
+            "distortion": checkpoint.get("distortion", False),
+            "dynamics_rand": checkpoint.get("dynamics_rand", False),
+            "camera_rand": checkpoint.get("camera_rand", False),
+        }
+    
+    print(f"--- Metadata Extracted ---")
+    print(f"Map: {env_id} | Grayscale: {grayscale}")
+    print(f"Randomizations: {sim_params}")
+
+    env_luncher = EnvLunch(
+        run_name="eval",
+        max_steps=3000,
+        grayscale=args.grayscale,
+        **sim_params
+    )
+    env_func = env_luncher.make_env_fn(
+        seed=1, 
+        idx=0,
+        capture_video=True,
+    )
     env = env_func()
+    
     path_parts = args.model_path.split('/')
     run_name_short = path_parts[-1].split(':')[0] if not args.local else os.path.basename(args.model_path)
     if args.capture_video:
@@ -60,17 +100,6 @@ def evaluate():
     dummy = DummyEnv(env)
     actor = Actor(dummy, grayscale=args.grayscale).to(device)
 
-    if args.local: 
-        model_path = args.model_path
-    else:
-        print("Downloading Artifact")
-        api = wandb.Api()
-        artifact = api.artifact(args.model_path)
-        artifact_dir = artifact.download()
-        model_path = f"{artifact_dir}/sac_Final.cleanrl_model"
-    
-    print(f"Loading model from {model_path}")
-    checkpoint = torch.load(model_path, map_location=device)
     actor.load_state_dict(checkpoint['actor_state_dict'])
     actor.eval()
 
