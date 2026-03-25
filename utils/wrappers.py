@@ -207,11 +207,11 @@ class CustomRewardWrapper(gym.RewardWrapper):
 
         # "Tight Right" vs "Wide Left"
         if tile_kind == "curve_right":
-            dist_penalty_coeff = -25.0 
-            speed_coeff = 1.5
+            dist_penalty_coeff = -15.0 
+            speed_coeff = 2.0
         elif tile_kind == "curve_left":
-            dist_penalty_coeff = -8.0
-            speed_coeff = 2.5 #
+            dist_penalty_coeff = -10.0
+            speed_coeff = 2.0
 
         reward_speed = speed_coeff * speed
         k = 5
