@@ -25,8 +25,9 @@ fi
 # --- 4. Launch Training ---
 python rl/td3_continuous_action.py \
     --seed 2 \
-    --env-id AsymetricR \
+    --env-id AsymetricR_v2 \
     --total-timesteps 1000001 \
     --track \
-    --domain-rand\
+    --domain-rand \
+    --learning-starts 50000 \
     --run-notes "Adding Domain Randomization to the Asymmetric Reward"
