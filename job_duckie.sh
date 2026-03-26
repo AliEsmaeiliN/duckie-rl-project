@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=duckie_rl
+#SBATCH --job-name=duckie_rl_td3
 #SBATCH --output=output/duckie_%j.out
 #SBATCH -e output/duckie_%j.err
 #SBATCH --time=20:00:00
 #SBATCH --partition=pgpu_most
 #SBATCH --account=dei_most
 #SBATCH --gpus=1
-#SBATCH --mem=16G
+#SBATCH --mem=32G
 #SBATCH --cpus-per-task=4
 
 source $(conda info --base)/etc/profile.d/conda.sh
@@ -27,6 +27,7 @@ python rl/td3_continuous_action.py \
     --seed 2 \
     --env-id AsymetricR_v2 \
     --total-timesteps 1000001 \
+    --buffer-size 250000 \
     --track \
     --domain-rand \
     --learning-starts 50000 \
