@@ -24,9 +24,10 @@ fi
 
 python rl/sac_continuous_action.py \
     --seed 3 \
+    --num-envs 1 \
     --env-id AsymmetricR_v2 \
     --total-timesteps 1000001 \
     --track \
-    --buffer-size 1000000 \
+    --buffer-size 100000 \
     --learning-starts 20000 \
-    --run-notes "Trying sac with the new reward and bigger buffer size" 
+    --run-notes "Trying sac with the new reward and bigger buffer size. reduced buffer" 
