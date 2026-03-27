@@ -23,7 +23,7 @@ from utils.env_lunch import EnvLunch
 # from experiments.utils import save_img
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--env-name", default= "Duckietown")
+parser.add_argument("--env-name", default= "Custom")
 parser.add_argument("--map-name", default="oval_loop")
 parser.add_argument("--distortion", default=False, action="store_true")
 parser.add_argument("--camera_rand", default=False, action="store_true")
@@ -48,6 +48,7 @@ if args.env_name and args.env_name.find("Duckietown") != -1:
         distortion=args.distortion,
         camera_rand=args.camera_rand,
         dynamics_rand=args.dynamics_rand,
+        accept_start_angle_deg = 4,
     )
     env = CropResizeWrapper(env, shape=(84, 84))
     env = DebugRewardWrapper(env)
@@ -66,15 +67,14 @@ else:
     
 
 render_modes = ["human", "top_down", "free_cam", "rgb_array"]
-view = render_modes[0]
+view = render_modes[1]
 
 env.reset(seed=args.seed)
 
 pure_internal_obs = env.unwrapped.render_obs()
 print(f"Internal Renderer Shape: {pure_internal_obs.shape}")
 
-env.render()
-
+env.unwrapped.render(mode=view)
 
 @env.unwrapped.window.event
 def on_key_press(symbol, modifiers):
@@ -85,8 +85,8 @@ def on_key_press(symbol, modifiers):
 
     if symbol == key.BACKSPACE or symbol == key.SLASH:
         print("RESET")
-        env.reset(seed=args.seed)
-        env.render()
+        env.reset()
+        env.unwrapped.render(mode=view)
     elif symbol == key.PAGEUP:
         env.unwrapped.cam_angle[0] = 0
     elif symbol == key.ESCAPE:
@@ -161,7 +161,7 @@ def update(dt):
         raw_view = env.unwrapped.render_obs()
 
         cnn_img = Image.fromarray(cnn_view_final, mode=mode).convert('RGB')
-        cnn_img = cnn_img.resize((160, 120), Image.NEAREST)
+        #cnn_img = cnn_img.resize((160, 120), Image.NEAREST)
         raw_img = Image.fromarray(raw_view).resize((160, 120), Image.NEAREST)
 
         # Combine into one image
@@ -177,10 +177,10 @@ def update(dt):
 
     if done:
         print("done!")
-        env.reset(seed=args.seed)
-        env.render()
+        env.reset()
+        env.unwrapped.render(mode=view)
 
-    env.render()
+    env.unwrapped.render(mode=view)
 
 
 pyglet.clock.schedule_interval(update, 1.0 / env.unwrapped.frame_rate)
