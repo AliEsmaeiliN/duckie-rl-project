@@ -619,8 +619,16 @@ class Simulator(gym.Env):
                 if not self.drivable_tiles:
                     msg = "There are no drivable tiles. Use start_tile or self.user_tile_start"
                     raise Exception(msg)
-                tile_idx = self.np_random.integers(0, len(self.drivable_tiles))
-                tile = self.drivable_tiles[tile_idx]
+                straight_tiles = [t for t in self.drivable_tiles if t["kind"] == "straight"]
+        
+                if not straight_tiles:
+                    # Fallback to any drivable tile if no straight tiles exist in the map
+                    tile_idx = self.np_random.integers(0, len(self.drivable_tiles))
+                    tile = self.drivable_tiles[tile_idx]
+                else:
+                    print("spawn on a straight")
+                    tile_idx = self.np_random.integers(0, len(straight_tiles))
+                    tile = straight_tiles[tile_idx]
 
         # If the map specifies a starting pose
         if self.start_pose is not None:
@@ -720,6 +728,9 @@ class Simulator(gym.Env):
         self.cur_pos = propose_pos
         self.cur_angle = propose_angle
 
+        self.episode_dir = get_driving_direction(tile, propose_angle)
+        
+
         init_vel = np.array([0, 0])
 
         # Initialize Dynamics model
@@ -739,7 +750,9 @@ class Simulator(gym.Env):
         # Generate the first camera image
         obs = self.render_obs(segment=segment)
         
-        info = {}
+        info = {
+            "episode_direction": self.episode_dir
+        }
         
         # Update world objects
         for obj in self.objects:
@@ -1660,6 +1673,7 @@ class Simulator(gym.Env):
 
             info["timestamp"] = self.timestamp
             info["tile_coords"] = list(self.get_grid_coords(pos))
+            info["episode_direction"] = getattr(self, "episode_dir", None)
             # info['map_data'] = self.map_data
         misc = {}
         misc["Simulator"] = info
@@ -2227,3 +2241,25 @@ def draw_axes():
     gl.glEnd()
 
     gl.glPopMatrix()
+
+def get_driving_direction(tile, angle):
+    """
+    Returns 'CCW' (Counter-Clockwise) or 'CW' (Clockwise)
+    based on the spawn location of Duckiebot.
+    """
+
+    tile_dir_idx = tile["angle"]
+
+    direction_idx = int(round(angle / (np.pi / 2)) + 1) % 4
+
+    if direction_idx == tile_dir_idx:
+
+        return "CCW"
+
+    elif (direction_idx + 2) % 4 == tile_dir_idx:
+
+        return "CW"
+
+    else:
+
+        return "TRANSITION" 
