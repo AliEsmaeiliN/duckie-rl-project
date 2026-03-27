@@ -120,18 +120,15 @@ class CropResizeWrapper(gym.ObservationWrapper):
         )
 
     def observation(self, obs):
-        # 1. Convert to PIL for easy manipulation
         img = Image.fromarray(obs)
         
         width, height = img.size
         
-        # 2. Crop: Keep the bottom 2/3
         # PIL crop box is (left, top, right, bottom)
         top_boundary = int(height * (1/3))
         img = img.crop((0, top_boundary, width, height))
         
-        # 3. Resize to target shape (84x84)
-        # Note: Image.resize takes (width, height)
+        # target shape (84x84)
         img = img.resize((self.shape[1], self.shape[0]), Image.BILINEAR)
         
         return np.array(img)
@@ -205,7 +202,6 @@ class CustomRewardWrapper(gym.RewardWrapper):
         dist_penalty_coeff = -10.0
         speed_coeff = 2.0
 
-        # "Tight Right" vs "Wide Left"
         if tile_kind == "curve_right":
             dist_penalty_coeff = -15.0 
             speed_coeff = 2.0
