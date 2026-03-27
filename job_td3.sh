@@ -24,11 +24,10 @@ fi
 
 # --- 4. Launch Training ---
 python rl/td3_continuous_action.py \
-    --seed 2 \
-    --env-id AsymetricR_v2 \
-    --total-timesteps 1000001 \
-    --buffer-size 250000 \
+    --seed 1 \
+    --env-id AdaptiveV1 \
+    --total-timesteps 1000000 \
+    --buffer-size 200000 \
     --track \
-    --domain-rand \
-    --learning-starts 50000 \
-    --run-notes "Adding Domain Randomization to the Asymmetric Reward"
+    --learning-starts 30000 \
+    --run-notes "New Adaptive Reward"
