@@ -6,7 +6,7 @@
 #SBATCH --partition=pgpu_most
 #SBATCH --account=dei_most
 #SBATCH --gpus=1
-#SBATCH --mem=32G
+#SBATCH --mem=16G
 #SBATCH --cpus-per-task=4
 
 source $(conda info --base)/etc/profile.d/conda.sh
@@ -27,7 +27,8 @@ python rl/td3_continuous_action.py \
     --seed 1 \
     --env-id AdaptiveV1 \
     --total-timesteps 1000000 \
-    --buffer-size 200000 \
+    --buffer-size 150000 \
     --track \
+    --domain-rand \
     --learning-starts 30000 \
-    --run-notes "New Adaptive Reward"
+    --run-notes "New Adaptive Reward with Domain Randomization and MotionBlur"
