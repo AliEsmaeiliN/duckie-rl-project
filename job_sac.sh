@@ -6,7 +6,7 @@
 #SBATCH --partition=pgpu_most
 #SBATCH --account=dei_most
 #SBATCH --gpus=1
-#SBATCH --mem=32G
+#SBATCH --mem=16G
 #SBATCH --cpus-per-task=4
 
 source $(conda info --base)/etc/profile.d/conda.sh
@@ -24,11 +24,10 @@ fi
 
 python rl/sac_continuous_action.py \
     --seed 1 \
-    --num-envs 1 \
-    --env-id AsymmetricR_v2 \
-    --total-timesteps 1500000 \
+    --env-id AdaptiveV1 \
+    --total-timesteps 1000000 \
     --track \
-    --buffer-size 250000 \
+    --buffer-size 150000 \
     --domain-rand \
     --learning-starts 20000 \
-    --run-notes "Trying sac with the new reward and bigger buffer size. reduced buffer" 
+    --run-notes "Trying sac with the new reward and bigger buffer size. reduced buffer with Domain Rand and MotionBlur" 

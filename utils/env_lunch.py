@@ -37,6 +37,7 @@ class EnvLunch:
 
     def _apply_wrappers(self, env, capture_video=False):
         """Sequentially applies Gymnasium wrappers."""
+        env = MotionBlurWrapper(env)
         if capture_video:
             video_folder = f"videos/{self.run_name}"
             os.makedirs(video_folder, exist_ok=True)
