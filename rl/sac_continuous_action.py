@@ -258,8 +258,8 @@ if __name__ == "__main__":
         reward_logic.add_file('utils/wrappers.py') 
         reward_logic.add_file('utils/env_lunch.py')
         try:
-            reward_logic.add_file('job_duckie.sh')
-        except FileNotFoundError as e:
+            reward_logic.add_file('job_sac.sh')
+        except (ValueError, FileNotFoundError) as e:
             print(f"Warning: Could not find job file for artifact logging: {e}")
         run.log_artifact(reward_logic)
     

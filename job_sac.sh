@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=duckie_rl
+#SBATCH --job-name=duckie_rl_sac
 #SBATCH --output=output/duckie_%j.out
 #SBATCH -e output/duckie_%j.err
 #SBATCH --time=20:00:00
@@ -23,11 +23,12 @@ if [ ! -f $CONDA_PREFIX/lib/libtiff.so.5 ]; then
 fi
 
 python rl/sac_continuous_action.py \
-    --seed 3 \
+    --seed 1 \
     --num-envs 1 \
     --env-id AsymmetricR_v2 \
-    --total-timesteps 1000001 \
+    --total-timesteps 1500000 \
     --track \
-    --buffer-size 100000 \
+    --buffer-size 250000 \
+    --domain-rand \
     --learning-starts 20000 \
     --run-notes "Trying sac with the new reward and bigger buffer size. reduced buffer" 
