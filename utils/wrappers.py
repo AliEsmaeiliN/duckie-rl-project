@@ -140,6 +140,10 @@ class CustomRewardWrapper(gym.RewardWrapper):
         self.prev_action = np.zeros(2)
 
     def reward(self, reward):
+
+        if reward <= -10.0:
+            return reward
+
         # Get internal simulator state for custom math
         sim = self.env.unwrapped 
         pos = sim.cur_pos
@@ -169,27 +173,27 @@ class CustomRewardWrapper(gym.RewardWrapper):
 
         in_curve = "curve" in tile_kind
         approaching_curve = "curve" in look_kind
-        in_danger_zone = (direction == "CW") and (in_curve or approaching_curve)
+        in_danger_zone = (direction == "CW") and approaching_curve
 
         # Default
-        dist_penalty_coeff = -8.0
+        dist_penalty_coeff = -6.0
         speed_coeff = 2.0
-        jerk_coeff = -0.3
+        jerk_coeff = -1
         k = 5.0
         target_offset = 0.0
 
         if in_danger_zone:
             # Special "Stabilization" Values
-            speed_coeff = 0.3      
-            dist_penalty_coeff = -15.0
+            speed_coeff = 0.2
+            dist_penalty_coeff = -10.0
             target_offset = 0.05
-            jerk_coeff = -1.5       
-            k = 10.0                      
+            jerk_coeff = -4      
+            k = 3.0                      
 
         
         reward_speed = speed_coeff * speed * lp.dot_dir
         reward_alignment = np.exp(k * (lp.dot_dir - 1.0)) # tanh like behaviour to add a higher gradint near 1
-        reward_distance = dist_penalty_coeff * np.abs(lp.dist - target_offset)
+        reward_distance = dist_penalty_coeff * (lp.dist - target_offset)**2
         reward_angle = -0.03 * np.abs(lp.angle_deg)
         
         action_diff = np.linalg.norm(current_action - self.prev_action) 
@@ -197,4 +201,8 @@ class CustomRewardWrapper(gym.RewardWrapper):
 
         self.prev_action = current_action.copy()
 
-        return reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
+        survival_bonus = 0.05  
+        if not sim._valid_pose(pos, angle):
+            return -10.0 
+
+        return reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk + survival_bonus
