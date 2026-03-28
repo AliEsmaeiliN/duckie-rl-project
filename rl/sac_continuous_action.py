@@ -105,6 +105,8 @@ class Args:
     """Simulates motor/trim imbalances"""
     camera_rand: bool = False 
     """Simulates mounting misalignments"""
+    motion_blur: bool = False
+    """Simulates the blur from the moving duckiebot"""
 
 # ALGO LOGIC: initialize agent here:
 class SoftQNetwork(nn.Module):
@@ -242,6 +244,7 @@ if __name__ == "__main__":
         if args.dynamics_rand: active_tags.append("DynamicsRand")
         if args.camera_rand: active_tags.append("CameraRand")
         if args.distortion: active_tags.append("Distortion")
+        if args.motion_blur: active_tags.append("MotionBlur")
 
         run = wandb.init(
             project=args.wandb_project_name,
