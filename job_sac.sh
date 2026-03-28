@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=duckie_rl
+#SBATCH --job-name=duckie_rl_sac
 #SBATCH --output=output/duckie_%j.out
 #SBATCH -e output/duckie_%j.err
 #SBATCH --time=20:00:00
@@ -22,11 +22,12 @@ if [ ! -f $CONDA_PREFIX/lib/libtiff.so.5 ]; then
     ln -s $CONDA_PREFIX/lib/libtiff.so.6 $CONDA_PREFIX/lib/libtiff.so.5
 fi
 
-# --- 4. Launch Training ---
-python rl/td3_continuous_action.py \
-    --seed 2 \
-    --env-id AsymetricR \
-    --total-timesteps 1000001 \
+python rl/sac_continuous_action.py \
+    --seed 1 \
+    --env-id AdaptiveV1 \
+    --total-timesteps 1000000 \
     --track \
-    --domain-rand\
-    --run-notes "Adding Domain Randomization to the Asymmetric Reward"
+    --buffer-size 150000 \
+    --domain-rand \
+    --learning-starts 20000 \
+    --run-notes "Trying sac with the new reward and bigger buffer size. reduced buffer with Domain Rand and MotionBlur" 

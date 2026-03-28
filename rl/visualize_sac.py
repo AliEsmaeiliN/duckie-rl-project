@@ -15,9 +15,7 @@ def enjoy():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # 1. Recreate the EXACT environment stack from training
     def make_eval_env():
-        # 1. Initializing the Duckietown env
         #env = launch_env() # Output: (480, 640, 3)
         env = DuckietownEnv(
             seed=123,  # random seed
@@ -34,25 +32,20 @@ def enjoy():
 
 
 
-        # 4. Wrappers
-        #env = ResizeWrapper(env)
+        
         
         print(f"Observation space before ImgWrapper: {env.observation_space.shape}")
         env = ImgWrapper(env)  # to make the images from 160x120x3 into 3x160x120
         print(f"Observation space after ImgWrapper: {env.observation_space.shape}")
 
-        # We don't need nomailiztion since we are saving them in uint8 and these will probably make them zero
-        # env = NormalizeWrapper(env)
-
+    
         env = ActionWrapper(env)
         env = DtRewardWrapper(env)
         print("Initialized Wrappers")
 
-        # 5. Stack 4 frames
         env = gym.wrappers.FrameStackObservation(env, stack_size=4)
         print(f"Observation space after stacking: {env.observation_space.shape}")
 
-        #Flatten the 4x3 channels into 12 for the DQNEncoder
         new_obs_space = gym.spaces.Box(low=0.0, high=1.0, shape=(12, 120, 160), dtype=np.uint8)
         env = gym.wrappers.TransformObservation(
             env, 
@@ -63,9 +56,7 @@ def enjoy():
         return env
     env = make_eval_env()
     
-    # 2. Load the Actor Model
-    # We pass the env to Actor so it knows the action/obs shapes
-    # Note: Wrap in a dummy object to mimic SyncVectorEnv's 'single_action_space'
+
     class DummyEnvs:
         def __init__(self, env):
             self.single_observation_space = env.observation_space
@@ -78,7 +69,6 @@ def enjoy():
 
     print(f"Loaded model from {args.checkpoint}")
 
-    # 3. Main Loop
     obs, _ = env.reset(seed=args.seed)
     
     try:

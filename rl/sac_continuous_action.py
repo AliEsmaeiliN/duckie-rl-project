@@ -19,11 +19,11 @@ from torch.utils.tensorboard import SummaryWriter
 from cleanrl_utils.buffers import ReplayBuffer
 
 # CNN Architucture 
-from rl.cnn_architectures import ImpalaCNN
+from rl.cnn_architectures import ImpalaCNN as cnn_encoder
 
 # Utilities
-from utils.env_lunch import make_env
-from utils.debug_tools import save_models
+from utils.env_lunch import EnvLunch
+from utils.debug_tools import save_models, evaluate_policy
 
 # Target the specific logger used in the simulator
 import logging
@@ -47,14 +47,24 @@ class Args:
     """if toggled, cuda will be enabled by default"""
     track: bool = False
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "DT_RL_SAC"
+    wandb_project_name: str = "Duckie-RL"
     """the wandb's project name"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
+    wandb_group: str = "SAC"
+    """The algorithm"""
     run_notes: str = ""
     """for wandb tracking notes"""
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
+    save_interval: int = 100000
+    """the interval to save the Actor periodically"""
+    save_model: bool = True
+    """whether to save model into the `runs/{run_name}` folder"""
+    grayscale: bool = True
+    """whether to convert the observation to grayscale"""
+    eval_model: bool = True
+    """whether to evaluate the saved model at the end of training"""
 
     # Algorithm specific arguments
     env_id: str = "Oval-"
@@ -85,12 +95,6 @@ class Args:
     """Entropy regularization coefficient."""
     autotune: bool = True
     """automatic tuning of the entropy coefficient"""
-    save_interval: int = 100000
-    """the interval to save the Actor periodically"""
-    save_model: bool = True
-    """whether to save model into the `runs/{run_name}` folder"""
-    grayscale: bool = True
-    """whether to convert the observation to grayscale"""
 
     #Duckietown specific arguments
     domain_rand: bool = False
@@ -101,6 +105,8 @@ class Args:
     """Simulates motor/trim imbalances"""
     camera_rand: bool = False 
     """Simulates mounting misalignments"""
+    motion_blur: bool = False
+    """Simulates the blur from the moving duckiebot"""
 
 # ALGO LOGIC: initialize agent here:
 class SoftQNetwork(nn.Module):
@@ -109,7 +115,7 @@ class SoftQNetwork(nn.Module):
 
         self.channels = 4 if args.grayscale else 12
         # Independent Visual Encoder
-        self.encoder = ImpalaCNN(
+        self.encoder = cnn_encoder(
             in_channels=self.channels,
             obs_shape=env.single_observation_space.shape,
             feature_dim=feature_dim
@@ -150,7 +156,7 @@ class Actor(nn.Module):
 
         self.channels = 4 if grayscale else 12
         # Modified Encoder
-        self.encoder = ImpalaCNN(
+        self.encoder = cnn_encoder(
             in_channels=self.channels,
             obs_shape=env.single_observation_space.shape,
             feature_dim=256
@@ -228,23 +234,36 @@ class Actor(nn.Module):
 if __name__ == "__main__":
 
     args = tyro.cli(Args)
-    input_mode = "_GrayScale" if args.grayscale else "_RGB"
+    input_mode = "" if args.grayscale else "_RGB"
     run_name = f"{args.env_id}{input_mode}__sac__{args.seed}__{int(time.time())}"
     if args.track:
         import wandb
+        active_tags = [args.env_id]
+        active_tags.append("Grayscale" if args.grayscale else "RGB")
+        if args.domain_rand: active_tags.append("DomainRand")
+        if args.dynamics_rand: active_tags.append("DynamicsRand")
+        if args.camera_rand: active_tags.append("CameraRand")
+        if args.distortion: active_tags.append("Distortion")
+        if args.motion_blur: active_tags.append("MotionBlur")
 
         run = wandb.init(
             project=args.wandb_project_name,
             entity=args.wandb_entity,
+            group=args.wandb_group,
+            tags=active_tags,
             sync_tensorboard=True,
             config=vars(args),
             name=run_name,
-            monitor_gym=True,
+            monitor_gym=False,
             save_code=True,
         )
         reward_logic = wandb.Artifact('rl-logic-files', type='code')
         reward_logic.add_file('utils/wrappers.py') 
         reward_logic.add_file('utils/env_lunch.py')
+        try:
+            reward_logic.add_file('job_sac.sh')
+        except (ValueError, FileNotFoundError) as e:
+            print(f"Warning: Could not find job file for artifact logging: {e}")
         run.log_artifact(reward_logic)
     
     writer = SummaryWriter(f"runs/{run_name}")
@@ -268,9 +287,14 @@ if __name__ == "__main__":
         "dynamics_rand": args.dynamics_rand,
         "camera_rand": args.camera_rand,
     }
+    env_luncher = EnvLunch(
+        run_name=run_name,
+        grayscale=args.grayscale,
+        **env_params
+    )
 
     envs = gym.vector.SyncVectorEnv(
-        [make_env(args.seed + i, i, args.capture_video, run_name, grayscale=args.grayscale, **env_params) for i in range(args.num_envs)]
+        [env_luncher.make_env_fn(args.seed + i, i, args.capture_video) for i in range(args.num_envs)]
     )
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
@@ -343,9 +367,7 @@ if __name__ == "__main__":
         # ALGO LOGIC: training.
         if global_step > args.learning_starts:
             data = rb.sample(args.batch_size)
-            #adding some parts
-            #CAST TO FLOAT HERE
-            # This converts the uint8 images from the buffer into float32 for the GPU
+        
             s_obs = data.observations.to(device, non_blocking=True)
             s_next_obs = data.next_observations.to(device, non_blocking=True)
 
@@ -415,10 +437,19 @@ if __name__ == "__main__":
                 if args.autotune:
                     writer.add_scalar("losses/alpha_loss", alpha_loss.item(), global_step)
 
-            # Periodic Model Saving 
-            if global_step > 0 and global_step % args.save_interval == 0:
-                save_models(actor, qf1, qf2, global_step, run_name, args, env_params)
 
-    save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix="Final")    
+    if args.save_model:
+        save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix="Final")
+    if args.eval_model:
+        evaluate_policy(
+            actor=actor,
+            args=args,
+            device=device,
+            algo_name="SAC",
+            num_episodes=10,
+            run_name=run_name,
+            **env_params
+        )
+    
     envs.close()
     writer.close()

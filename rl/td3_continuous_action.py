@@ -46,8 +46,10 @@ class Args:
     """if toggled, cuda will be enabled by default"""
     track: bool = False
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "DT_RL_TD3"
+    wandb_project_name: str = "Duckie-RL"
     """the wandb's project name"""
+    wandb_group: str = "TD3"
+    """The algorithm"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
     capture_video: bool = False
@@ -176,10 +178,18 @@ if __name__ == "__main__":
     run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
     if args.track:
         import wandb
+        active_tags = [args.env_id]
+        active_tags.append("Grayscale" if args.grayscale else "RGB")
+        if args.domain_rand: active_tags.append("DomainRand")
+        if args.dynamics_rand: active_tags.append("DynamicsRand")
+        if args.camera_rand: active_tags.append("CameraRand")
+        if args.distortion: active_tags.append("Distortion")
 
         run = wandb.init(
             project=args.wandb_project_name,
             entity=args.wandb_entity,
+            group=args.wandb_group,
+            tags=active_tags,
             sync_tensorboard=True,
             config=vars(args),
             name=run_name,
