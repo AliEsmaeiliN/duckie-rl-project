@@ -237,7 +237,7 @@ if __name__ == "__main__":
     )
     
     envs = gym.vector.SyncVectorEnv(
-        [env_luncher.make_env_fn(args.seed + i, i, args.capture_video) for i in range(args.num_envs)]
+        [env_luncher.make_env_fn(args.seed + i, i, args.capture_video, args.motion_blur) for i in range(args.num_envs)]
     )
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 

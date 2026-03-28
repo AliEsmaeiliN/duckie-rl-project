@@ -3,7 +3,7 @@ import gymnasium as gym
 import numpy as np
 # Duckietown Specific
 from gym_duckietown.envs import DuckietownEnv
-from utils.wrappers import ImgWrapper, ActionWrapper, CropResizeWrapper, CustomRewardWrapper, MotionBlurWrapper
+from utils.wrappers import ImgWrapper, ActionWrapper, CropResizeWrapper, CustomRewardWrapper, MotionBlurWrapper, DtRewardWrapper
 
 class EnvLunch:
     def __init__(self, 
@@ -35,9 +35,13 @@ class EnvLunch:
             **self.sim_to_real_kwargs
         )
 
-    def _apply_wrappers(self, env, capture_video=False):
+    def _apply_wrappers(self, env, capture_video=False, motion_blur=False):
         """Sequentially applies Gymnasium wrappers."""
-        env = MotionBlurWrapper(env)
+
+        if motion_blur:
+            print("motion blur applied")
+            env = MotionBlurWrapper(env)
+
         if capture_video:
             video_folder = f"videos/{self.run_name}"
             os.makedirs(video_folder, exist_ok=True)
@@ -45,6 +49,7 @@ class EnvLunch:
 
         # Vision Preprocessing
         env = CropResizeWrapper(env, shape=self.img_shape)
+
         if self.grayscale:
             env = gym.wrappers.GrayscaleObservation(env, keep_dim=True)
         
@@ -52,6 +57,7 @@ class EnvLunch:
         
         # Dynamics & Rewards
         env = ActionWrapper(env)
+        env = DtRewardWrapper(env)
         env = CustomRewardWrapper(env)
 
         # Temporal Stacking
@@ -76,12 +82,12 @@ class EnvLunch:
 
         return gym.wrappers.RecordEpisodeStatistics(env)
 
-    def make_env_fn(self, seed, idx, capture_video=False):
+    def make_env_fn(self, seed, idx, capture_video=False, motion_blur=False):
         """Returns a 'thunk' function for VectorEnv integration."""
         def thunk():
             render_mode = "rgb_array" if (capture_video and idx == 0) else None
             env = self._create_base_env(seed, render_mode)
-            env = self._apply_wrappers(env, capture_video)
+            env = self._apply_wrappers(env, capture_video, motion_blur)
             env.action_space.seed(seed)
             return env
         return thunk

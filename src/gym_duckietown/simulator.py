@@ -626,7 +626,6 @@ class Simulator(gym.Env):
                     tile_idx = self.np_random.integers(0, len(self.drivable_tiles))
                     tile = self.drivable_tiles[tile_idx]
                 else:
-                    print("spawn on a straight")
                     tile_idx = self.np_random.integers(0, len(straight_tiles))
                     tile = straight_tiles[tile_idx]
 
