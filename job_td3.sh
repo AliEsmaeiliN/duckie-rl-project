@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=duckie_rl_sac
+#SBATCH --job-name=duckie_rl_td3
 #SBATCH --output=output/duckie_%j.out
 #SBATCH -e output/duckie_%j.err
 #SBATCH --time=20:00:00
@@ -22,12 +22,12 @@ if [ ! -f $CONDA_PREFIX/lib/libtiff.so.5 ]; then
     ln -s $CONDA_PREFIX/lib/libtiff.so.6 $CONDA_PREFIX/lib/libtiff.so.5
 fi
 
-python rl/sac_continuous_action.py \
+python rl/td3_continuous_action.py \
     --seed 1 \
     --env-id AdaptiveV1 \
     --total-timesteps 1000000 \
-    --track \
     --buffer-size 150000 \
+    --track \
     --domain-rand \
-    --learning-starts 20000 \
-    --run-notes "Trying sac with the new reward and bigger buffer size. reduced buffer with Domain Rand and MotionBlur" 
+    --learning-starts 30000 \
+    --run-notes "New Adaptive Reward with Domain Randomization and MotionBlur"

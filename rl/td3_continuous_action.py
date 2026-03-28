@@ -101,6 +101,8 @@ class Args:
     """Simulates motor/trim imbalances"""
     camera_rand: bool = False 
     """Simulates mounting misalignments"""
+    motion_blur: bool = False
+    """Simulates the blur from the moving duckiebot"""
 
 
 # ALGO LOGIC: initialize agent here:
@@ -175,7 +177,7 @@ class Actor(nn.Module):
 if __name__ == "__main__":
 
     args = tyro.cli(Args)
-    run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
+    run_name = f"{args.env_id}__td3__{args.seed}__{int(time.time())}"
     if args.track:
         import wandb
         active_tags = [args.env_id]
@@ -184,6 +186,8 @@ if __name__ == "__main__":
         if args.dynamics_rand: active_tags.append("DynamicsRand")
         if args.camera_rand: active_tags.append("CameraRand")
         if args.distortion: active_tags.append("Distortion")
+        if args.motion_blur: active_tags.append("MotionBlur")
+
 
         run = wandb.init(
             project=args.wandb_project_name,
@@ -200,8 +204,8 @@ if __name__ == "__main__":
         reward_logic.add_file('utils/wrappers.py') 
         reward_logic.add_file('utils/env_lunch.py')
         try:
-            reward_logic.add_file('job_duckie.sh')
-        except FileNotFoundError as e:
+            reward_logic.add_file('job_td3.sh')
+        except (ValueError, FileNotFoundError) as e:
             print(f"Warning: Could not find job file for artifact logging: {e}")
         run.log_artifact(reward_logic)
 
