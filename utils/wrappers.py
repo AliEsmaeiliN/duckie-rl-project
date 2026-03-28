@@ -176,13 +176,6 @@ class CustomRewardWrapper(gym.RewardWrapper):
         speed_coeff = 2.0
         jerk_coeff = -0.3
         k = 5.0
-<<<<<<< HEAD
-
-        if in_danger_zone:
-            # Special "Stabilization" Values
-            speed_coeff = 0.4      
-            dist_penalty_coeff = -15.0      
-=======
         target_offset = 0.0
 
         if in_danger_zone:
@@ -190,18 +183,13 @@ class CustomRewardWrapper(gym.RewardWrapper):
             speed_coeff = 0.3      
             dist_penalty_coeff = -15.0
             target_offset = 0.05
->>>>>>> sac
             jerk_coeff = -1.5       
             k = 10.0                      
 
         
         reward_speed = speed_coeff * speed * lp.dot_dir
         reward_alignment = np.exp(k * (lp.dot_dir - 1.0)) # tanh like behaviour to add a higher gradint near 1
-<<<<<<< HEAD
-        reward_distance = dist_penalty_coeff * np.abs(lp.dist)
-=======
         reward_distance = dist_penalty_coeff * np.abs(lp.dist - target_offset)
->>>>>>> sac
         reward_angle = -0.03 * np.abs(lp.angle_deg)
         
         action_diff = np.linalg.norm(current_action - self.prev_action) 
