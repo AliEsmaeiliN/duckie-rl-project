@@ -93,7 +93,7 @@ class DtRewardWrapper(gym.RewardWrapper):
 
     def reward(self, reward):
         if reward == -1000:
-            reward = -10
+            reward = -15
 
         return reward
 
@@ -126,7 +126,7 @@ class CropResizeWrapper(gym.ObservationWrapper):
         width, height = img.size
         
         # PIL crop box is (left, top, right, bottom)
-        top_boundary = int(height * (1/3))
+        top_boundary = int(height * (1/4))
         img = img.crop((0, top_boundary, width, height))
         
         # target shape (84x84)
@@ -141,7 +141,7 @@ class CustomRewardWrapper(gym.RewardWrapper):
 
     def reward(self, reward):
 
-        if reward <= -10.0:
+        if reward <= -15.0:
             return reward
 
         # Get internal simulator state for custom math
@@ -175,25 +175,26 @@ class CustomRewardWrapper(gym.RewardWrapper):
         approaching_curve = "curve" in look_kind
         in_danger_zone = (direction == "CW") and approaching_curve
 
-        # Default
-        dist_penalty_coeff = -6.0
-        speed_coeff = 2.0
-        jerk_coeff = -1
-        k = 5.0
-        target_offset = 0.0
+
 
         if in_danger_zone:
             # Special "Stabilization" Values
-            speed_coeff = 0.2
-            dist_penalty_coeff = -10.0
+            speed_coeff = 1.0
+            dist_coeff = -15.0
+            jerk_coeff = -1.2
             target_offset = 0.05
-            jerk_coeff = -4      
-            k = 3.0                      
-
+            alignment_k = 5.0
+        else:
+            # "Race Mode" for straights
+            speed_coeff = 2.5
+            dist_coeff = -10.0
+            jerk_coeff = -0.5
+            target_offset = 0.0
+            alignment_k = 2.0
         
         reward_speed = speed_coeff * speed * lp.dot_dir
-        reward_alignment = np.exp(k * (lp.dot_dir - 1.0)) # tanh like behaviour to add a higher gradint near 1
-        reward_distance = dist_penalty_coeff * (lp.dist - target_offset)**2
+        reward_alignment = np.exp(alignment_k * (lp.dot_dir - 1.0)) # tanh like behaviour to add a higher gradint near 1
+        reward_distance = dist_coeff * (lp.dist - target_offset)**2
         reward_angle = -0.03 * np.abs(lp.angle_deg)
         
         action_diff = np.linalg.norm(current_action - self.prev_action) 
@@ -201,8 +202,40 @@ class CustomRewardWrapper(gym.RewardWrapper):
 
         self.prev_action = current_action.copy()
 
-        survival_bonus = 0.05  
-        if not sim._valid_pose(pos, angle):
-            return -10.0 
+        return reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
+    
+    import gymnasium as gym
+import numpy as np
 
-        return reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk + survival_bonus
+class KinematicActionWrapper(gym.ActionWrapper):
+    def __init__(self, env, gain=1.0, trim=0.0, radius=0.0318, k=27.0, limit=1.0):
+        super().__init__(env)
+        self.gain = gain
+        self.trim = trim
+        self.radius = radius
+        self.k = k
+        self.limit = limit
+        # Get wheel_dist directly from the simulator instance
+        self.wheel_dist = self.unwrapped.wheel_dist 
+
+    def action(self, action):
+        # Action is [v, omega] from the RL Agent
+        vel, angle = action
+
+        # Adjust motor constants by gain and trim
+        k_r_inv = (self.gain + self.trim) / self.k
+        k_l_inv = (self.gain - self.trim) / self.k
+
+        # Calculate angular velocities for wheels
+        omega_r = (vel + 0.5 * angle * self.wheel_dist) / self.radius
+        omega_l = (vel - 0.5 * angle * self.wheel_dist) / self.radius
+
+        # Convert to duty cycle (PWM)
+        u_r = omega_r * k_r_inv
+        u_l = omega_l * k_l_inv
+
+        # Apply physical limits (max motor power)
+        u_r_limited = np.clip(u_r, -self.limit, self.limit)
+        u_l_limited = np.clip(u_l, -self.limit, self.limit)
+
+        return np.array([u_l_limited, u_r_limited], dtype=np.float32)
