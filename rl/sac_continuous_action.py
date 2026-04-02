@@ -22,7 +22,7 @@ from cleanrl_utils.buffers import ReplayBuffer
 from rl.cnn_architectures import ImpalaCNN as cnn_encoder
 
 # Utilities
-from utils.env_lunch import EnvLunch
+from utils.rl_env import DuckieOvalEnv
 from utils.debug_tools import save_models, evaluate_policy
 
 # Target the specific logger used in the simulator
@@ -107,6 +107,21 @@ class Args:
     """Simulates mounting misalignments"""
     motion_blur: bool = False
     """Simulates the blur from the moving duckiebot"""
+
+def make_env(seed, idx, run_name, capture_video=False, motion_blur=False, **env_kwargs):
+    def thunk():
+        render_mode = "rgb_array" if (capture_video and idx == 0) else None
+        env = DuckieOvalEnv.create_wrapped(
+            run_name=run_name,
+            motion_blur=motion_blur,
+            render_mode=render_mode,
+            seed=seed, 
+            **env_kwargs
+        )
+        env.action_space.seed(seed)
+        return env
+
+    return thunk
 
 # ALGO LOGIC: initialize agent here:
 class SoftQNetwork(nn.Module):
@@ -235,7 +250,7 @@ if __name__ == "__main__":
 
     args = tyro.cli(Args)
     input_mode = "" if args.grayscale else "_RGB"
-    run_name = f"{args.env_id}{input_mode}__sac__{args.seed}__{int(time.time())}"
+    run_name = f"sac__{args.env_id}{input_mode}__{args.seed}__{int(time.time())}"
     if args.track:
         import wandb
         active_tags = [args.env_id]
@@ -287,14 +302,9 @@ if __name__ == "__main__":
         "dynamics_rand": args.dynamics_rand,
         "camera_rand": args.camera_rand,
     }
-    env_luncher = EnvLunch(
-        run_name=run_name,
-        grayscale=args.grayscale,
-        **env_params
-    )
 
     envs = gym.vector.SyncVectorEnv(
-        [env_luncher.make_env_fn(args.seed + i, i, args.capture_video, args.motion_blur) for i in range(args.num_envs)]
+        [make_env(args.seed + i, i, run_name, args.capture_video, args.motion_blur) for i in range(args.num_envs)]
     )
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 

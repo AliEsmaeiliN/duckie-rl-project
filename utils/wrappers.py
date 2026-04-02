@@ -7,35 +7,46 @@ from gym_duckietown.simulator import Simulator
 from gym_duckietown.simulator import get_dir_vec
 
 
-class MotionBlurWrapper(gym.Wrapper):
-    def __init__(self, env=None, frame_skip=3):
+class TemporalWrapper(gym.Wrapper):
+    def __init__(self, env=None, frame_skip=3, motion_blur=True):
         super().__init__(env)
         self.frame_skip = frame_skip
+        self.motion_blur = motion_blur
         self.env.unwrapped.delta_time = self.env.unwrapped.delta_time / (self.frame_skip + 1)
         
+        self.weights = [0.01, 0.04, 0.15, 0.8]  
         
-        self.weights = [0.01, 0.04, 0.15, 0.8]
     def step(self, action: np.ndarray):
         action = np.clip(action, self.action_space.low, self.action_space.high)
         motion_blur_window = []
+        total_reward = 0.0
 
-        for _ in range(self.frame_skip):
+        for _ in range(self.frame_skip + 1):
             obs = self.env.unwrapped.render_obs()
             motion_blur_window.append(obs)
-            self.env.unwrapped.update_physics(action)
+
+            _, reward, terminated, truncated, info = self.env.step(action)
+            total_reward += reward
+            
+            if terminated or truncated:
+                break
+
+        if not self.motion_blur:
+            processed_obs = motion_blur_window[-1]
+        else:
+            current_weights = self.weights[:len(motion_blur_window)]
+            
+            if np.sum(current_weights) == 0:
+                processed_obs = motion_blur_window[-1]
 
 
-        obs = self.env.unwrapped.render_obs()
-        motion_blur_window.append(obs)
+        processed_obs = np.average(
+            motion_blur_window, 
+            axis=0, 
+            weights=self.weights[:len(motion_blur_window)]
+        ).astype(np.uint8)
 
-        # axis=0 averages the pixel values across the time dimension
-        blurred_obs = np.average(motion_blur_window, axis=0, weights=self.weights).astype(np.uint8)
-
-        d_info = self.env.unwrapped._compute_done_reward(action)
-        misc = self.env.unwrapped.get_agent_info()
-        misc["Simulator"]["msg"] = d_info.done_why
-
-        return blurred_obs, d_info.reward, d_info.done, False, misc
+        return processed_obs, total_reward, terminated, truncated, info
 
 
 class ResizeWrapper(gym.ObservationWrapper):
@@ -208,15 +219,14 @@ class CustomRewardWrapper(gym.RewardWrapper):
 import numpy as np
 
 class KinematicActionWrapper(gym.ActionWrapper):
-    def __init__(self, env, gain=1.0, trim=0.0, radius=0.0318, k=27.0, limit=1.0):
+    def __init__(self, env, gain=1.0, trim=0.0, wheel_dist=0.102, radius=0.0318, k=27.0, limit=1.0):
         super().__init__(env)
         self.gain = gain
         self.trim = trim
         self.radius = radius
         self.k = k
         self.limit = limit
-        # Get wheel_dist directly from the simulator instance
-        self.wheel_dist = self.unwrapped.wheel_dist 
+        self.wheel_dist = wheel_dist
 
     def action(self, action):
         # Action is [v, omega] from the RL Agent

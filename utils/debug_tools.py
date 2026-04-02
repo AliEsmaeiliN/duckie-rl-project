@@ -5,7 +5,7 @@ import glob
 import torch
 import numpy as np
 import wandb
-from utils.env_lunch import EnvLunch
+from utils.rl_env import DuckieOvalEnv
 
 def plot_model_input(s_obs, global_step):
     # Take the first environment's observation from the batch
@@ -63,19 +63,17 @@ def evaluate_policy(actor, args, device, algo_name, run_name = "run_name", num_e
     custom_run_name = f"{algo_name}/{run_name}"
     
     # Create a separate evaluation environment
-    env_luncher = EnvLunch(
+    eval_env = DuckieOvalEnv.create_wrapped(
         run_name=custom_run_name,
-        max_steps=3000,
-        grayscale=args.grayscale,
-        **env_params
+        motion_blur=args.motion_blur, 
+        grayscale=True,
+        frame_stack=4,
+        capture_video = True,
+        render_mode = "rgb_array",
+        domain_rand=args.domain_rand,
+        dynamics_rand=args.dynamics_rand,
+        distortion=args.distortion
     )
-    eval_env_func = env_luncher.make_env_fn(
-        seed=args.seed + 100, 
-        idx=0,
-        capture_video=True,
-    )
-
-    eval_env = eval_env_func()
     
 
     all_rewards = []
