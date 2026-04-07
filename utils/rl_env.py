@@ -18,7 +18,7 @@ class DuckieOvalEnv(Simulator):
         kwargs.setdefault('camera_height', 120)
         kwargs.setdefault('accept_start_angle_deg', 4)
         kwargs.setdefault('full_transparency', True)
-        kwargs.setdefault('max_steps', 1500)
+        kwargs.setdefault('max_steps', 3000)
         
         kwargs.setdefault('frame_skip', 1) 
         
@@ -36,6 +36,7 @@ class DuckieOvalEnv(Simulator):
         env = cls(**kwargs)
 
         # 1. Kinematics (v, w -> wl, wr)
+        env = ActionWrapper(env)
         env = KinematicActionWrapper(env, wheel_dist=0.102, radius=0.0318, k=27.0)
 
         # 2. Temporal Logic
@@ -56,7 +57,7 @@ class DuckieOvalEnv(Simulator):
         env = ImgWrapper(env) # Transpose to CHW
 
         # 4. Action Constraints & Logic
-        env = ActionWrapper(env)
+        #env = ActionWrapper(env)
         
         # 5. Reward System
         env = DtRewardWrapper(env)

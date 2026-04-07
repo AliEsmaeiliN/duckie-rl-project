@@ -12,41 +12,41 @@ class TemporalWrapper(gym.Wrapper):
         super().__init__(env)
         self.frame_skip = frame_skip
         self.motion_blur = motion_blur
-        self.env.unwrapped.delta_time = self.env.unwrapped.delta_time / (self.frame_skip + 1)
+        self.unwrapped.delta_time = self.unwrapped.delta_time / (self.frame_skip + 1)
         
         self.weights = [0.01, 0.04, 0.15, 0.8]  
         
     def step(self, action: np.ndarray):
-        action = np.clip(action, self.action_space.low, self.action_space.high)
+        action = np.clip(action, -1, 1)
         motion_blur_window = []
-        total_reward = 0.0
+        processed_action = self.env.action(action)
+        if hasattr(self.env, 'action'):
+            processed_action = self.env.action(action)
 
         for _ in range(self.frame_skip + 1):
-            obs = self.env.unwrapped.render_obs()
+            obs = self.unwrapped.render_obs()
             motion_blur_window.append(obs)
 
-            _, reward, terminated, truncated, info = self.env.step(action)
-            total_reward += reward
+            self.unwrapped.update_physics(processed_action)
             
-            if terminated or truncated:
-                break
-
         if not self.motion_blur:
             processed_obs = motion_blur_window[-1]
         else:
             current_weights = self.weights[:len(motion_blur_window)]
-            
             if np.sum(current_weights) == 0:
                 processed_obs = motion_blur_window[-1]
+            else:
+                processed_obs = np.average(
+                    motion_blur_window, 
+                    axis=0, 
+                    weights=current_weights
+                ).astype(np.uint8)
 
 
-        processed_obs = np.average(
-            motion_blur_window, 
-            axis=0, 
-            weights=self.weights[:len(motion_blur_window)]
-        ).astype(np.uint8)
+        d_info = self.unwrapped._compute_done_reward(processed_action)
+        self.unwrapped.step_count += 1
 
-        return processed_obs, total_reward, terminated, truncated, info
+        return processed_obs, d_info.reward, d_info.done, False, self.unwrapped.get_agent_info()
 
 
 class ResizeWrapper(gym.ObservationWrapper):
