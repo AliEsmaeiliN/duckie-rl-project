@@ -25,7 +25,8 @@ requirements.resolved
 output/
 outputs/
 artifacts/
-models/
+models/*
+!models/.gitkeep
 trained_models/
 wandb/
 runs/

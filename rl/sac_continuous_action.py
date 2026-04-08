@@ -166,7 +166,7 @@ LOG_STD_MIN = -5
 
 
 class Actor(nn.Module):
-    def __init__(self, env, grayscale=False):
+    def __init__(self, env, grayscale=True):
         super().__init__()
 
         self.channels = 4 if grayscale else 12

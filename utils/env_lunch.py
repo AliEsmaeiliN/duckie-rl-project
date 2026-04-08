@@ -3,7 +3,7 @@ import gymnasium as gym
 import numpy as np
 # Duckietown Specific
 from gym_duckietown.simulator import Simulator
-from utils.wrappers import ImgWrapper, ActionWrapper, CropResizeWrapper, CustomRewardWrapper, MotionBlurWrapper, DtRewardWrapper, KinematicActionWrapper, ResizeWrapper
+from utils.wrappers import ImgWrapper, ActionWrapper, CropResizeWrapper, CustomRewardWrapper, TemporalWrapper, DtRewardWrapper, KinematicActionWrapper, ResizeWrapper
 
 class EnvLunch:
     def __init__(self, 
@@ -26,12 +26,12 @@ class EnvLunch:
             seed=seed,
             map_name="oval_loop",
             max_steps=self.max_steps,
-            camera_width=160,
-            camera_height=120,
+            camera_width=640,
+            camera_height=480,
             accept_start_angle_deg=4,
             full_transparency=True,
             render_mode=render_mode,
-            frame_skip=1,
+            frame_skip=3,
             **self.sim_to_real_kwargs
         )
 
@@ -42,10 +42,10 @@ class EnvLunch:
 
         if motion_blur:
             print("motion blur applied")
-            env = MotionBlurWrapper(env)
-        else:
+            env = TemporalWrapper(env)
+        #else:
         # Just repeats the action without rendering intermediate frames
-            env = gym.wrappers.FrameSkip(env, skip=3)
+        #    env = gym.wrappers.FrameSkip(env, skip=3)
 
         if capture_video:
             video_folder = f"videos/{self.run_name}"
