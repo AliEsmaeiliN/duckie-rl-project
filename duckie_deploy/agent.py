@@ -1,11 +1,9 @@
 import torch
 import numpy as np
 import collections
-from PIL import Image
 import cv2
 
-from rl.sac_continuous_action import Actor as SACActor
-from rl.td3_continuous_action import Actor as TD3Actor
+from .models import SACActor, TD3Actor
 
 class DuckiebotAgent:
     def __init__(self, model_path, algo_type="sac", grayscale=True, frame_stack=4):
@@ -14,23 +12,26 @@ class DuckiebotAgent:
         self.grayscale = grayscale
         self.frame_stack = frame_stack
         
+        print(f"Loading {self.algo_type.upper()} model from {model_path}...")
         self.frames = collections.deque(maxlen=frame_stack)
         
         if self.algo_type == "sac":
-            self.actor = SACActor(None).to(self.device)
+            self.actor = SACActor(grayscale=self.grayscale).to(self.device)
         elif self.algo_type == "td3":
-            self.actor = TD3Actor(None).to(self.device)
+            self.actor = TD3Actor(grayscale=self.grayscale).to(self.device)
         else:
-            raise ValueError("Could not detect the agent type to upload the actor")
+            raise ValueError(f"Unknown algo type: {self.algo_type}")
 
         checkpoint = torch.load(model_path, map_location=self.device)
         self.actor.load_state_dict(checkpoint['actor_state_dict'])
         self.actor.eval()
 
+        self.c = 1 if grayscale else 3
+        self.frames = collections.deque(maxlen=frame_stack)
+
     def preprocess(self, obs_rgb):
         """
         Replicates the Sim2Real vision pipeline: 
-        Resize(120,160) -> Crop(bottom 3/4) -> Resize(84,84) -> Gray -> Stack
         """
         
         # ResizeWrapper
@@ -41,44 +42,41 @@ class DuckiebotAgent:
         top_boundary = int(h * 0.25)
         img = img[top_boundary:h, 0:w]
         
-        # 3. Resize to 84x84
         img = cv2.resize(img, (84, 84), interpolation=cv2.INTER_LINEAR)
         
-        # 4. Grayscale & Transpose (ImgWrapper logic)
         if self.grayscale:
-            img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-            # Add channel dim: (84, 84) -> (1, 84, 84)
-            img = np.expand_dims(img, axis=0)
+            img_processed = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            img_processed = img_processed[np.newaxis, :, :]
         else:
-            # RGB Transpose: (84, 84, 3) -> (3, 84, 84)
-            img = img.transpose(2, 0, 1)
+            img_processed = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            img_processed = img_processed.transpose(2, 0, 1)
             
-        # 5. Temporal Stacking
-        if len(self.frames) == 0:
-            for _ in range(self.frame_stack):
-                self.frames.append(img)
-        else:
-            self.frames.append(img)
-            
-        # 6. Final Tensor Construction
-        # Concatenate along the channel axis (axis 0)
-        stacked_obs = np.concatenate(list(self.frames), axis=0)
-        
-        obs_tensor = torch.FloatTensor(stacked_obs).unsqueeze(0).to(self.device)
-        return obs_tensor
+        return img_processed.astype(np.float32)
 
-    def act(self, obs_tensor):
+    def get_action(self, obs_tensor):
         """
         Handles deterministic inference for the physical robot.
         """
+        processed_frame = self.preprocess(obs_tensor)
+
+        if len(self.frames) == 0:
+            for _ in range(self.frame_stack):
+                self.frames.append(processed_frame)
+        else:
+            self.frames.append(processed_frame)
+            
+        # Stack along channel dimension: (C*Stack, 84, 84)
+        stacked_input = np.concatenate(list(self.frames), axis=0)
+        input_tensor = torch.FloatTensor(stacked_input).unsqueeze(0).to(self.device)
+
         with torch.no_grad():
             if self.algo_type == "sac":
                 # use mean_action
-                _, _, action = self.actor.get_action(obs_tensor)
+                _, _, action = self.actor.get_action(input_tensor)
             else:
-                action = self.actor(obs_tensor)
+                action = self.actor(input_tensor)
         
-        return action.cpu().numpy()[0]
+        return action.cpu().numpy().reshape(-1)
 
     def postprocess_kinematics(self, action):
         """
@@ -102,9 +100,4 @@ if __name__ == "__main__":
 
     print(f"Agent initialized using {agent.algo_type} on {agent.device}")
 
-    # This part is handled by the Duckietown ROS wrapper in reality
-    def on_camera_frame(raw_frame):
-        obs_tensor = agent.preprocess(raw_frame)
-        raw_action = agent.act(obs_tensor)
-        wheel_cmd = agent.postprocess_kinematics(raw_action)
-        return wheel_cmd
+    

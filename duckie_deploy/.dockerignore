@@ -1,0 +1,16 @@
+**
+# Allowing the necessary scripts
+!solution.py
+!agent.py
+!requirements.txt
+!rl/**
+!**/*.cleanrl_model
+
+# Blocking everything else
+.git
+.ipynb_checkpoints
+__pycache__
+*.pyc
+utils/
+videos/
+runs/

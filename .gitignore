@@ -25,8 +25,7 @@ requirements.resolved
 output/
 outputs/
 artifacts/
-models/*
-!models/.gitkeep
+duckie_deploy/models/*
 trained_models/
 wandb/
 runs/
