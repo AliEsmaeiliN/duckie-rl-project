@@ -13,32 +13,23 @@ class RLNode:
         rospy.init_node('rl_agent_node')
         self.veh = os.environ.get('VEHICLE_NAME', 'duckie1nav')
         
-        # Initialize Agent
         self.agent = DuckiebotAgent(
             model_path="models/sac_Final.cleanrl_model", 
             algo_type="sac"
         )
         
-        # Publisher for the wheels
         self.wheel_pub = rospy.Publisher(f"/{self.veh}/wheels_driver_node/wheels_cmd", WheelsCmdStamped, queue_size=1)
-        
-        # Subscriber for the camera
         self.sub = rospy.Subscriber(f"/{self.veh}/camera_node/image/compressed", CompressedImage, self.callback, queue_size=1, buff_size=2**24)
         
         rospy.loginfo("Node started. Listening for camera frames...")
         rospy.on_shutdown(self.emergency_stop)
 
     def callback(self, msg):
-        # Decode image
         np_arr = np.frombuffer(msg.data, np.uint8)
         obs = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-        
-        # Use your debug script to send data to laptop
-        # We pass 'self' as the context
         run_remote_debug(self.agent, self, obs)
 
     def write(self, topic, data):
-        """Matches the 'context.write' expected by your debug_bot.py"""
         if topic == 'wheels':
             pass
             

@@ -2,6 +2,7 @@ import socket
 import pickle
 import struct
 import cv2
+import numpy as np
 
 def start_laptop_receiver(ip='0.0.0.0', port=8089):
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -38,11 +39,7 @@ def start_laptop_receiver(ip='0.0.0.0', port=8089):
                 msg = pickle.loads(msg_data)
                 img = msg["image"]
 
-                # FORCE interpretation as uint8 grayscale
                 img = np.array(img, dtype=np.uint8)
-
-                # If it STILL looks inverted, manually flip it to see if it matches Sim
-                # img = cv2.bitwise_not(img) 
 
                 cv2.imshow("Duckiebot View (84x84)", img)
                 print(f"Action: {msg['action']} | Motors: {msg['motors']}")
