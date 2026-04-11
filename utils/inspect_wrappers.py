@@ -100,7 +100,7 @@ def manual_vision_pipeline(env, observation_raw, grayscale=True):
     cv2.imshow("2. Crop & Resized", cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
     
     if grayscale:
-        img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         cv2.imshow("3. Grayscale", img_gray)
         cv2.waitKey(0) 
     else:
@@ -117,7 +117,7 @@ def manual_vision_pipeline(env, observation_raw, grayscale=True):
         img = cv2.resize(img, (84, 84), interpolation=cv2.INTER_LINEAR)
         
         if grayscale:
-            img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+            img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             img_processed = img_gray[np.newaxis, :, :]
         else:
             img_processed = img.transpose(2, 0, 1)

@@ -3,7 +3,7 @@ import numpy as np
 import collections
 import cv2
 
-from .models import SACActor, TD3Actor
+from models import SACActor, TD3Actor
 
 class DuckiebotAgent:
     def __init__(self, model_path, algo_type="sac", grayscale=True, frame_stack=4):
@@ -43,15 +43,16 @@ class DuckiebotAgent:
         img = img[top_boundary:h, 0:w]
         
         img = cv2.resize(img, (84, 84), interpolation=cv2.INTER_LINEAR)
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         
         if self.grayscale:
-            img_processed = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            img_processed = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2GRAY)
             img_processed = img_processed[np.newaxis, :, :]
         else:
-            img_processed = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            img_processed = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
             img_processed = img_processed.transpose(2, 0, 1)
             
-        return img_processed.astype(np.float32)
+        return img_processed
 
     def get_action(self, obs_tensor):
         """
@@ -93,11 +94,3 @@ class DuckiebotAgent:
         u_l = np.clip(((v - 0.5 * omega * wheel_dist) / radius) / k, -1.0, 1.0)
         
         return [u_l, u_r]
-
-if __name__ == "__main__":
-    MODEL_PATH = "models/sac_v1/sac_latest_step.cleanrl_model"
-    agent = DuckiebotAgent(MODEL_PATH, algo_type="sac")
-
-    print(f"Agent initialized using {agent.algo_type} on {agent.device}")
-
-    

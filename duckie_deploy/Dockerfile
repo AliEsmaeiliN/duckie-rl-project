@@ -4,6 +4,7 @@ FROM duckietown/dt-core:${DISTRO}-${ARCH}
 
 # Install ML dependencies
 COPY requirements_duckiebot.txt .
+RUN pip3 install --no-cache-dir --upgrade pip
 RUN pip3 install --no-cache-dir -r requirements_duckiebot.txt
 
 # Set workspace
