@@ -12,8 +12,6 @@ def get_version(filename):
 
 version = get_version("src/gym_duckietown/__init__.py")
 
-# 2. Read requirements.txt for a single "Source of Truth"
-# This ensures pip install -e . installs everything in your requirements file
 with open("requirements.txt") as f:
     install_requires = [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
@@ -23,9 +21,6 @@ setup(
     description="Modified Duckietown for SAC/TD3 Reinforcement Learning Using CleanRL",
     
     # --- THIS IS THE KEY CHANGE ---
-    # We tell Python: 
-    # 1. The main code is in 'src'
-    # 2. But 'rl', 'utils', and 'cleanrl_utils' are in the root ('.')
     package_dir={
         "": "src",
         "rl": "rl",
@@ -35,7 +30,6 @@ setup(
     },
     
     # Now find_packages will look in 'src', 
-    # and the others will be pulled from the root mapping above
     packages=find_packages("src") + ["rl", "utils", "path_planning", "cleanrl_utils"],
     
     zip_safe=False,
