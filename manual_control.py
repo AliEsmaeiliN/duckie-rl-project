@@ -17,8 +17,8 @@ import pyglet
 from pyglet.window import key
 
 from src.gym_duckietown.envs import DuckietownEnv
-from utils.wrappers import CropResizeWrapper, DebugRewardWrapper
-from utils.env_lunch import EnvLunch
+from utils.wrappers import CropResizeWrapper
+from utils.rl_env import DuckieOvalEnv
 
 # from experiments.utils import save_img
 
@@ -34,6 +34,7 @@ parser.add_argument("--dynamics_rand", action="store_true", help="enable dynamic
 parser.add_argument("--frame-skip", default=1, type=int, help="number of frames to skip")
 parser.add_argument("--seed", default=1, type=int, help="seed")
 parser.add_argument("--no-grayscale", dest="grayscale", action="store_false", help="Disable the grayscale wrapper (default is True)")
+parser.add_argument("--motion-blur", default=False, action="store_true")
 args = parser.parse_args()
 
 
@@ -51,20 +52,17 @@ if args.env_name and args.env_name.find("Duckietown") != -1:
         accept_start_angle_deg = 4,
     )
     env = CropResizeWrapper(env, shape=(84, 84))
-    env = DebugRewardWrapper(env)
 else:
-    env_lunch = EnvLunch(
-        run_name="manaul_control",
-        max_steps=5000,
-        grayscale=args.grayscale,
-        domain_rand = args.domain_rand,
-        distortion = args.distortion,
-        camera_rand=args.camera_rand,
+    env = DuckieOvalEnv.create_wrapped(
+        run_name="manual_control",
+        motion_blur=args.motion_blur, 
+        grayscale=True,
+        frame_stack=4,
+        
+        domain_rand=args.domain_rand,
         dynamics_rand=args.dynamics_rand,
-        )
-    env_func = env_lunch.make_env_fn(seed=1, idx=0)
-    env = env_func()
-    
+        distortion=args.distortion
+    )
 
 render_modes = ["human", "top_down", "free_cam", "rgb_array"]
 view = render_modes[1]

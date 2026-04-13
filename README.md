@@ -35,8 +35,6 @@ This version has been refactored to support:
 
     Gymnasium API: Updated for compatibility with modern RL libraries.
 
-    Hardware Acceleration: Optimized for NVIDIA GPUs (GTX 1650/RTX series).
-
 Gym-Duckietown is a simulator for the [Duckietown](https://duckietown.org) Universe, written in pure Python/OpenGL (Pyglet). It places your agent, a Duckiebot, inside of an instance of a Duckietown: a loop of roads with turns, intersections, obstacles, Duckie pedestrians, and other Duckiebots. It can be a pretty hectic place!
 
 Gym-Duckietown is fast, open, and incredibly customizable. What started as a lane-following simulator has evolved into a fully-functioning autonomous driving simulator that you can use to train and test your Machine Learning, Reinforcement Learning, Imitation Learning, or even classical robotics algorithms. Gym-Duckietown offers a wide range of tasks, from simple lane-following to full city navigation with dynamic obstacles. Gym-Duckietown also ships with features, wrappers, and tools that can help you bring your algorithms to the real robot, including [domain-randomization](https://blog.openai.com/spam-detection-in-the-physical-world/), accurate camera distortion, and differential-drive physics (and most importantly, realistic waddling).
@@ -66,10 +64,6 @@ different scenarios will make for a more robust policy/model.
 <img src="media/domainrand-sim.gif" width="300px" height="200px" ><img src="media/needfordr.gif" width="300px" height="200px" ><br>
 </p>
 
-The recommended way to test your model on the real hardware is to use [one of the AI Driving Olympics templates](https://docs-old.duckietown.org/daffy/AIDO/out/embodied.html). 
-We have some baseline RL implementations that also may be useful for this purpose, 
-[one that is standalone](https://docs-old.duckietown.org/daffy/AIDO/out/embodied_rl.html), and 
-[one that is based on Residual Policy Learning and integrates with ROS](https://docs-old.duckietown.org/daffy/AIDO/out/embodied_rpl.html). 
 
 <!--The `Duckiebot-v0` environment is meant to connect to software running on
 a real Duckiebot and remotely control the robot. It is a tool to test that policies
@@ -124,56 +118,14 @@ source activate duckie-rl
 export PYTHONPATH="${PYTHONPATH}:`pwd`"
 ```
 
-### Docker Image
-
-There is a pre-built Docker image available [on Docker Hub](https://hub.docker.com/r/duckietown/gym-duckietown), which also contains an installation of PyTorch.
-
-*Note that in order to get GPU acceleration, you should install and use [nvidia-docker 2.0](https://github.com/nvidia/nvidia-docker/wiki/Installation-(version-2.0)).*
-
-To get started, pull the `duckietown/gym-duckietown` image from Docker Hub and open a shell in the container:
-
-```
-nvidia-docker pull duckietown/gym-duckietown && \
-nvidia-docker run -it duckietown/gym-duckietown bash
-```
-
-Then create a virtual display:
-
-```
-Xvfb :0 -screen 0 1024x768x24 -ac +extension GLX +render -noreset &> xvfb.log &
-export DISPLAY=:0
-```
-
-Now, you are ready to start training a policy using RL:
-
-```
-python3 pytorch_rl/main.py \
-        --algo a2c \
-        --env-name Duckietown-loop_obstacles-v0 \
-        --lr 0.0002 \
-        --max-grad-norm 0.5 \
-        --no-vis \
-        --num-steps 20
-```
-
-If you need to do so, you can build a Docker image by running the following command from the root directory of this repository:
-
-```
-docker build . \
-       --file ./docker/standalone/Dockerfile \
-       --no-cache=true \
-       --network=host \
-       --tag <YOUR_TAG_GOES_HERE>
-```
-
 ## Usage
 
 ### Testing
 
-There is a simple UI application which allows you to control the simulation or real robot manually. The `manual_control.py` application will launch the Gym environment, display camera images and send actions (keyboard commands) back to the simulator or robot. You can specify which map file to load with the `--map-name` argument:
+There is a simple UI application which allows you to control the simulation or real robot manually. The `manual_control.py` application will launch the Gym environment, display camera images and send actions (keyboard commands) back to the simulator or robot. You can specify which map file to load with the `--map-name` argument. You can try the Duckietown environment using the Duckietown `--env-name`, otherwise the custom environment of RL which is defaulted to `oval-map` will be lunched:
 
 ```
-./manual_control.py --env-name Duckietown-udem1-v0
+./manual_control.py --env-name Duckietown
 ```
 
 There is also a script to run automated tests (`run_tests.py`).
@@ -187,13 +139,13 @@ Verify your installation, CUDA status, and OpenGL vendor by running the integrat
 This workspace is designed to work with CleanRL. To train a SAC or TD3 agent, move your scripts to the [rl](/rl). folder and run:
 
 ```
-python rl/sac_continuous_action.py --env-id map
+python rl/sac_continuous_action.py
 ```
 
-Then, to visualize the results of training, you can run the following command. Note that you can do this while the training process is still running. Also note that if you are running this through SSH, you will need to enable X forwarding to get a display:
+Then, to visualize the results of training, you can run the following command. The follwoing will evaluate the saved  `.cleanrl_model` which can be saved manualy or on [WandB](https://github.com/wandb/wandb):
 
 ```
-python3 pytorch_rl/enjoy.py --env-name Duckietown-small_loop-v0 --num-stack 1 --load-dir trained_models/a2c
+python rl/eval_sac.py --model-path --local True\False
 ```
 
 
@@ -322,28 +274,3 @@ It's possible to improve the performance of the simulator by disabling Pyglet er
 ```
 export PYGLET_DEBUG_GL=True
 ```
-
-### RL training doesn't converge
-
-Reinforcement learning algorithms are extremely sensitive to hyperparameters. Choosing the
-wrong set of parameters could prevent convergence completely, or lead to unstable performance over
-training. You will likely want to experiment. A learning rate that is too low can lead to no
-learning happening. A learning rate that is too high can lead unstable performance throughout
-training or a suboptimal result.
-
-The reward values are currently rescaled into the [0,1] range, because the RL code in
-`pytorch_rl` doesn't do reward clipping, and deals poorly with large reward values. Also
-note that changing the reward function might mean you also have to retune your choice
-of hyperparameters.
-
-### Unknown encoder 'libx264' when using gym.wrappers.Monitor
-
-It is possible to use `gym.wrappers.Monitor` to record videos of the agent performing a task. See [examples here](https://www.programcreek.com/python/example/100947/gym.wrappers.Monitor).
-
-The libx264 error is due to a problem with the way ffmpeg is installed on some linux distributions. One possible way to circumvent this is to reinstall ffmpeg using conda:
-
-```
-conda install -c conda-forge ffmpeg
-```
-
-Alternatively, screencasting programs such as [Kazam](https://launchpad.net/kazam) can be used to record the graphical output of a single window.

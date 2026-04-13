@@ -21,7 +21,7 @@ from cleanrl_utils.buffers import ReplayBuffer
 from rl.cnn_architectures import ImpalaCNN as cnn_encoder
 
 # Utilities
-from utils.env_lunch import EnvLunch
+from utils.rl_env import DuckieOvalEnv
 from utils.debug_tools import save_models, evaluate_policy
 
 # Target the specific logger used in the simulator
@@ -46,8 +46,10 @@ class Args:
     """if toggled, cuda will be enabled by default"""
     track: bool = False
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "DT_RL_TD3"
+    wandb_project_name: str = "Duckie-RL"
     """the wandb's project name"""
+    wandb_group: str = "TD3"
+    """The algorithm"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
     capture_video: bool = False
@@ -99,6 +101,23 @@ class Args:
     """Simulates motor/trim imbalances"""
     camera_rand: bool = False 
     """Simulates mounting misalignments"""
+    motion_blur: bool = False
+    """Simulates the blur from the moving duckiebot"""
+
+def make_env(seed, idx, run_name, capture_video=False, motion_blur=False, **env_kwargs):
+    def thunk():
+        render_mode = "rgb_array" if (capture_video and idx == 0) else None
+        env = DuckieOvalEnv.create_wrapped(
+            run_name=run_name,
+            motion_blur=motion_blur,
+            render_mode=render_mode,
+            seed=seed,
+            **env_kwargs
+        )
+        env.action_space.seed(seed)
+        return env
+
+    return thunk
 
 
 # ALGO LOGIC: initialize agent here:
@@ -173,13 +192,23 @@ class Actor(nn.Module):
 if __name__ == "__main__":
 
     args = tyro.cli(Args)
-    run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
+    run_name = f"td3__{args.env_id}__{args.seed}__{int(time.time())}"
     if args.track:
         import wandb
+        active_tags = [args.env_id]
+        active_tags.append("Grayscale" if args.grayscale else "RGB")
+        if args.domain_rand: active_tags.append("DomainRand")
+        if args.dynamics_rand: active_tags.append("DynamicsRand")
+        if args.camera_rand: active_tags.append("CameraRand")
+        if args.distortion: active_tags.append("Distortion")
+        if args.motion_blur: active_tags.append("MotionBlur")
+
 
         run = wandb.init(
             project=args.wandb_project_name,
             entity=args.wandb_entity,
+            group=args.wandb_group,
+            tags=active_tags,
             sync_tensorboard=True,
             config=vars(args),
             name=run_name,
@@ -190,8 +219,8 @@ if __name__ == "__main__":
         reward_logic.add_file('utils/wrappers.py') 
         reward_logic.add_file('utils/env_lunch.py')
         try:
-            reward_logic.add_file('job_duckie.sh')
-        except FileNotFoundError as e:
+            reward_logic.add_file('job_td3.sh')
+        except (ValueError, FileNotFoundError) as e:
             print(f"Warning: Could not find job file for artifact logging: {e}")
         run.log_artifact(reward_logic)
 
@@ -216,14 +245,9 @@ if __name__ == "__main__":
         "dynamics_rand": args.dynamics_rand,
         "camera_rand": args.camera_rand,
     }
-    env_luncher = EnvLunch(
-        run_name=run_name,
-        grayscale=args.grayscale,
-        **env_params
-    )
     
     envs = gym.vector.SyncVectorEnv(
-        [env_luncher.make_env_fn(args.seed + i, i, args.capture_video) for i in range(args.num_envs)]
+        [make_env(args.seed + i, i, run_name, args.capture_video, args.motion_blur) for i in range(args.num_envs)]
     )
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 

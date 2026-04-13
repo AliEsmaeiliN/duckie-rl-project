@@ -7,35 +7,46 @@ from gym_duckietown.simulator import Simulator
 from gym_duckietown.simulator import get_dir_vec
 
 
-class MotionBlurWrapper(gym.Wrapper):
-    def __init__(self, env=None, frame_skip=3):
+class TemporalWrapper(gym.Wrapper):
+    def __init__(self, env=None, frame_skip=3, motion_blur=True):
         super().__init__(env)
         self.frame_skip = frame_skip
-        self.env.unwrapped.delta_time = self.env.unwrapped.delta_time / (self.frame_skip + 1)
+        self.motion_blur = motion_blur
+        self.unwrapped.delta_time = self.unwrapped.delta_time / (self.frame_skip + 1)
         
+        self.weights = [0.01, 0.04, 0.15, 0.8]  
         
-        self.weights = [0.01, 0.04, 0.15, 0.8]
     def step(self, action: np.ndarray):
-        action = np.clip(action, self.action_space.low, self.action_space.high)
+        action = np.clip(action, -1, 1)
         motion_blur_window = []
+        processed_action = self.env.action(action)
+        if hasattr(self.env, 'action'):
+            processed_action = self.env.action(action)
 
-        for _ in range(self.frame_skip):
-            obs = self.env.unwrapped.render_obs()
+        for _ in range(self.frame_skip + 1):
+            obs = self.unwrapped.render_obs()
             motion_blur_window.append(obs)
-            self.env.unwrapped.update_physics(action)
+
+            self.unwrapped.update_physics(processed_action)
+            
+        if not self.motion_blur:
+            processed_obs = motion_blur_window[-1]
+        else:
+            current_weights = self.weights[:len(motion_blur_window)]
+            if np.sum(current_weights) == 0:
+                processed_obs = motion_blur_window[-1]
+            else:
+                processed_obs = np.average(
+                    motion_blur_window, 
+                    axis=0, 
+                    weights=current_weights
+                ).astype(np.uint8)
 
 
-        obs = self.env.unwrapped.render_obs()
-        motion_blur_window.append(obs)
+        d_info = self.unwrapped._compute_done_reward(processed_action)
+        self.unwrapped.step_count += 1
 
-        # axis=0 averages the pixel values across the time dimension
-        blurred_obs = np.average(motion_blur_window, axis=0, weights=self.weights).astype(np.uint8)
-
-        d_info = self.env.unwrapped._compute_done_reward(action)
-        misc = self.env.unwrapped.get_agent_info()
-        misc["Simulator"]["msg"] = d_info.done_why
-
-        return blurred_obs, d_info.reward, d_info.done, False, misc
+        return processed_obs, d_info.reward, d_info.done, False, self.unwrapped.get_agent_info()
 
 
 class ResizeWrapper(gym.ObservationWrapper):
@@ -93,7 +104,7 @@ class DtRewardWrapper(gym.RewardWrapper):
 
     def reward(self, reward):
         if reward == -1000:
-            reward = -10
+            reward = -15
 
         return reward
 
@@ -126,7 +137,7 @@ class CropResizeWrapper(gym.ObservationWrapper):
         width, height = img.size
         
         # PIL crop box is (left, top, right, bottom)
-        top_boundary = int(height * (1/3))
+        top_boundary = int(height * (1/4))
         img = img.crop((0, top_boundary, width, height))
         
         # target shape (84x84)
@@ -134,123 +145,16 @@ class CropResizeWrapper(gym.ObservationWrapper):
         
         return np.array(img)
     
-class DebugRewardWrapper(gym.Wrapper):
-    def __init__(self, env):
-        super().__init__(env)
-        self.prev_action = np.zeros(2)
-    
-    def get_predictive_direction(self, sim, pos, angle, look_ahead_dist=0.3):
-        """
-        Looks ahead in the current driving direction to see 
-        what kind of turn is coming up.
-        """
-        # 1. Calculate a point ahead of the robot
-        dir_vec = np.array([np.cos(angle), 0, -np.sin(angle)])
-        predictive_pos = pos + dir_vec * look_ahead_dist
-        
-        # 2. Get the tile at that forward point
-        coord = sim.get_grid_coords(predictive_pos)
-        next_tile = sim._get_tile(*coord)
-        #print(next_tile["kind"])
-        if not next_tile or "curve" not in next_tile["kind"]:
-            return "STRAIGHT"
-
-        # 3. Apply your direction logic to the upcoming tile
-        tile_dir_idx = next_tile["angle"]
-        # We use the current angle to predict how we will enter it
-        direction_idx = int(round(angle / (np.pi / 2)) + 1) % 4
-        
-        if (direction_idx + 2) % 4 == tile_dir_idx:
-            return "INNER (CW)"
-        elif direction_idx == tile_dir_idx:
-            return "OUTER (CCW)"
-        else:
-            return "TRANSITION"
-    
-
-    def step(self, action):
-        obs, reward, terminated, truncated, info = self.env.step(action)
-
-        sim = self.env.unwrapped
-        pos = sim.cur_pos
-        angle = sim.cur_angle
-        speed = sim.speed
-        current_action = sim.last_action
-        try:
-            lp = sim.get_lane_pos2(sim.cur_pos, sim.cur_angle)
-            
-            coords = sim.get_grid_coords(pos) #
-            tile = sim._get_tile(*coords) #
-            tile_kind = tile["kind"] if tile else ""
-
-
-            # Default
-            dist_penalty_coeff = -10.0
-            speed_coeff = 2.0
-
-            #lane_dir = self.get_predictive_direction(sim, pos, angle)
-            #print(lane_dir, end="\r", flush=True)
-            direction = sim.episode_dir
-            print(direction)
-
-            lookahead_dist = 0.25 
-            dir_vec = np.array([np.cos(angle), 0, -np.sin(angle)]) # Based on get_dir_vec
-            lookahead_pos = pos + dir_vec * lookahead_dist
-            
-            look_coords = sim.get_grid_coords(lookahead_pos)
-            look_tile = sim._get_tile(*look_coords)
-            look_kind = look_tile["kind"] if look_tile else ""
-
-            print(f"current: {tile_kind}, lookahead: {look_kind}")
-            in_curve = "curve" in tile_kind
-            approaching_curve = ("curve" in look_kind)
-            in_danger_zone = (direction == "CW") and (in_curve or approaching_curve)
-            print(in_curve)
-            print(approaching_curve)
-            print(in_danger_zone)
-
-            if tile_kind == "curve_right":
-                dist_penalty_coeff = -15.0 
-                speed_coeff = 2.0
-            elif tile_kind == "curve_left":
-                dist_penalty_coeff = -10.0
-                speed_coeff = 2.0
-
-            r_speed = speed_coeff * speed
-            k = 5
-            r_align = np.exp(k * (lp.dot_dir - 1.0)) # tanh like behaviour to add a higher gradint near 1
-            r_dist = dist_penalty_coeff * np.abs(lp.dist)
-            r_angle = -0.1 * np.abs(lp.angle_deg)
-            
-            action_diff = np.linalg.norm(current_action - self.prev_action) 
-            r_jerk = - 0.3 * action_diff
-
-            self.prev_action = current_action.copy()
-
-            total = r_angle + r_speed + r_align + r_jerk + r_dist
-            msg = (
-                f"\rDEBUG | Total: {total:6.2f} | Spd: {r_speed:4.1f} | Dist: {r_dist:5.1f} "
-                f"| Aln: {r_align:4.1f} | Angle: {r_angle:4.1f}    | Jrk: {r_jerk:4.1f} "
-                f"| dir:{lp.dot_dir} | angle:{lp.angle_deg} | "
-            )   
-            #print(msg, end="", flush=True)
-            #print(lp.dist)
-               
-        except Exception as e:
-            # Handle 'NotInLane' or other issues during manual driving
-            if sim.step_count % 15 == 0:
-                print(f"DEBUG | NOT IN LANE or Error: {e}")
-
-        self.prev_action = action.copy()
-        return obs, reward, terminated, truncated, info
-    
-    
 class CustomRewardWrapper(gym.RewardWrapper):
     def __init__(self, env):
         super().__init__(env)
         self.prev_action = np.zeros(2)
 
     def reward(self, reward):
+
+        if reward <= -15.0:
+            return reward
+
         # Get internal simulator state for custom math
         sim = self.env.unwrapped 
         pos = sim.cur_pos
@@ -280,25 +184,28 @@ class CustomRewardWrapper(gym.RewardWrapper):
 
         in_curve = "curve" in tile_kind
         approaching_curve = "curve" in look_kind
-        in_danger_zone = (direction == "CW") and (in_curve or approaching_curve)
+        in_danger_zone = (direction == "CW") and approaching_curve
 
-        # Default
-        dist_penalty_coeff = -8.0
-        speed_coeff = 2.0
-        jerk_coeff = -0.3
-        k = 5.0
+
 
         if in_danger_zone:
             # Special "Stabilization" Values
-            speed_coeff = 0.4      
-            dist_penalty_coeff = -15.0      
-            jerk_coeff = -1.5       
-            k = 10.0                      
-
+            speed_coeff = 1.0
+            dist_coeff = -15.0
+            jerk_coeff = -1.2
+            target_offset = 0.05
+            alignment_k = 5.0
+        else:
+            # "Race Mode" for straights
+            speed_coeff = 2.5
+            dist_coeff = -10.0
+            jerk_coeff = -0.5
+            target_offset = 0.0
+            alignment_k = 2.0
         
         reward_speed = speed_coeff * speed * lp.dot_dir
-        reward_alignment = np.exp(k * (lp.dot_dir - 1.0)) # tanh like behaviour to add a higher gradint near 1
-        reward_distance = dist_penalty_coeff * np.abs(lp.dist)
+        reward_alignment = np.exp(alignment_k * (lp.dot_dir - 1.0)) # tanh like behaviour to add a higher gradint near 1
+        reward_distance = dist_coeff * (lp.dist - target_offset)**2
         reward_angle = -0.03 * np.abs(lp.angle_deg)
         
         action_diff = np.linalg.norm(current_action - self.prev_action) 
@@ -307,3 +214,38 @@ class CustomRewardWrapper(gym.RewardWrapper):
         self.prev_action = current_action.copy()
 
         return reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
+    
+    import gymnasium as gym
+import numpy as np
+
+class KinematicActionWrapper(gym.ActionWrapper):
+    def __init__(self, env, gain=1.0, trim=0.0, wheel_dist=0.102, radius=0.0318, k=27.0, limit=1.0):
+        super().__init__(env)
+        self.gain = gain
+        self.trim = trim
+        self.radius = radius
+        self.k = k
+        self.limit = limit
+        self.wheel_dist = wheel_dist
+
+    def action(self, action):
+        # Action is [v, omega] from the RL Agent
+        vel, angle = action
+
+        # Adjust motor constants by gain and trim
+        k_r_inv = (self.gain + self.trim) / self.k
+        k_l_inv = (self.gain - self.trim) / self.k
+
+        # Calculate angular velocities for wheels
+        omega_r = (vel + 0.5 * angle * self.wheel_dist) / self.radius
+        omega_l = (vel - 0.5 * angle * self.wheel_dist) / self.radius
+
+        # Convert to duty cycle (PWM)
+        u_r = omega_r * k_r_inv
+        u_l = omega_l * k_l_inv
+
+        # Apply physical limits (max motor power)
+        u_r_limited = np.clip(u_r, -self.limit, self.limit)
+        u_l_limited = np.clip(u_l, -self.limit, self.limit)
+
+        return np.array([u_l_limited, u_r_limited], dtype=np.float32)

@@ -10,7 +10,7 @@ __pycache__/
 
 # IDE
 .idea/
-.vscode/
+.vscode
 
 # Logs
 *.log
@@ -25,7 +25,7 @@ requirements.resolved
 output/
 outputs/
 artifacts/
-models/
+duckie_deploy/models/*
 trained_models/
 wandb/
 runs/
