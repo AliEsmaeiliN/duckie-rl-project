@@ -5,7 +5,7 @@ from gym_duckietown.simulator import Simulator
 from utils.wrappers import (
     KinematicActionWrapper, ActionWrapper, ResizeWrapper, 
     CropResizeWrapper, ImgWrapper, CustomRewardWrapper, DtRewardWrapper,
-    TemporalWrapper
+    TemporalWrapper, AdaptiveRewardWrapper
 )
 
 class DuckieOvalEnv(Simulator):
@@ -61,7 +61,7 @@ class DuckieOvalEnv(Simulator):
         
         # 5. Reward System
         env = DtRewardWrapper(env)
-        env = CustomRewardWrapper(env)
+        env = AdaptiveRewardWrapper(env)
 
         # 6. Temporal Stacking
         if frame_stack > 1:
@@ -92,8 +92,8 @@ class DuckieOvalEnv(Simulator):
         self.camera_rand      # Camera mounting noise
         """
         for key, value in kwargs.items():
-        if hasattr(self, key):
-            setattr(self, key, value)
-            print(f"Simulator config updated: {key} = {value}")
-        else:
-            print(f"Warning: Simulator has no attribute '{key}'")
+            if hasattr(self, key):
+                setattr(self, key, value)
+                print(f"Simulator config updated: {key} = {value}")
+            else:
+                print(f"Warning: Simulator has no attribute '{key}'")
