@@ -18,7 +18,7 @@ class DuckieOvalEnv(Simulator):
         kwargs.setdefault('camera_height', 120)
         kwargs.setdefault('accept_start_angle_deg', 4)
         kwargs.setdefault('full_transparency', True)
-        kwargs.setdefault('max_steps', 3000)
+        kwargs.setdefault('max_steps', 1500)
         
         kwargs.setdefault('frame_skip', 1) 
         

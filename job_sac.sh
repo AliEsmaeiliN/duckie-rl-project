@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=duckie_rl_sac
+#SBATCH --job-name=duckie_sac
 #SBATCH --output=output/duckie_%j.out
 #SBATCH -e output/duckie_%j.err
 #SBATCH --time=20:00:00
@@ -24,10 +24,10 @@ fi
 
 python rl/sac_continuous_action.py \
     --seed 1 \
-    --env-id AdaptiveV1 \
+    --env-id Sim2Real \
     --total-timesteps 1000000 \
     --track \
     --buffer-size 150000 \
-    --domain-rand \
-    --learning-starts 20000 \
-    --run-notes "Trying sac with the new reward and bigger buffer size. reduced buffer with Domain Rand and MotionBlur" 
+    --motion-blur \
+    --learning-starts 40000 \
+    --run-notes "Starting the Sim2real Process with Hybrid Reward?MotionBlur Fixed" 

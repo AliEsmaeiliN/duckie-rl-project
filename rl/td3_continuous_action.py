@@ -83,7 +83,7 @@ class Args:
     """the batch size of sample from the reply memory"""
     policy_noise: float = 0.2
     """the scale of policy noise"""
-    exploration_noise: float = 0.1
+    exploration_noise: float = 0.05
     """the scale of exploration noise"""
     learning_starts: int = 25e3
     """timestep to start learning"""
@@ -183,7 +183,7 @@ class Actor(nn.Module):
         mu = self.fc_mu(visual_features)
         v_raw = mu[:, 0:1]
         omega_raw = mu[:, 1:2]
-        v = torch.tanh(v_raw).clamp(min=0.1)
+        v = torch.tanh(v_raw).clamp(min=1e-3)
         omega = torch.tanh(omega_raw)
         x = torch.cat([v, omega], dim=-1)
         return x * self.action_scale + self.action_bias
