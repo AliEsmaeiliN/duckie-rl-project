@@ -81,3 +81,19 @@ class DuckieOvalEnv(Simulator):
             )
 
         return gym.wrappers.RecordEpisodeStatistics(env)
+
+    def set_randomization(self, **kwargs):
+        """
+        Dynamically toggle randomization flags for Curriculum Learning.
+        
+        self.dynamics_rand    # Motor/Trim noise
+        self.domain_rand      # Visual/Light noise
+        self.distortion       # Fisheye effect
+        self.camera_rand      # Camera mounting noise
+        """
+        for key, value in kwargs.items():
+        if hasattr(self, key):
+            setattr(self, key, value)
+            print(f"Simulator config updated: {key} = {value}")
+        else:
+            print(f"Warning: Simulator has no attribute '{key}'")

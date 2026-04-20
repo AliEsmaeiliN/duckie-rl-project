@@ -446,6 +446,13 @@ if __name__ == "__main__":
                 )
                 if args.autotune:
                     writer.add_scalar("losses/alpha_loss", alpha_loss.item(), global_step)
+            if global_step == 200000:
+                envs.call("set_randomization", domain_rand=args.domain_rand)
+            elif global_step == 500000:
+                envs.call("set_randomization", 
+                         camera_rand=args.camera_rand, 
+                         dynamics_rand=args.dynamics_rand, 
+                         distortion=args.distortion)
 
 
     if args.save_model:
