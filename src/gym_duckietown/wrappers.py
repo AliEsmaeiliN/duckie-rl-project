@@ -154,27 +154,23 @@ class UndistortWrapper(gym.ObservationWrapper):
     def __init__(self, env=None):
         gym.ObservationWrapper.__init__(self, env)
 
-        assert env.unwrapped.distortion, "Distortion is false, no need for this wrapper"
 
         # Set a variable in the unwrapped env so images don't get distorted
-        self.env.unwrapped.undistort = True
+        self.env.unwrapped.undistort = False
 
         # K - Intrinsic camera matrix for the raw (distorted) images.
         camera_matrix = [
-            305.5718893575089,
-            0,
-            303.0797142544728,
-            0,
-            308.8338858195428,
-            231.8845403702499,
-            0,
-            0,
-            1,
+            311.5665681454016, 0.0, 335.2914198639567,
+            0.0, 308.44370374450375, 235.41469946322758,
+            0.0, 0.0, 1.0
         ]
         self.camera_matrix = np.reshape(camera_matrix, (3, 3))
 
         # distortion parameters - (k1, k2, t1, t2, k3)
-        distortion_coefs = [-0.2, 0.0305, 0.0005859930422629722, -0.0006697840226199427, 0]
+        distortion_coefs = [
+            -0.2605492415446591, 0.05392162341209542, 
+            0.0011529115993347476, -0.004728714280095291, 0.0
+        ]
         self.distortion_coefs = np.reshape(distortion_coefs, (1, 5))
 
         # R - Rectification matrix - stereo cameras only, so identity
@@ -183,18 +179,9 @@ class UndistortWrapper(gym.ObservationWrapper):
         # P - Projection Matrix - specifies the intrinsic (camera) matrix
         #  of the processed (rectified) image
         projection_matrix = [
-            220.2460277141687,
-            0,
-            301.8668918355899,
-            0,
-            0,
-            238.6758484095299,
-            227.0880056118307,
-            0,
-            0,
-            0,
-            1,
-            0,
+            223.22879028320312, 0.0, 327.2591191800675, 0.0,
+            0.0, 247.4501953125, 233.82550662924768, 0.0,
+            0.0, 0.0, 1.0, 0.0
         ]
         self.projection_matrix = np.reshape(projection_matrix, (3, 4))
 
@@ -205,7 +192,9 @@ class UndistortWrapper(gym.ObservationWrapper):
         self.mapy = None
 
     def observation(self, observation):
-        return self._undistort(observation)
+        if self.env.unwrapped.distortion:
+            return self._undistort(observation)
+        return observation
 
     def _undistort(self, observation):
         if self.mapx is None:

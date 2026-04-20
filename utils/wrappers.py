@@ -45,7 +45,6 @@ class TemporalWrapper(gym.Wrapper):
 
 
         d_info = self.unwrapped._compute_done_reward(processed_action)
-        self.unwrapped.step_count += 1
 
         return processed_obs, d_info.reward, d_info.done, False, self.unwrapped.get_agent_info()
 

@@ -7,6 +7,7 @@ from utils.wrappers import (
     CropResizeWrapper, ImgWrapper, CustomRewardWrapper, DtRewardWrapper,
     TemporalWrapper, AdaptiveRewardWrapper
 )
+from src.gym_duckietown.wrappers import UndistortWrapper
 
 class DuckieOvalEnv(Simulator):
     """
@@ -14,8 +15,8 @@ class DuckieOvalEnv(Simulator):
     """
     def __init__(self, **kwargs):
         kwargs.setdefault('map_name', "oval_loop")
-        kwargs.setdefault('camera_width', 160)
-        kwargs.setdefault('camera_height', 120)
+        kwargs.setdefault('camera_width', 640)
+        kwargs.setdefault('camera_height', 480)
         kwargs.setdefault('accept_start_angle_deg', 4)
         kwargs.setdefault('full_transparency', True)
         kwargs.setdefault('max_steps', 1500)
@@ -35,9 +36,11 @@ class DuckieOvalEnv(Simulator):
         """
         env = cls(**kwargs)
 
+        env = UndistortWrapper(env)
         # 1. Kinematics (v, w -> wl, wr)
-        env = ActionWrapper(env)
+        #env = ActionWrapper(env)
         env = KinematicActionWrapper(env, wheel_dist=0.102, radius=0.0318, k=27.0)
+        env = ActionWrapper(env)
 
         # 2. Temporal Logic
         env = TemporalWrapper(env, frame_skip=3, motion_blur=motion_blur)
