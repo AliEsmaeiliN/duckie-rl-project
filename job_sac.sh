@@ -2,7 +2,7 @@
 #SBATCH --job-name=duckie_sac
 #SBATCH --output=output/duckie_%j.out
 #SBATCH -e output/duckie_%j.err
-#SBATCH --time=20:00:00
+#SBATCH --time=24:00:00
 #SBATCH --partition=pgpu_most
 #SBATCH --account=dei_most
 #SBATCH --gpus=1
@@ -25,9 +25,13 @@ fi
 python rl/sac_continuous_action.py \
     --seed 1 \
     --env-id Sim2Real \
-    --total-timesteps 1000000 \
+    --total-timesteps 1500000 \
     --track \
-    --buffer-size 150000 \
+    --buffer-size 100000 \
     --motion-blur \
     --learning-starts 40000 \
-    --run-notes "Starting the Sim2real Process with Hybrid Reward?MotionBlur Fixed" 
+    --domain-rand \
+    --camera-rand \
+    --dynamics-rand \
+    --distortion \
+    --run-notes "Adaptive reward with curriculum learning: 500k DR, 800k Dyn, 1M Distort" 

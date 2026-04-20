@@ -97,3 +97,8 @@ class DuckieOvalEnv(Simulator):
                 print(f"Simulator config updated: {key} = {value}")
             else:
                 print(f"Warning: Simulator has no attribute '{key}'")
+
+            if getattr(self, 'distortion', False) and self.camera_model is None:
+                from src.gym_duckietown.distortion import Distortion
+                print("Initializing Distortion Model...")
+                self.camera_model = Distortion(camera_rand=getattr(self, 'camera_rand', False))
