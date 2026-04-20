@@ -115,7 +115,7 @@ class ActionWrapper(gym.ActionWrapper):
         super().__init__(env)
 
     def action(self, action):
-        action_ = [action[0] * 0.8, action[1]]
+        action_ = np.array([action[0] * 0.8, action[1]], dtype=np.float32)
         return action_
 
 class CropResizeWrapper(gym.ObservationWrapper):
