@@ -649,7 +649,7 @@ class Simulator(gym.Env):
             # ======================================================
             # NEW PERFECT SPAWN LOGIC (Using Geometry)
             # ======================================================
-
+            '''
             # Finding the coordinate and curves of the specific tile
             i, j = tile["coords"]
             curves = tile["curves"]
@@ -672,7 +672,7 @@ class Simulator(gym.Env):
             propose_angle = self.np_random.uniform(curve_angle - accept_limit_rad, curve_angle + accept_limit_rad)
 
             # ======================================================
-            # ORIGINAL DUCKIETOWN SPAWN LOGIC (Commented out)
+            # ORIGINAL DUCKIETOWN SPAWN LOGIC
             # ======================================================
 
             '''
@@ -724,7 +724,7 @@ class Simulator(gym.Env):
                 propose_angle = 1
 
                 # raise Exception(msg)
-            '''
+            
 
         self.cur_pos = propose_pos
         self.cur_angle = propose_angle
@@ -1720,17 +1720,10 @@ class Simulator(gym.Env):
             return -10.0  
         
         reward_speed = 2.0 * speed
-        # Squared term creates a smooth gradient toward perfect alignment
         reward_alignment = 2.0 * (lp.dot_dir ** 2) if lp.dot_dir > 0 else 4.0 * lp.dot_dir
-        
-        # Penalties
         reward_distance = -10.0 * np.abs(lp.dist)
         reward_angle = -0.1 * np.abs(lp.angle_deg)
         
-        # Smoothness
-        action_diff = np.linalg.norm(action - self.last_action)
-        self.jerk_alpha =0.5
-        reward_jerk = -self.jerk_alpha * action_diff 
 
         reward = reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
         return reward

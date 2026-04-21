@@ -104,7 +104,7 @@ class DtRewardWrapper(gym.RewardWrapper):
 
     def reward(self, reward):
         if reward == -1000:
-            reward = -15
+            reward = -15.0
 
         return reward
 
@@ -215,6 +215,45 @@ class CustomRewardWrapper(gym.RewardWrapper):
 
         return reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
     
+
+class SimpleRewardWrapper(gym.RewardWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        self.prev_action = np.zeros(2)
+
+    def reward(self, reward):
+        if reward == -15.0:
+            return reward
+
+        # Get internal simulator state for custom math
+        sim = self.env.unwrapped 
+        pos = sim.cur_pos
+        angle = sim.cur_angle
+        speed = sim.speed
+        current_action = sim.last_action
+
+        try:
+            lp = sim.get_lane_pos2(pos, angle)
+        except Exception:
+            return -10.0 
+
+        speed_coeff = 1.5
+        dist_coeff = -15.0
+        jerk_coeff = -1.0
+        alignment_k = 2.0
+
+        reward_speed = speed_coeff * speed * lp.dot_dir
+        reward_alignment = alignment_k * (lp.dot_dir ** 2) if lp.dot_dir > 0 else 4.0 * lp.dot_dir
+        reward_distance = dist_coeff * np.abs(lp.dist)
+        reward_angle = -0.03 * np.abs(lp.angle_deg)
+        
+        action_diff = np.linalg.norm(current_action - self.prev_action) 
+        reward_jerk = jerk_coeff * action_diff
+
+        self.prev_action = current_action.copy()
+
+        return reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
+        
 
 class AdaptiveRewardWrapper(gym.RewardWrapper):
     def __init__(self, env):

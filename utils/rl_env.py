@@ -5,7 +5,7 @@ from gym_duckietown.simulator import Simulator
 from utils.wrappers import (
     KinematicActionWrapper, ActionWrapper, ResizeWrapper, 
     CropResizeWrapper, ImgWrapper, CustomRewardWrapper, DtRewardWrapper,
-    TemporalWrapper, AdaptiveRewardWrapper
+    TemporalWrapper, AdaptiveRewardWrapper, SimpleRewardWrapper
 )
 from src.gym_duckietown.wrappers import UndistortWrapper
 
@@ -37,8 +37,8 @@ class DuckieOvalEnv(Simulator):
         env = cls(**kwargs)
 
         env = UndistortWrapper(env)
+
         # 1. Kinematics (v, w -> wl, wr)
-        #env = ActionWrapper(env)
         env = KinematicActionWrapper(env, wheel_dist=0.102, radius=0.0318, k=27.0)
         env = ActionWrapper(env)
 
@@ -59,12 +59,10 @@ class DuckieOvalEnv(Simulator):
         
         env = ImgWrapper(env) # Transpose to CHW
 
-        # 4. Action Constraints & Logic
-        #env = ActionWrapper(env)
         
         # 5. Reward System
         env = DtRewardWrapper(env)
-        env = AdaptiveRewardWrapper(env)
+        env = SimpleRewardWrapper(env)
 
         # 6. Temporal Stacking
         if frame_stack > 1:

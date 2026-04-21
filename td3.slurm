@@ -1,14 +1,13 @@
 #!/bin/bash
-#SBATCH -J DuckieRL
+#SBATCH -J TD3
 #SBATCH -o logs/output_%j.txt
 #SBATCH -e logs/errors_%j.txt
-#SBATCH -t 00:30:00
+#SBATCH -t 30:00:00
 #SBATCH -n 1
-#SBATCH -c 4
+#SBATCH -c 6
 #SBATCH -p allgroups
 #SBATCH --mem=16G
-#SBATCH --gres=gpu:a40
-#SBATCH --cpus-per-task=8
+#SBATCH --gres=gpu:rtx
 
 cd $HOME/duckie-rl-project
 mkdir -p logs
@@ -29,9 +28,15 @@ srun singularity exec --nv \
     $SIF_IMAGE \
     bash -c "export PYTHONPATH=\$PYTHONPATH:/app:/app/src && \
     python3 rl/td3_continuous_action.py \
-    --env-id 'testforCL' \
-    --total-timesteps 2000 \
-    --buffer-size 5000 \
-    --batch-size 64 \
-    --learning-starts 500 \
-    --track"
+    --seed 1 \
+    --env-id 'sim2real_v2' \
+    --total-timesteps 1000000 \
+    --buffer-size 100000 \
+    --batch-size 256 \
+    --learning-starts 15000 \
+    --track \
+    --domain-rand \
+    --camera-rand \
+    --dynamics-rand \
+    --distortion \
+    --run-notes 'Simple Reward with Curriculum L and random spawn'"
