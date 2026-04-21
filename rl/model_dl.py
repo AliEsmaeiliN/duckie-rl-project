@@ -1,6 +1,5 @@
 import wandb
 import torch
-#wandb api: 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
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 api = wandb.Api()

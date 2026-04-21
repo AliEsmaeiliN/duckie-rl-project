@@ -1,0 +1,40 @@
+Bootstrap: docker
+From: nvidia/cuda:12.1.0-base-ubuntu22.04
+
+%files
+    requirements_singularity.txt /opt/requirements.txt
+
+%post
+    # Install system dependencies for OpenGL, Xvfb, and Duckietown
+    apt-get update && apt-get install -y --no-install-recommends \
+        python3-pip python3-dev \
+        freeglut3-dev libgl1-mesa-dev libglu1-mesa-dev \
+        libosmesa6-dev x11-xserver-utils xvfb \
+        ffmpeg libsm6 libxext6 git \
+        libjpeg-dev libpng-dev libtiff-dev \
+        && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+    pip install --upgrade pip
+
+    pip install \
+        numpy==1.23.5 \
+        scipy==1.14.1\
+        pyyaml==6.0.2\
+        torch==2.5.1 \
+        torchvision==0.20.1 \
+        torchaudio==2.5.1 \
+        --extra-index-url https://download.pytorch.org/whl/cu121
+
+    pip install -r /opt/requirements.txt
+
+%environment
+    export LC_ALL=C
+    export DISPLAY=:99
+    export OMP_NUM_THREADS=1
+    export MKL_NUM_THREADS=1
+    export PYGLET_DEBUG_GL=False
+    export PYGLET_HEADLESS=True
+    export PYTHONPATH="/app:/app/src:${PYTHONPATH}"
+
+%runscript
+    exec python3 "$@"
