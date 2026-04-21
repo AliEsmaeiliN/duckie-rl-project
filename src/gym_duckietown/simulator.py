@@ -1725,7 +1725,7 @@ class Simulator(gym.Env):
         reward_angle = -0.1 * np.abs(lp.angle_deg)
         
 
-        reward = reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
+        reward = reward_speed + reward_alignment + reward_distance + reward_angle
         return reward
 
     def step(self, action: np.ndarray):
