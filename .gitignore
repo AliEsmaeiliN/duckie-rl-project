@@ -20,6 +20,7 @@ xvfb.log
 dist/
 bin/
 requirements.resolved
+train.slurm
 
 # RL Training Outputs
 output/
