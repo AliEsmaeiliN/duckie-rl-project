@@ -20,6 +20,7 @@ xvfb.log
 dist/
 bin/
 requirements.resolved
+duckie_rl.sif
 
 # RL Training Outputs
 output/

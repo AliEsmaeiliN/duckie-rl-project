@@ -12,7 +12,7 @@ def get_version(filename):
 
 version = get_version("src/gym_duckietown/__init__.py")
 
-with open("requirements.txt") as f:
+with open("requirements_singularity.txt") as f:
     install_requires = [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
 setup(

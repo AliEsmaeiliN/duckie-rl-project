@@ -1,0 +1,21 @@
+# Core Simulation & RL
+gymnasium==1.2.3
+pyglet==1.5.27
+PyYAML==6.0.2
+numpy==1.23.5
+scipy==1.14.1
+torch==2.5.1+cu121
+
+# Duckietown Ecosystem (Crucial)
+duckietown-world-daffy==6.4.3
+pygeometry-z6==2.1.5
+zuper-commons-z6==6.2.4
+carnivalmirror==0.6.2
+
+# Vision & Logging
+opencv-python==4.10.0.84
+Pillow==12.2.0
+moviepy==1.0.3
+tensorboard
+tyro
+wandb

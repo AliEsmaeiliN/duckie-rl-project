@@ -1,5 +1,4 @@
 # Core RL and Simulation
-gym==0.26.2
 gymnasium==1.2.3
 ale-py==0.11.2
 pygame==2.1.0
