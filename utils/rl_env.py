@@ -5,8 +5,9 @@ from gym_duckietown.simulator import Simulator
 from utils.wrappers import (
     KinematicActionWrapper, ActionWrapper, ResizeWrapper, 
     CropResizeWrapper, ImgWrapper, CustomRewardWrapper, DtRewardWrapper,
-    TemporalWrapper
+    TemporalWrapper, AdaptiveRewardWrapper, SimpleRewardWrapper
 )
+from src.gym_duckietown.wrappers import UndistortWrapper
 
 class DuckieOvalEnv(Simulator):
     """
@@ -14,11 +15,11 @@ class DuckieOvalEnv(Simulator):
     """
     def __init__(self, **kwargs):
         kwargs.setdefault('map_name', "oval_loop")
-        kwargs.setdefault('camera_width', 160)
-        kwargs.setdefault('camera_height', 120)
+        kwargs.setdefault('camera_width', 640)
+        kwargs.setdefault('camera_height', 480)
         kwargs.setdefault('accept_start_angle_deg', 4)
         kwargs.setdefault('full_transparency', True)
-        kwargs.setdefault('max_steps', 3000)
+        kwargs.setdefault('max_steps', 10000)
         
         kwargs.setdefault('frame_skip', 1) 
         
@@ -35,9 +36,11 @@ class DuckieOvalEnv(Simulator):
         """
         env = cls(**kwargs)
 
+        env = UndistortWrapper(env)
+
         # 1. Kinematics (v, w -> wl, wr)
-        env = ActionWrapper(env)
         env = KinematicActionWrapper(env, wheel_dist=0.102, radius=0.0318, k=27.0)
+        env = ActionWrapper(env)
 
         # 2. Temporal Logic
         env = TemporalWrapper(env, frame_skip=3, motion_blur=motion_blur)
@@ -56,12 +59,10 @@ class DuckieOvalEnv(Simulator):
         
         env = ImgWrapper(env) # Transpose to CHW
 
-        # 4. Action Constraints & Logic
-        #env = ActionWrapper(env)
         
         # 5. Reward System
         env = DtRewardWrapper(env)
-        env = CustomRewardWrapper(env)
+        env = SimpleRewardWrapper(env)
 
         # 6. Temporal Stacking
         if frame_stack > 1:
@@ -81,3 +82,24 @@ class DuckieOvalEnv(Simulator):
             )
 
         return gym.wrappers.RecordEpisodeStatistics(env)
+
+    def set_randomization(self, **kwargs):
+        """
+        Dynamically toggle randomization flags for Curriculum Learning.
+        
+        self.dynamics_rand    # Motor/Trim noise
+        self.domain_rand      # Visual/Light noise
+        self.distortion       # Fisheye effect
+        self.camera_rand      # Camera mounting noise
+        """
+        for key, value in kwargs.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+                print(f"Simulator config updated: {key} = {value}")
+            else:
+                print(f"Warning: Simulator has no attribute '{key}'")
+
+            if getattr(self, 'distortion', False) and self.camera_model is None:
+                from src.gym_duckietown.distortion import Distortion
+                print("Initializing Distortion Model...")
+                self.camera_model = Distortion(camera_rand=getattr(self, 'camera_rand', False))

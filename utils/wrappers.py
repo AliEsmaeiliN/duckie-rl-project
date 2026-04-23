@@ -2,6 +2,7 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 from PIL import Image
+import numpy as np 
 
 from gym_duckietown.simulator import Simulator
 from gym_duckietown.simulator import get_dir_vec
@@ -44,7 +45,6 @@ class TemporalWrapper(gym.Wrapper):
 
 
         d_info = self.unwrapped._compute_done_reward(processed_action)
-        self.unwrapped.step_count += 1
 
         return processed_obs, d_info.reward, d_info.done, False, self.unwrapped.get_agent_info()
 
@@ -104,7 +104,7 @@ class DtRewardWrapper(gym.RewardWrapper):
 
     def reward(self, reward):
         if reward == -1000:
-            reward = -15
+            reward = -15.0
 
         return reward
 
@@ -115,7 +115,7 @@ class ActionWrapper(gym.ActionWrapper):
         super().__init__(env)
 
     def action(self, action):
-        action_ = [action[0] * 0.8, action[1]]
+        action_ = np.array([action[0] * 0.8, action[1]], dtype=np.float32)
         return action_
 
 class CropResizeWrapper(gym.ObservationWrapper):
@@ -215,8 +215,108 @@ class CustomRewardWrapper(gym.RewardWrapper):
 
         return reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
     
-    import gymnasium as gym
-import numpy as np
+
+class SimpleRewardWrapper(gym.RewardWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        self.prev_action = np.zeros(2)
+
+    def reward(self, reward):
+        if reward == -15.0:
+            return reward
+
+        # Get internal simulator state for custom math
+        sim = self.env.unwrapped 
+        pos = sim.cur_pos
+        angle = sim.cur_angle
+        speed = sim.speed
+        current_action = sim.last_action
+
+        try:
+            lp = sim.get_lane_pos2(pos, angle)
+        except Exception:
+            return -10.0 
+
+        speed_coeff = 1.5
+        dist_coeff = -15.0
+        jerk_coeff = -1.0
+        alignment_k = 2.0
+
+        reward_speed = speed_coeff * speed
+        reward_alignment = alignment_k * (lp.dot_dir ** 2) if lp.dot_dir > 0 else 4.0 * lp.dot_dir
+        reward_distance = dist_coeff * np.abs(lp.dist)
+        reward_angle = -0.03 * np.abs(lp.angle_deg)
+        
+        action_diff = np.linalg.norm(current_action - self.prev_action) 
+        reward_jerk = jerk_coeff * action_diff
+
+        self.prev_action = current_action.copy()
+
+        return reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
+        
+
+class AdaptiveRewardWrapper(gym.RewardWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        self.prev_action = np.zeros(2)
+
+    def reward(self, reward):
+        # Get internal simulator state for custom math
+        sim = self.env.unwrapped 
+        pos = sim.cur_pos
+        angle = sim.cur_angle
+        speed = sim.speed
+        current_action = sim.last_action
+        
+        try:
+            lp = sim.get_lane_pos2(pos, angle)
+        except Exception:
+            return -10.0 
+            
+        # Asymmetric Logic
+        coords = sim.get_grid_coords(pos) #
+        tile = sim._get_tile(*coords) #
+        tile_kind = tile["kind"] if tile else ""
+        direction = sim.episode_dir
+
+        # Lookahead Logic
+        lookahead_dist = 0.25 
+        dir_vec = np.array([np.cos(angle), 0, -np.sin(angle)]) # Based on get_dir_vec
+        lookahead_pos = pos + dir_vec * lookahead_dist
+        
+        look_coords = sim.get_grid_coords(lookahead_pos)
+        look_tile = sim._get_tile(*look_coords)
+        look_kind = look_tile["kind"] if look_tile else ""
+
+        in_curve = "curve" in tile_kind
+        approaching_curve = "curve" in look_kind
+        in_danger_zone = (direction == "CW") and (in_curve or approaching_curve)
+
+        # Default
+        dist_penalty_coeff = -8.0
+        speed_coeff = 2.0
+        jerk_coeff = -0.3
+        k = 5.0
+
+        if in_danger_zone:
+            # Special "Stabilization" Values
+            speed_coeff = 0.4      
+            dist_penalty_coeff = -15.0      
+            jerk_coeff = -1.5       
+            k = 10.0                      
+
+        
+        reward_speed = speed_coeff * speed * lp.dot_dir
+        reward_alignment = np.exp(k * (lp.dot_dir - 1.0)) # tanh like behaviour to add a higher gradint near 1
+        reward_distance = dist_penalty_coeff * np.abs(lp.dist)
+        reward_angle = -0.03 * np.abs(lp.angle_deg)
+        
+        action_diff = np.linalg.norm(current_action - self.prev_action) 
+        reward_jerk = jerk_coeff * action_diff
+
+        self.prev_action = current_action.copy()
+
+        return reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
 
 class KinematicActionWrapper(gym.ActionWrapper):
     def __init__(self, env, gain=1.0, trim=0.0, wheel_dist=0.102, radius=0.0318, k=27.0, limit=1.0):

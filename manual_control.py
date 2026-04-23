@@ -19,6 +19,9 @@ from pyglet.window import key
 from src.gym_duckietown.envs import DuckietownEnv
 from utils.wrappers import CropResizeWrapper
 from utils.rl_env import DuckieOvalEnv
+from rl.models import SACActor, TD3Actor
+from rl.agent import DuckiebotAgent
+
 
 # from experiments.utils import save_img
 
@@ -35,6 +38,8 @@ parser.add_argument("--frame-skip", default=1, type=int, help="number of frames 
 parser.add_argument("--seed", default=1, type=int, help="seed")
 parser.add_argument("--no-grayscale", dest="grayscale", action="store_false", help="Disable the grayscale wrapper (default is True)")
 parser.add_argument("--motion-blur", default=False, action="store_true")
+parser.add_argument("--debug", default=False, action="store_true", help="Activating the Agent's action output")
+parser.add_argument("--model", default=None, type=str, help="The agent's .cleanrl_model file")
 args = parser.parse_args()
 
 
@@ -65,9 +70,9 @@ else:
     )
 
 render_modes = ["human", "top_down", "free_cam", "rgb_array"]
-view = render_modes[1]
+view = render_modes[0]
 
-env.reset(seed=args.seed)
+obs, info = env.reset(seed=args.seed)
 
 pure_internal_obs = env.unwrapped.render_obs()
 print(f"Internal Renderer Shape: {pure_internal_obs.shape}")
@@ -97,12 +102,56 @@ def on_key_press(symbol, modifiers):
 key_handler = key.KeyStateHandler()
 env.unwrapped.window.push_handlers(key_handler)
 
+rl_agent = None
+
+if args.debug:
+    if args.model:
+        model_path = args.model
+        algo = "sac" if "sac" in model_path.lower() else "td3"
+        rl_agent = DuckiebotAgent(
+            model_path=model_path, 
+            algo_type= algo
+            )
+        print(f"{algo.upper()} Agent loaded from {args.model}")    
+
+rl_label = pyglet.text.Label(
+    'Agent: Waiting...',
+    font_name='Arial',
+    font_size=12,
+    x=5, y=40,
+    anchor_x='left', anchor_y='top',
+    color=(255, 255, 0, 255), # Yellow color to make it stand out
+    multiline=True, 
+    width=800
+    )
+
 
 def update(dt):
     """
     This function is called at every frame to handle
     movement/stepping and redrawing
     """
+    global obs
+
+    if rl_agent is not None:
+        
+        # Simulator raw observation with sim2real preprocessing
+        last_obs = env.unwrapped.render_obs()
+        #print(last_obs.shape)
+        processed_frame = rl_agent.preprocess(last_obs)
+        rl_agent.update_buffer(processed_frame)
+        rl_action = rl_agent.get_action(last_obs)
+        rl_action_motor = rl_agent.postprocess_kinematics(rl_action)
+        raw_obs_action = f"RL Raw Action: v={rl_action[0]:.2f}, omega={rl_action[1]:.2f} , Motor Action: l={rl_action_motor[0]:.2f}, r={rl_action_motor[1]:.2f}"
+
+        # Env wrapped observation
+        stack_obs = obs
+        #print(stack_obs.shape)
+        rl_action = rl_agent.get_action(is_stacked=True, processed_stack_input=stack_obs)
+        rl_action_motor = rl_agent.postprocess_kinematics(rl_action)
+        wrapped_obs_action = f"RL Env Action: v={rl_action[0]:.2f}, omega={rl_action[1]:.2f} , Motor Action: l={rl_action_motor[0]:.2f}, r={rl_action_motor[1]:.2f}"
+        rl_label.text = f"{raw_obs_action}, \n{wrapped_obs_action}"
+
     wheel_distance = 0.102
     min_rad = 0.08
 
@@ -175,10 +224,11 @@ def update(dt):
 
     if done:
         print("done!")
-        env.reset()
+        obs, _ = env.reset()
         env.unwrapped.render(mode=view)
 
     env.unwrapped.render(mode=view)
+    rl_label.draw()
 
 
 pyglet.clock.schedule_interval(update, 1.0 / env.unwrapped.frame_rate)
