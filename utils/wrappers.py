@@ -242,7 +242,7 @@ class SimpleRewardWrapper(gym.RewardWrapper):
         jerk_coeff = -1.0
         alignment_k = 2.0
 
-        reward_speed = speed_coeff * speed * lp.dot_dir
+        reward_speed = speed_coeff * speed
         reward_alignment = alignment_k * (lp.dot_dir ** 2) if lp.dot_dir > 0 else 4.0 * lp.dot_dir
         reward_distance = dist_coeff * np.abs(lp.dist)
         reward_angle = -0.03 * np.abs(lp.angle_deg)
