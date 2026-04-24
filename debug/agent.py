@@ -5,7 +5,7 @@ import cv2
 import yaml
 from PIL import Image
 
-from debug.models import SACActor, TD3Actor
+from models import SACActor, TD3Actor
 
 class DuckiebotAgent:
     def __init__(self, model_path, algo_type="sac", grayscale=True, frame_stack=4):

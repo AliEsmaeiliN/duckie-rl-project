@@ -1,83 +1,78 @@
+import os
 import torch
 import numpy as np
 from PIL import Image
-import matplotlib.pyplot as plt
+from rl_env_debug import DuckieOvalEnv
 
-from debug.rl_env_debug import DuckieOvalEnv
-from debug.agent import DuckiebotAgent
-
-def trace_debug_step(model_path=None):
+def save_image(arr, name, folder="captures/observation_pipeline"):
+    """Helper to save various array formats as images."""
+    os.makedirs(folder, exist_ok=True)
     
+    # Handle (C, H, W) vs (H, W, C)
+    if len(arr.shape) == 3:
+        if arr.shape[0] < arr.shape[1] and arr.shape[0] < arr.shape[2]:
+            # It's likely CHW (after ImgWrapper or FrameStack)
+            # We take the first 3 channels for a viewable RGB
+            arr = arr[:3, :, :].transpose(1, 2, 0)
+    
+    if arr.dtype == np.float32:
+        arr = (arr * 255).astype(np.uint8)
+        
+    img = Image.fromarray(arr.squeeze())
+    img.save(f"{folder}/{name}.png")
+
+def debug_step():
+    
+    run_name = "debug_run"
     env = DuckieOvalEnv.create_wrapped(
-        run_name="manual_control",
-        motion_blur=False, 
+        run_name=run_name,
+        capture_video=False,
+        motion_blur=True,
         grayscale=True,
         frame_stack=4,
         domain_rand=False,
-        dynamics_rand=False,
-        distortion=False
+        distortion=True
     )
+
+    obs, info = env.reset(seed=42)
     
-    obs, info = env.reset()
+    constant_action = np.array([0.4, 0.2], dtype=np.float32)
+
+    print(f"{'Step':<6} | {'Reward':<10} | {'Action [v, w]':<15}")
+    print("-" * 40)
+
+    for i in range(50):
     
-    
-    if model_path:
-        # Dummy stack for initialization
-        action = np.array([0.5, 0.2]) # [v, omega]
-        print(f" [RL Intent] v: {action[0]}, omega: {action[1]}")
-    else:
-        # Case B: Constant Action
-        action = np.array([0.4, 0.1]) 
-        print(f" [Constant Intent] v: {action[0]}, omega: {action[1]}")
+        next_obs, reward, done, truncated, misc = env.step(constant_action)
+        
+        print(f"{i:<6} | {reward:<10.4f} | {str(constant_action):<15}")
 
-    # Trace inside the ActionWrapper
-    # Your ActionWrapper scales v by 0.8: action_ = [action[0] * 0.8, action[1]]
-    scaled_action = [action[0] * 0.8, action[1]]
-    print(f" [ActionWrapper Output] Scaled v: {scaled_action[0]}")
+        current_obs = env.unwrapped.render_obs()
+        if i % 20 == 0:
+            save_image(current_obs, f"step_{int(i/20)}_0_Raw_Simulator")
 
-    # Trace into Simulator Physics (Simplified PWM mapping)
-    # Simulator.py: self.wheelVels = action * self.robot_speed
-    sim = env.unwrapped
-    wheel_vels = np.array(scaled_action) * sim.robot_speed
-    print(f" [Simulator WheelVels] Left/Right: {wheel_vels}")
+        wrappers = []
+        curr = env
+        while hasattr(curr, 'env'):
+            wrappers.append(curr)
+            curr = curr.env
+        if i % 20 == 0:
+            for idx, wrapper in enumerate(reversed(wrappers)):
+                wrapper_name = wrapper.__class__.__name__
+                if hasattr(wrapper, 'observation'):
+                    try:
+                        current_obs = wrapper.observation(current_obs)
+                        save_image(current_obs, f"step_{i}_{idx+1}_{wrapper_name}")
+                    except Exception as e:
+                        print(f"Skipping visualization for {wrapper_name}: {e}")
+                        for t in range(next_obs.shape[0]):
+                            save_image(next_obs[t], f"step_{i}_{idx+1}_{wrapper_name}_f_{t}")
 
-    # --- OBSERVATION TRACE ---
-    print("\n--- Observation Pipeline ---")
-    
-    # 1. Raw Simulator Output
-    raw_obs = env.unwrapped.render_obs()
-    print(f" 1. Raw Simulator Obs: {raw_obs.shape}, Range: [{raw_obs.min()}, {raw_obs.max()}]")
+        if done:
+            break
 
-    # 2. After Crop & Resize (CropResizeWrapper)
-    # Based on your code: crops top 1/3 and resizes to 84x84
-    img = Image.fromarray(raw_obs)
-    w, h = img.size
-    cropped = img.crop((0, int(h*(1/3)), w, h))
-    resized = cropped.resize((84, 84), Image.BILINEAR)
-    proc_obs = np.array(resized)
-    print(f" 2. Post-Crop/Resize:  {proc_obs.shape}")
-
-    # 3. After Grayscale (GrayscaleObservation)
-    if launcher.grayscale:
-        gray_obs = np.dot(proc_obs[...,:3], [0.2989, 0.5870, 0.1140]).astype(np.uint8)
-        print(f" 3. Post-Grayscale:    {gray_obs.shape}")
-
-    # 4. Final CNN Input (ImgWrapper + FrameStack)
-    # This is what the 'step' function returns
-    next_obs, reward, done, truncated, info = env.step(action)
-    print(f" 4. Final CNN Input (Stacked): {next_obs.shape}")
-    
-    # Visualization
-    fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-    ax[0].imshow(raw_obs)
-    ax[0].set_title("Simulator Raw")
-    # Show last frame of stack
-    if launcher.grayscale:
-        ax[1].imshow(next_obs[-1], cmap='gray')
-    else:
-        ax[1].imshow(next_obs[-3:].transpose(1, 2, 0))
-    ax[1].set_title("CNN Input (Final Frame)")
-    plt.show()
+    env.close()
+    print("\nDebug complete. Check the 'captures' folder for images.")
 
 if __name__ == "__main__":
-    trace_debug_step()
+    debug_step()

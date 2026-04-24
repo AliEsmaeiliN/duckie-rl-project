@@ -3,10 +3,29 @@ from gymnasium import spaces
 import numpy as np
 from PIL import Image
 import numpy as np 
+import cv2
+
+def save_debug_image(obs, name, folder="captures/observation_pipeline"):
+    """Internal helper to save observations for debugging."""
+    
+    arr = np.array(obs)
+    
+    if len(arr.shape) == 3 and arr.shape[0] in [1, 3, 4]:
+        if arr.shape[0] == 4:
+            arr = arr[-1, :, :]
+        else:
+            arr = arr.transpose(1, 2, 0)
+            
+    if arr.dtype == np.float32:
+        arr = (arr * 255).astype(np.uint8)
+        
+    img = Image.fromarray(arr.squeeze())
+    img.save(f"{folder}/{name}.png")
 
 class TemporalWrapper(gym.Wrapper):
     def __init__(self, env=None, frame_skip=3, motion_blur=True):
         super().__init__(env)
+        self.step_count = 0
         self.frame_skip = frame_skip
         self.motion_blur = motion_blur
         self.unwrapped.delta_time = self.unwrapped.delta_time / (self.frame_skip + 1)
@@ -17,6 +36,7 @@ class TemporalWrapper(gym.Wrapper):
         action = np.clip(action, -1, 1)
         motion_blur_window = []
         processed_action = action
+        self.step_count += 1
 
         for _ in range(self.frame_skip + 1):
             obs = self.unwrapped.render_obs()
@@ -39,6 +59,8 @@ class TemporalWrapper(gym.Wrapper):
 
 
         d_info = self.unwrapped._compute_done_reward(processed_action)
+
+        save_debug_image(processed_obs, f"step_{self.step_count}_{2}_TemporalWrapper")    
 
         return processed_obs, d_info.reward, d_info.done, False, self.unwrapped.get_agent_info()
 
@@ -109,7 +131,10 @@ class ActionWrapper(gym.ActionWrapper):
         super().__init__(env)
 
     def action(self, action):
+        step = self.unwrapped.step_count
         action_ = np.array([action[0] * 0.8, action[1]], dtype=np.float32)
+            
+        print(f"Action wrapper at step {step} : {action_}")
         return action_
 
 class CropResizeWrapper(gym.ObservationWrapper):
@@ -151,6 +176,7 @@ class DebugRewardWrapper(gym.RewardWrapper):
 
         # Get internal simulator state for custom math
         sim = self.env.unwrapped 
+        step = sim.step_count
         pos = sim.cur_pos
         angle = sim.cur_angle
         speed = sim.speed
@@ -205,9 +231,20 @@ class DebugRewardWrapper(gym.RewardWrapper):
         action_diff = np.linalg.norm(current_action - self.prev_action) 
         reward_jerk = jerk_coeff * action_diff
 
+        total_reward = reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
+
+        print(f"--- [Step {step}] Reward Breakdown ---")
+        print(f"  Danger Zone: {in_danger_zone} | Tile: {tile_kind} | Dir: {direction}")
+        print(f"  Speed: {speed:.2f} -> Rew: {reward_speed:.4f}")
+        print(f"  Dist: {lp.dist:.4f} (Target: {target_offset}) -> Rew: {reward_distance:.4f}")
+        print(f"  Align: {lp.dot_dir:.4f} -> Rew: {reward_alignment:.4f}")
+        print(f"  Jerk (Smoothness): -> Rew: {reward_jerk:.4f}")
+        print(f"  TOTAL STEP REWARD: {total_reward:.4f}")
+        print(f"---------------------------------------")
+
         self.prev_action = current_action.copy()
 
-        return reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
+        return total_reward
 
 class KinematicActionWrapper(gym.ActionWrapper):
     def __init__(self, env, gain=1.0, trim=0.0, wheel_dist=0.102, radius=0.0318, k=27.0, limit=1.0):
@@ -222,6 +259,7 @@ class KinematicActionWrapper(gym.ActionWrapper):
     def action(self, action):
         # Action is [v, omega] from the RL Agent
         vel, angle = action
+        step = self.unwrapped.step_count
 
         # Adjust motor constants by gain and trim
         k_r_inv = (self.gain + self.trim) / self.k
@@ -238,5 +276,80 @@ class KinematicActionWrapper(gym.ActionWrapper):
         # Apply physical limits (max motor power)
         u_r_limited = np.clip(u_r, -self.limit, self.limit)
         u_l_limited = np.clip(u_l, -self.limit, self.limit)
+            
+        print(f"Kinematic wrapper at step {step} : {[u_l_limited, u_r_limited]}")
 
         return np.array([u_l_limited, u_r_limited], dtype=np.float32)
+    
+class UndistortWrapper(gym.ObservationWrapper):
+    """
+    To Undo the Fish eye transformation - undistorts the image with plumbbob distortion
+    Using the default configuration parameters on the duckietown/Software repo
+    https://github.com/duckietown/Software/blob/master18/catkin_ws/src/
+    ...05-teleop/pi_camera/include/pi_camera/camera_info.py
+    """
+
+    def __init__(self, env=None):
+        gym.ObservationWrapper.__init__(self, env)
+
+
+        # Set a variable in the unwrapped env so images don't get distorted
+        self.env.unwrapped.undistort = False
+
+        # K - Intrinsic camera matrix for the raw (distorted) images.
+        camera_matrix = [
+            311.5665681454016, 0.0, 335.2914198639567,
+            0.0, 308.44370374450375, 235.41469946322758,
+            0.0, 0.0, 1.0
+        ]
+        self.camera_matrix = np.reshape(camera_matrix, (3, 3))
+
+        # distortion parameters - (k1, k2, t1, t2, k3)
+        distortion_coefs = [
+            -0.2605492415446591, 0.05392162341209542, 
+            0.0011529115993347476, -0.004728714280095291, 0.0
+        ]
+        self.distortion_coefs = np.reshape(distortion_coefs, (1, 5))
+
+        # R - Rectification matrix - stereo cameras only, so identity
+        self.rectification_matrix = np.eye(3)
+
+        # P - Projection Matrix - specifies the intrinsic (camera) matrix
+        #  of the processed (rectified) image
+        projection_matrix = [
+            223.22879028320312, 0.0, 327.2591191800675, 0.0,
+            0.0, 247.4501953125, 233.82550662924768, 0.0,
+            0.0, 0.0, 1.0, 0.0
+        ]
+        self.projection_matrix = np.reshape(projection_matrix, (3, 4))
+
+        # Initialize mappings
+
+        # Used for rectification
+        self.mapx = None
+        self.mapy = None
+
+    def observation(self, observation):
+        if self.env.unwrapped.distortion:
+            return self._undistort(observation)
+        return observation
+
+    def _undistort(self, observation):
+        if self.mapx is None:
+            # Not initialized - initialize all the transformations we'll need
+            self.mapx = np.zeros(observation.shape)
+            self.mapy = np.zeros(observation.shape)
+
+            H, W, _ = observation.shape
+
+            # Initialize self.mapx and self.mapy (updated)
+            self.mapx, self.mapy = cv2.initUndistortRectifyMap(
+                self.camera_matrix,
+                self.distortion_coefs,
+                self.rectification_matrix,
+                self.projection_matrix,
+                (W, H),
+                cv2.CV_32FC1,
+            )
+
+        return cv2.remap(observation, self.mapx, self.mapy, cv2.INTER_NEAREST)

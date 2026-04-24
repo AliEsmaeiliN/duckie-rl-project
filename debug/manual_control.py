@@ -18,8 +18,8 @@ from pyglet.window import key
 
 from gym_duckietown.envs import DuckietownEnv
 from utils.wrappers import CropResizeWrapper
-from utils.rl_env import DuckieOvalEnv
-from debug.agent import DuckiebotAgent
+from rl_env_debug import DuckieOvalEnv
+from agent import DuckiebotAgent
 
 
 # from experiments.utils import save_img

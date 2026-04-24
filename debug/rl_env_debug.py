@@ -2,12 +2,11 @@ import os
 import gymnasium as gym
 import numpy as np
 from gym_duckietown.simulator import Simulator
-from debug.wrappers_debug import (
+from wrappers_debug import (
     KinematicActionWrapper, ActionWrapper, ResizeWrapper, 
     CropResizeWrapper, ImgWrapper, DebugRewardWrapper, DtRewardWrapper,
-    TemporalWrapper
+    TemporalWrapper, UndistortWrapper
 )
-from gym_duckietown.wrappers import UndistortWrapper
 
 class DuckieOvalEnv(Simulator):
     """
@@ -21,7 +20,7 @@ class DuckieOvalEnv(Simulator):
         kwargs.setdefault('full_transparency', True)
         kwargs.setdefault('max_steps', 10000)
         
-        kwargs.setdefault('frame_skip', 1) 
+        kwargs.setdefault('frame_skip', 4) 
         
         super().__init__(**kwargs)
         
@@ -37,7 +36,6 @@ class DuckieOvalEnv(Simulator):
         env = cls(**kwargs)
 
         env = UndistortWrapper(env)
-        env = TemporalWrapper(env, frame_skip=3, motion_blur=motion_blur)
 
         # 1. Kinematics (v, w -> wl, wr)
         env = KinematicActionWrapper(env, wheel_dist=0.102, radius=0.0318, k=27.0)
@@ -60,7 +58,7 @@ class DuckieOvalEnv(Simulator):
         
         # 5. Reward System
         env = DtRewardWrapper(env)
-        env = SimpleRewardWrapper(env)
+        env = DebugRewardWrapper(env)
 
         # 6. Temporal Stacking
         if frame_stack > 1:
