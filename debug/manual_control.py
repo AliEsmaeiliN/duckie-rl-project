@@ -16,11 +16,10 @@ import numpy as np
 import pyglet
 from pyglet.window import key
 
-from src.gym_duckietown.envs import DuckietownEnv
+from gym_duckietown.envs import DuckietownEnv
 from utils.wrappers import CropResizeWrapper
 from utils.rl_env import DuckieOvalEnv
-from rl.models import SACActor, TD3Actor
-from rl.agent import DuckiebotAgent
+from debug.agent import DuckiebotAgent
 
 
 # from experiments.utils import save_img
@@ -168,6 +167,7 @@ def update(dt):
     if key_handler[key.SPACE]:
         action = np.array([0, 0])
 
+    
     v1 = action[0]
     v2 = action[1]
     # Limit radius of curvature

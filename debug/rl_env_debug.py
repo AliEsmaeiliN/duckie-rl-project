@@ -2,10 +2,10 @@ import os
 import gymnasium as gym
 import numpy as np
 from gym_duckietown.simulator import Simulator
-from utils.wrappers import (
+from debug.wrappers_debug import (
     KinematicActionWrapper, ActionWrapper, ResizeWrapper, 
-    CropResizeWrapper, ImgWrapper, CustomRewardWrapper, DtRewardWrapper,
-    TemporalWrapper, AdaptiveRewardWrapper, SimpleRewardWrapper
+    CropResizeWrapper, ImgWrapper, DebugRewardWrapper, DtRewardWrapper,
+    TemporalWrapper
 )
 from gym_duckietown.wrappers import UndistortWrapper
 
