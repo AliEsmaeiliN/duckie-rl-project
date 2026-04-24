@@ -64,10 +64,9 @@ def debug_step():
                         current_obs = wrapper.observation(current_obs)
                         save_image(current_obs, f"step_{i}_{idx+1}_{wrapper_name}")
                     except Exception as e:
-                        print(f"Skipping visualization for {wrapper_name}: {e}")
-                        for t in range(next_obs.shape[0]):
-                            save_image(next_obs[t], f"step_{i}_{idx+1}_{wrapper_name}_f_{t}")
-
+                        frames = [next_obs[t] for t in range(next_obs.shape[0])]
+                        combined_stack = np.concatenate(frames, axis=1) 
+                        save_image(combined_stack, f"step_{i}_{idx+1}_{wrapper_name}")
         if done:
             break
 

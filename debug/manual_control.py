@@ -16,10 +16,12 @@ import numpy as np
 import pyglet
 from pyglet.window import key
 
+from gym_duckietown.simulator import WINDOW_WIDTH, WINDOW_HEIGHT
 from gym_duckietown.envs import DuckietownEnv
 from utils.wrappers import CropResizeWrapper
 from rl_env_debug import DuckieOvalEnv
 from agent import DuckiebotAgent
+from wrappers_debug import DebugRewardWrapper, ActionWrapper, KinematicActionWrapper
 
 
 # from experiments.utils import save_img
@@ -116,7 +118,7 @@ if args.debug:
 rl_label = pyglet.text.Label(
     'Agent: Waiting...',
     font_name='Arial',
-    font_size=12,
+    font_size=10,
     x=5, y=40,
     anchor_x='left', anchor_y='top',
     color=(255, 255, 0, 255), # Yellow color to make it stand out
@@ -124,13 +126,26 @@ rl_label = pyglet.text.Label(
     width=800
     )
 
+debug_label = pyglet.text.Label(
+    'Step: 0 | Reward: 0.00',
+    font_name='Arial',
+    font_size=10,
+    x=5, y=WINDOW_HEIGHT - 60, 
+    anchor_x='left', anchor_y='top',
+    color=(0, 255, 0, 255),
+    multiline=True,
+    width=WINDOW_WIDTH - 10
+)
+
+ep_return = 0.0
+prev_ep_return = "0.00"
 
 def update(dt):
     """
     This function is called at every frame to handle
     movement/stepping and redrawing
     """
-    global obs
+    global obs, ep_return, prev_ep_return
 
     if rl_agent is not None:
         
@@ -150,6 +165,7 @@ def update(dt):
         rl_action_motor = rl_agent.postprocess_kinematics(rl_action)
         wrapped_obs_action = f"RL Env Action: v={rl_action[0]:.2f}, omega={rl_action[1]:.2f} , Motor Action: l={rl_action_motor[0]:.2f}, r={rl_action_motor[1]:.2f}"
         rl_label.text = f"{raw_obs_action}, \n{wrapped_obs_action}"
+
 
     wheel_distance = 0.102
     min_rad = 0.08
@@ -185,8 +201,44 @@ def update(dt):
         action *= 1.5
 
     obs, reward, done, truncated, info = env.step(action)
-    #print("step_count = %s, reward=%.3f" % (env.unwrapped.step_count, reward))
-    #print(f"Observation shape: {obs.shape}")
+
+    ep_return += reward
+
+    if done: 
+        total_r = info["episode"]["r"]
+        if isinstance(total_r, (np.ndarray, list)):
+            total_r = total_r[0]
+        
+        prev_ep_return = f"{total_r:.2f}"
+        print(f"DONE! Final Return: {prev_ep_return}")
+        ep_return = 0.0
+
+    sim = env.unwrapped
+    
+    sim_info = info.get("Simulator", {})
+    curr = env
+    reward_layer = None
+    while hasattr(curr, 'env'):
+        if isinstance(curr, DebugRewardWrapper):
+            reward_layer = curr
+            break
+        curr = curr.env
+
+    if reward_layer:
+        comps = reward_layer.latest_reward_components
+        reward_text = (
+            f"--- REWARD BREAKDOWN (Step {sim.step_count}) ---\n"
+            f"Reward: {reward:.2f} | Total: {ep_return:.2f}\n"
+            f"Status: {sim_info.get('msg', 'Normal')}\n"
+            f"Action L/R: {sim.last_action[0]:.2f}, {sim.last_action[1]:.2f}\n"
+            f"Speed: {sim.speed:.2f} m/s | Lane Dist: {sim_info.get('lane_position', {}).get('dist', 0):.4f}\n"
+            f"SPEED REW: {comps['speed']:.4f}\n"
+            f"DIST REW:  {comps['distance']:.4f}\n"
+            f"ALIGN REW: {comps['alignment']:.4f}\n"
+            f"JERK REW:  {comps['jerk']:.4f}"
+        )
+    
+    debug_label.text = reward_text
 
     if key_handler[key.RETURN]:
         os.makedirs("screenshots", exist_ok=True)
@@ -228,6 +280,7 @@ def update(dt):
         env.unwrapped.render(mode=view)
 
     env.unwrapped.render(mode=view)
+    debug_label.draw()
     rl_label.draw()
 
 

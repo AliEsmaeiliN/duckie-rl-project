@@ -134,7 +134,7 @@ class ActionWrapper(gym.ActionWrapper):
         step = self.unwrapped.step_count
         action_ = np.array([action[0] * 0.8, action[1]], dtype=np.float32)
             
-        print(f"Action wrapper at step {step} : {action_}")
+        #print(f"Action wrapper at step {step} : {action_}")
         return action_
 
 class CropResizeWrapper(gym.ObservationWrapper):
@@ -233,14 +233,22 @@ class DebugRewardWrapper(gym.RewardWrapper):
 
         total_reward = reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
 
-        print(f"--- [Step {step}] Reward Breakdown ---")
+        self.latest_reward_components = {
+            "speed": reward_speed,
+            "alignment": reward_alignment,
+            "distance": reward_distance,
+            "angle": reward_angle,
+            "jerk": reward_jerk
+        }
+
+        """print(f"--- [Step {step}] Reward Breakdown ---")
         print(f"  Danger Zone: {in_danger_zone} | Tile: {tile_kind} | Dir: {direction}")
         print(f"  Speed: {speed:.2f} -> Rew: {reward_speed:.4f}")
         print(f"  Dist: {lp.dist:.4f} (Target: {target_offset}) -> Rew: {reward_distance:.4f}")
         print(f"  Align: {lp.dot_dir:.4f} -> Rew: {reward_alignment:.4f}")
         print(f"  Jerk (Smoothness): -> Rew: {reward_jerk:.4f}")
         print(f"  TOTAL STEP REWARD: {total_reward:.4f}")
-        print(f"---------------------------------------")
+        print(f"---------------------------------------")"""
 
         self.prev_action = current_action.copy()
 
@@ -277,7 +285,7 @@ class KinematicActionWrapper(gym.ActionWrapper):
         u_r_limited = np.clip(u_r, -self.limit, self.limit)
         u_l_limited = np.clip(u_l, -self.limit, self.limit)
             
-        print(f"Kinematic wrapper at step {step} : {[u_l_limited, u_r_limited]}")
+        #print(f"Kinematic wrapper at step {step} : {[u_l_limited, u_r_limited]}")
 
         return np.array([u_l_limited, u_r_limited], dtype=np.float32)
     
