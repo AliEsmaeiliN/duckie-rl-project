@@ -4,9 +4,6 @@ import numpy as np
 from PIL import Image
 import numpy as np 
 
-from gym_duckietown.simulator import Simulator
-from gym_duckietown.simulator import get_dir_vec
-
 
 class TemporalWrapper(gym.Wrapper):
     def __init__(self, env=None, frame_skip=3, motion_blur=True):
@@ -137,7 +134,7 @@ class CropResizeWrapper(gym.ObservationWrapper):
         width, height = img.size
         
         # PIL crop box is (left, top, right, bottom)
-        top_boundary = int(height * (1/4))
+        top_boundary = int(height * (1/3))
         img = img.crop((0, top_boundary, width, height))
         
         # target shape (84x84)

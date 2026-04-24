@@ -20,8 +20,7 @@ class DuckieOvalEnv(Simulator):
         kwargs.setdefault('accept_start_angle_deg', 4)
         kwargs.setdefault('full_transparency', True)
         kwargs.setdefault('max_steps', 1500)
-        
-        kwargs.setdefault('frame_skip', 1) 
+        kwargs.setdefault('frame_skip', 4) 
         
         super().__init__(**kwargs)
         
@@ -41,9 +40,6 @@ class DuckieOvalEnv(Simulator):
         # 1. Kinematics (v, w -> wl, wr)
         env = KinematicActionWrapper(env, wheel_dist=0.102, radius=0.0318, k=27.0)
         env = ActionWrapper(env)
-
-        # 2. Temporal Logic
-        env = TemporalWrapper(env, frame_skip=3, motion_blur=motion_blur)
 
         if capture_video:
             video_folder = f"videos/{run_name}"
