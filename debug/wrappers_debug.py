@@ -171,8 +171,8 @@ class DebugRewardWrapper(gym.RewardWrapper):
 
     def reward(self, reward):
 
-        if reward <= -15.0:
-            return reward
+        if reward == -1000:
+            return -20
 
         # Get internal simulator state for custom math
         sim = self.env.unwrapped 
@@ -222,7 +222,9 @@ class DebugRewardWrapper(gym.RewardWrapper):
             jerk_coeff = -0.5
             target_offset = 0.0
             alignment_k = 2.0
-        
+        if np.abs(lp.dist) >= 0.1:
+            dist_coeff = -30
+
         reward_speed = speed_coeff * speed * lp.dot_dir
         reward_alignment = np.exp(alignment_k * (lp.dot_dir - 1.0)) # tanh like behaviour to add a higher gradint near 1
         reward_distance = dist_coeff * (lp.dist - target_offset)**2
