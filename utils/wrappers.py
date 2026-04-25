@@ -219,8 +219,8 @@ class SimpleRewardWrapper(gym.RewardWrapper):
         self.prev_action = np.zeros(2)
 
     def reward(self, reward):
-        if reward == -15.0:
-            return reward
+        if reward == -1000:
+            return -30
 
         # Get internal simulator state for custom math
         sim = self.env.unwrapped 
@@ -228,7 +228,7 @@ class SimpleRewardWrapper(gym.RewardWrapper):
         angle = sim.cur_angle
         speed = sim.speed
         current_action = sim.last_action
-        lane_width = 0.2
+        lane_width = 0.1
 
         try:
             lp = sim.get_lane_pos2(pos, angle)
@@ -242,6 +242,8 @@ class SimpleRewardWrapper(gym.RewardWrapper):
 
         reward_speed = speed_coeff * speed
         reward_alignment = alignment_k * (lp.dot_dir ** 2) if lp.dot_dir > 0 else 4.0 * lp.dot_dir
+        if np.abs(lp.dist) >= lane_width:
+            dist_coeff = -50
         reward_distance = dist_coeff * np.abs(lp.dist)
         reward_angle = -0.03 * np.abs(lp.angle_deg)
         
