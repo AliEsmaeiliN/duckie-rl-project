@@ -5,9 +5,8 @@ from gym_duckietown.simulator import Simulator
 from utils.wrappers import (
     KinematicActionWrapper, ActionWrapper, ResizeWrapper, 
     CropResizeWrapper, ImgWrapper, CustomRewardWrapper, DtRewardWrapper,
-    TemporalWrapper, AdaptiveRewardWrapper, SimpleRewardWrapper
+    TemporalWrapper, AdaptiveRewardWrapper, SimpleRewardWrapper, UndistortWrapper
 )
-from src.gym_duckietown.wrappers import UndistortWrapper
 
 class DuckieOvalEnv(Simulator):
     """

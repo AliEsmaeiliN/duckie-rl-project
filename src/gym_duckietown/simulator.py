@@ -649,7 +649,7 @@ class Simulator(gym.Env):
             # ======================================================
             # NEW PERFECT SPAWN LOGIC (Using Geometry)
             # ======================================================
-            '''
+            
             # Finding the coordinate and curves of the specific tile
             i, j = tile["coords"]
             curves = tile["curves"]
@@ -724,7 +724,7 @@ class Simulator(gym.Env):
                 propose_angle = 1
 
                 # raise Exception(msg)
-            
+            '''
 
         self.cur_pos = propose_pos
         self.cur_angle = propose_angle

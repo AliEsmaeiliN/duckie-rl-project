@@ -228,6 +228,7 @@ class SimpleRewardWrapper(gym.RewardWrapper):
         angle = sim.cur_angle
         speed = sim.speed
         current_action = sim.last_action
+        lane_width = 0.2
 
         try:
             lp = sim.get_lane_pos2(pos, angle)
@@ -346,3 +347,76 @@ class KinematicActionWrapper(gym.ActionWrapper):
         u_l_limited = np.clip(u_l, -self.limit, self.limit)
 
         return np.array([u_l_limited, u_r_limited], dtype=np.float32)
+    
+class UndistortWrapper(gym.ObservationWrapper):
+    """
+    To Undo the Fish eye transformation - undistorts the image with plumbbob distortion
+    Using the default configuration parameters on the duckietown/Software repo
+    https://github.com/duckietown/Software/blob/master18/catkin_ws/src/
+    ...05-teleop/pi_camera/include/pi_camera/camera_info.py
+    """
+
+    def __init__(self, env=None):
+        gym.ObservationWrapper.__init__(self, env)
+
+
+        # Set a variable in the unwrapped env so images don't get distorted
+        self.env.unwrapped.undistort = False
+
+        # K - Intrinsic camera matrix for the raw (distorted) images.
+        camera_matrix = [
+            311.5665681454016, 0.0, 335.2914198639567,
+            0.0, 308.44370374450375, 235.41469946322758,
+            0.0, 0.0, 1.0
+        ]
+        self.camera_matrix = np.reshape(camera_matrix, (3, 3))
+
+        # distortion parameters - (k1, k2, t1, t2, k3)
+        distortion_coefs = [
+            -0.2605492415446591, 0.05392162341209542, 
+            0.0011529115993347476, -0.004728714280095291, 0.0
+        ]
+        self.distortion_coefs = np.reshape(distortion_coefs, (1, 5))
+
+        # R - Rectification matrix - stereo cameras only, so identity
+        self.rectification_matrix = np.eye(3)
+
+        # P - Projection Matrix - specifies the intrinsic (camera) matrix
+        #  of the processed (rectified) image
+        projection_matrix = [
+            223.22879028320312, 0.0, 327.2591191800675, 0.0,
+            0.0, 247.4501953125, 233.82550662924768, 0.0,
+            0.0, 0.0, 1.0, 0.0
+        ]
+        self.projection_matrix = np.reshape(projection_matrix, (3, 4))
+
+        # Initialize mappings
+
+        # Used for rectification
+        self.mapx = None
+        self.mapy = None
+
+    def observation(self, observation):
+        if self.env.unwrapped.distortion:
+            return self._undistort(observation)
+        return observation
+
+    def _undistort(self, observation):
+        if self.mapx is None:
+            # Not initialized - initialize all the transformations we'll need
+            self.mapx = np.zeros(observation.shape)
+            self.mapy = np.zeros(observation.shape)
+
+            H, W, _ = observation.shape
+
+            # Initialize self.mapx and self.mapy (updated)
+            self.mapx, self.mapy = cv2.initUndistortRectifyMap(
+                self.camera_matrix,
+                self.distortion_coefs,
+                self.rectification_matrix,
+                self.projection_matrix,
+                (W, H),
+                cv2.CV_32FC1,
+            )
+
+        return cv2.remap(observation, self.mapx, self.mapy, cv2.INTER_NEAREST)
