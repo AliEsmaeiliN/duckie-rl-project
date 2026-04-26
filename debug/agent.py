@@ -13,6 +13,8 @@ class DuckiebotAgent:
         self.algo_type = algo_type.lower()
         self.grayscale = grayscale
         self.frame_stack = frame_stack
+        self.prev_action = np.array([0.0, 0.0])
+        self.alpha = 0.6 # Lower = smoother but more lag
         
         print(f"Loading {self.algo_type.upper()} model from {model_path}...")
         self.frames = collections.deque(maxlen=frame_stack)
@@ -119,7 +121,10 @@ class DuckiebotAgent:
             else:
                 action = self.actor(input_tensor)
         
-        return action.cpu().numpy().reshape(-1)
+        current_raw_action = action.cpu().numpy().reshape(-1)
+        smoothed_action = (self.alpha * current_raw_action) + ((1.0 - self.alpha) * self.prev_action)
+        self.prev_action = smoothed_action.copy()
+        return smoothed_action
 
     def postprocess_kinematics(self, action):
         """
