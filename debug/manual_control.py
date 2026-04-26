@@ -15,6 +15,7 @@ import gymnasium as gym
 import numpy as np
 import pyglet
 from pyglet.window import key
+import torch
 
 from gym_duckietown.simulator import WINDOW_WIDTH, WINDOW_HEIGHT
 from gym_duckietown.envs import DuckietownEnv
@@ -22,6 +23,8 @@ from utils.wrappers import CropResizeWrapper
 from rl_env_debug import DuckieOvalEnv
 from agent import DuckiebotAgent
 from wrappers_debug import DebugRewardWrapper, ActionWrapper, KinematicActionWrapper
+from rl.sac_continuous_action import Actor as sac_sim_actor
+from rl.td3_continuous_action import Actor as td3_sim_actor
 
 
 # from experiments.utils import save_img
@@ -72,6 +75,7 @@ else:
 
 render_modes = ["human", "top_down", "free_cam", "rgb_array"]
 view = render_modes[0]
+auto_mode = False
 
 obs, info = env.reset(seed=args.seed)
 
@@ -86,6 +90,7 @@ def on_key_press(symbol, modifiers):
     This handler processes keyboard commands that
     control the simulation
     """
+    global auto_mode
 
     if symbol == key.BACKSPACE or symbol == key.SLASH:
         print("RESET")
@@ -96,6 +101,9 @@ def on_key_press(symbol, modifiers):
     elif symbol == key.ESCAPE:
         env.close()
         sys.exit(0)
+    elif symbol == key.A:
+        auto_mode = not auto_mode
+        print(f"Autonomous Mode: {auto_mode}")
 
 
 
@@ -113,7 +121,15 @@ if args.debug:
             model_path=model_path, 
             algo_type= algo
             )
-        print(f"{algo.upper()} Agent loaded from {args.model}")    
+        env.single_observation_space = env.observation_space
+        env.single_action_space = env.action_space
+        actor_class = sac_sim_actor if algo == "sac" else td3_sim_actor
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        rl_sim_agent = actor_class(env).to(device)
+        checkpoint = torch.load(model_path, map_location=rl_sim_agent.fc_mean.weight.device)
+        rl_sim_agent.load_state_dict(checkpoint['actor_state_dict'])
+        rl_sim_agent.eval()
+        print(f"{algo.upper()} Agent loaded from {args.model}")
 
 rl_label = pyglet.text.Label(
     'Agent: Waiting...',
@@ -145,47 +161,50 @@ def update(dt):
     This function is called at every frame to handle
     movement/stepping and redrawing
     """
-    global obs, ep_return, prev_ep_return
+    global obs, ep_return, prev_ep_return, device, auto_mode
 
     if rl_agent is not None:
         
-        # Simulator raw observation with sim2real preprocessing
+        # Simulator raw observation with sim2real preprocessing and agent
         last_obs = env.unwrapped.render_obs()
-        #print(last_obs.shape)
         processed_frame = rl_agent.preprocess(last_obs)
         rl_agent.update_buffer(processed_frame)
         rl_action = rl_agent.get_action(last_obs)
         rl_action_motor = rl_agent.postprocess_kinematics(rl_action)
         raw_obs_action = f"RL Raw Action: v={rl_action[0]:.2f}, omega={rl_action[1]:.2f} , Motor Action: l={rl_action_motor[0]:.2f}, r={rl_action_motor[1]:.2f}"
 
-        # Env wrapped observation
-        stack_obs = obs
-        #print(stack_obs.shape)
-        rl_action = rl_agent.get_action(is_stacked=True, processed_stack_input=stack_obs)
-        rl_action_motor = rl_agent.postprocess_kinematics(rl_action)
-        wrapped_obs_action = f"RL Env Action: v={rl_action[0]:.2f}, omega={rl_action[1]:.2f} , Motor Action: l={rl_action_motor[0]:.2f}, r={rl_action_motor[1]:.2f}"
+        # Env wrapped observation through the training agents
+        stack_obs = torch.Tensor(obs).unsqueeze(0).to(device)
+        with torch.no_grad():   
+            if hasattr(rl_sim_agent, "get_action"):
+                _, _, sim_action = rl_sim_agent.get_action(stack_obs) # Use mean_action for eval
+            else:
+                sim_action = rl_sim_agent(stack_obs) #TD3 actor returns action directly
+            sim_action = sim_action.cpu().numpy().reshape(-1)
+        sim_action_motor = rl_agent.postprocess_kinematics(sim_action)
+        wrapped_obs_action = f"RL Env Action: v={sim_action[0]:.2f}, omega={sim_action[1]:.2f} , Motor Action: l={sim_action_motor[0]:.2f}, r={sim_action_motor[1]:.2f}"
         rl_label.text = f"{raw_obs_action}, \n{wrapped_obs_action}"
 
 
     wheel_distance = 0.102
     min_rad = 0.08
 
-    action = np.array([0.0, 0.0])
+    manual_action = np.array([0.0, 0.0])
 
     if key_handler[key.UP]:
-        action += np.array([0.44, 0.0])
+        manual_action += np.array([0.44, 0.0])
     if key_handler[key.DOWN]:
-        action -= np.array([0.44, 0])
+        manual_action -= np.array([0.44, 0])
     if key_handler[key.LEFT]:
-        action += np.array([0, 1])
+        manual_action += np.array([0, 1])
     if key_handler[key.RIGHT]:
-        action -= np.array([0, 1])
+        manual_action -= np.array([0, 1])
     if key_handler[key.SPACE]:
-        action = np.array([0, 0])
+        manual_action = np.array([0, 0])
 
     
-    v1 = action[0]
-    v2 = action[1]
+    v1 = manual_action[0]
+    v2 = manual_action[1]
     # Limit radius of curvature
     if v1 == 0 or abs(v2 / v1) > (min_rad + wheel_distance / 2.0) / (min_rad - wheel_distance / 2.0):
         # adjust velocities evenly such that condition is fulfilled
@@ -193,12 +212,17 @@ def update(dt):
         v1 += delta_v
         v2 -= delta_v
 
-    action[0] = v1
-    action[1] = v2
+    manual_action[0] = v1
+    manual_action[1] = v2
 
     # Speed boost
     if key_handler[key.LSHIFT]:
-        action *= 1.5
+        manual_action *= 1.5
+
+    if auto_mode:
+        action = sim_action 
+    else:
+        action = manual_action
 
     obs, reward, done, truncated, info = env.step(action)
 
@@ -232,6 +256,7 @@ def update(dt):
             f"Status: {sim_info.get('msg', 'Normal')}\n"
             f"Action L/R: {sim.last_action[0]:.2f}, {sim.last_action[1]:.2f}\n"
             f"Speed: {sim.speed:.2f} m/s | Lane Dist: {sim_info.get('lane_position', {}).get('dist', 0):.4f}\n"
+            f"Distance: {comps['dist']:.4f} ,Heading: {comps['heading']:.4f}"
             f"SPEED REW: {comps['speed']:.4f}\n"
             f"DIST REW:  {comps['distance']:.4f}\n"
             f"ALIGN REW: {comps['alignment']:.4f}\n"

@@ -156,7 +156,7 @@ class CropResizeWrapper(gym.ObservationWrapper):
         width, height = img.size
         
         # PIL crop box is (left, top, right, bottom)
-        top_boundary = int(height * (1/4))
+        top_boundary = int(height * (1/3))
         img = img.crop((0, top_boundary, width, height))
         
         # target shape (84x84)
@@ -240,7 +240,9 @@ class DebugRewardWrapper(gym.RewardWrapper):
             "alignment": reward_alignment,
             "distance": reward_distance,
             "angle": reward_angle,
-            "jerk": reward_jerk
+            "jerk": reward_jerk,
+            "dist": lp.dist,
+            "heading": lp.dot_dir
         }
 
         """print(f"--- [Step {step}] Reward Breakdown ---")
