@@ -202,14 +202,11 @@ class CustomRewardWrapper(gym.RewardWrapper):
             # "Race Mode" for straights
             speed_coeff = 2.5
             dist_coeff = -10.0
-            jerk_coeff = -2.5
+            jerk_coeff = -1.8
             target_offset = 0.0
             alignment_k = 2.0
         
-        if speed < 0.1:
-            reward_speed = -3.0  
-        else:
-            reward_speed = speed_coeff * speed * lp.dot_dir
+        reward_speed = speed_coeff * speed * lp.dot_dir
 
 
         reward_alignment = np.exp(alignment_k * (lp.dot_dir - 1.0)) # tanh like behaviour to add a higher gradint near 1
