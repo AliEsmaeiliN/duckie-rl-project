@@ -147,11 +147,11 @@ class CustomRewardWrapper(gym.RewardWrapper):
     def __init__(self, env):
         super().__init__(env)
         self.prev_action = np.zeros(2)
-        self.WRONG_LANE_LIMIT = - 0.15
+        self.WRONG_LANE_LIMIT = - 0.2
 
     def reward(self, reward):
 
-        if reward <= -15.0:
+        if reward == -1000:
             return -20
 
         # Get internal simulator state for custom math
@@ -166,9 +166,6 @@ class CustomRewardWrapper(gym.RewardWrapper):
         except Exception:
             return -10.0 
         
-        if lp.dist < self.WRONG_LANE_LIMIT:
-            return -20.0
-
             
         # Asymmetric Logic
         coords = sim.get_grid_coords(pos) #
@@ -177,7 +174,7 @@ class CustomRewardWrapper(gym.RewardWrapper):
         direction = sim.episode_dir
 
         # Lookahead Logic
-        lookahead_dist = 0.2 
+        lookahead_dist = 0.1 
         dir_vec = np.array([np.cos(angle), 0, -np.sin(angle)]) # Based on get_dir_vec
         lookahead_pos = pos + dir_vec * lookahead_dist
         
@@ -202,20 +199,22 @@ class CustomRewardWrapper(gym.RewardWrapper):
             # "Race Mode" for straights
             speed_coeff = 2.5
             dist_coeff = -10.0
-            jerk_coeff = -1.8
+            jerk_coeff = - 1.8
             target_offset = 0.0
             alignment_k = 2.0
         
-        reward_speed = speed_coeff * speed * lp.dot_dir
+        if speed < 0.05:
+            reward_speed = -3
+        else:
+            reward_speed = speed_coeff * speed * lp.dot_dir
 
 
         reward_alignment = np.exp(alignment_k * (lp.dot_dir - 1.0)) # tanh like behaviour to add a higher gradint near 1
 
-        # Asymmetric distance penalty
-        if lp.dist < 0:
-            reward_distance = -40.0 * (lp.dist ** 2)
-        else:
-            reward_distance = dist_coeff * (lp.dist - target_offset) ** 2
+        if lp.dist < self.WRONG_LANE_LIMIT:
+            dist_coeff = -40
+
+        reward_distance = dist_coeff * (lp.dist - target_offset) ** 2
             
         reward_angle = -0.03 * np.abs(lp.angle_deg)
         
@@ -225,7 +224,7 @@ class CustomRewardWrapper(gym.RewardWrapper):
         self.prev_action = current_action.copy()
         total_reward = reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
  
-        return np.clip(total_reward, -20.0, 5.0)
+        return total_reward
     
 
 class SimpleRewardWrapper(gym.RewardWrapper):
