@@ -5,7 +5,7 @@ from gym_duckietown.simulator import Simulator
 from wrappers_debug import (
     KinematicActionWrapper, ActionWrapper, ResizeWrapper, 
     CropResizeWrapper, ImgWrapper, DebugRewardWrapper, DtRewardWrapper,
-    TemporalWrapper, UndistortWrapper
+    UndistortWrapper
 )
 
 class DuckieOvalEnv(Simulator):
@@ -29,7 +29,7 @@ class DuckieOvalEnv(Simulator):
         self.motor_k = 27.0
 
     @classmethod
-    def create_wrapped(cls, run_name, capture_video=False, motion_blur=False, grayscale=True, frame_stack=4, **kwargs):
+    def create_wrapped(cls, run_name, capture_video=False, motion_blur=False, grayscale=True, frame_stack=4, reward_type="adp", **kwargs):
         """
         Static method to build the fully wrapped stack.
         """
@@ -58,7 +58,7 @@ class DuckieOvalEnv(Simulator):
         
         # 5. Reward System
         #env = DtRewardWrapper(env)
-        env = DebugRewardWrapper(env)
+        env = DebugRewardWrapper(env, reward_type=reward_type)
 
         # 6. Temporal Stacking
         if frame_stack > 1:

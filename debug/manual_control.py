@@ -44,6 +44,7 @@ parser.add_argument("--no-grayscale", dest="grayscale", action="store_false", he
 parser.add_argument("--motion-blur", default=False, action="store_true")
 parser.add_argument("--debug", default=False, action="store_true", help="Activating the Agent's action output")
 parser.add_argument("--model", default=None, type=str, help="The agent's .cleanrl_model file")
+parser.add_argument("--reward", default="adp", help="Choose the reward function 'adl', 'adp' , 'simple'")
 args = parser.parse_args()
 
 
@@ -67,7 +68,7 @@ else:
         motion_blur=args.motion_blur, 
         grayscale=True,
         frame_stack=4,
-        
+        reward_type=args.reward,
         domain_rand=args.domain_rand,
         dynamics_rand=args.dynamics_rand,
         distortion=args.distortion
@@ -148,7 +149,7 @@ debug_label = pyglet.text.Label(
     font_size=10,
     x=5, y=WINDOW_HEIGHT - 60, 
     anchor_x='left', anchor_y='top',
-    color=(0, 255, 0, 255),
+    color=(255, 0, 0, 255),
     multiline=True,
     width=WINDOW_WIDTH - 10
 )
@@ -256,7 +257,7 @@ def update(dt):
             f"Status: {sim_info.get('msg', 'Normal')}\n"
             f"Action L/R: {sim.last_action[0]:.2f}, {sim.last_action[1]:.2f}\n"
             f"Speed: {sim.speed:.2f} m/s | Lane Dist: {sim_info.get('lane_position', {}).get('dist', 0):.4f}\n"
-            f"Distance: {comps['dist']:.4f} ,Heading: {comps['heading']:.4f}"
+            f"Distance: {comps['raw_dist']:.4f} ,Heading: {comps['raw_heading']:.4f}\n \n"
             f"SPEED REW: {comps['speed']:.4f}\n"
             f"DIST REW:  {comps['distance']:.4f}\n"
             f"ALIGN REW: {comps['alignment']:.4f}\n"

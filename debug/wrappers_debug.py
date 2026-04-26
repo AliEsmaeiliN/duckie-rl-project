@@ -22,47 +22,66 @@ def save_debug_image(obs, name, folder="captures/observation_pipeline"):
     img = Image.fromarray(arr.squeeze())
     img.save(f"{folder}/{name}.png")
 
-class TemporalWrapper(gym.Wrapper):
-    def __init__(self, env=None, frame_skip=3, motion_blur=True):
-        super().__init__(env)
-        self.step_count = 0
-        self.frame_skip = frame_skip
-        self.motion_blur = motion_blur
-        self.unwrapped.delta_time = self.unwrapped.delta_time / (self.frame_skip + 1)
-        
-        self.weights = [0.01, 0.04, 0.15, 0.8]  
-        
-    def step(self, action: np.ndarray):
-        action = np.clip(action, -1, 1)
-        motion_blur_window = []
-        processed_action = action
-        self.step_count += 1
+class RewardCompute():
+    def __init__(self):
+        self.WRONG_LANE_LIMIT = -0.20 # Meters (standard lane width is ~0.2-0.3)
 
-        for _ in range(self.frame_skip + 1):
-            obs = self.unwrapped.render_obs()
-            motion_blur_window.append(obs)
+    def compute(self, name, **kwargs):
+        """Registry to call the correct reward function by string name."""
+        funcs = {
+            "adl": self.adl_reward,
+            "simple": self.simple_reward,
+            "adp": self.adp_reward
+        }
+        if name not in funcs:
+            raise ValueError(f"Reward type '{name}' not recognized.")
+        return funcs[name](**kwargs)
 
-            self.unwrapped.update_physics(processed_action)
-            
-        if not self.motion_blur:
-            processed_obs = motion_blur_window[-1]
+    def adl_reward(self, speed, distance, heading, angle, danger_zone, current_action, previous_action):
+        if distance < self.WRONG_LANE_LIMIT:
+            return -20.0, 0, 0, 0, 0 # Return tuple to maintain consistency
+
+        if danger_zone:
+            speed_coeff, dist_coeff, jerk_coeff, target_offset, alignment_k = 1.0, -15.0, -1.2, 0.05, 5.0
         else:
-            current_weights = self.weights[:len(motion_blur_window)]
-            if np.sum(current_weights) == 0:
-                processed_obs = motion_blur_window[-1]
-            else:
-                processed_obs = np.average(
-                    motion_blur_window, 
-                    axis=0, 
-                    weights=current_weights
-                ).astype(np.uint8)
+            speed_coeff, dist_coeff, jerk_coeff, target_offset, alignment_k = 2.5, -10.0, -2.5, 0.0, 2.0
+        
+        reward_speed = -3.0 if speed < 0.1 else speed_coeff * speed * heading
+        reward_alignment = np.exp(alignment_k * (heading - 1.0))
+        reward_distance = -40.0 * (distance ** 2) if distance < 0 else dist_coeff * (distance - target_offset) ** 2
+        reward_angle = -0.03 * np.abs(angle)
+        reward_jerk = jerk_coeff * np.linalg.norm(current_action - previous_action)
 
+        return reward_speed, reward_distance, reward_alignment, reward_angle, reward_jerk
+    
+    def simple_reward(self, speed, distance, heading, angle, danger_zone, current_action, previous_action):
+        speed_coeff, dist_coeff, jerk_coeff, alignment_k = 1.5, -15.0, -1.0, 2.0
+        
+        reward_speed = speed_coeff * speed
+        reward_alignment = alignment_k * (heading ** 2) if heading > 0 else 4.0 * heading
+        if np.abs(distance) >= np.abs(self.WRONG_LANE_LIMIT) / 2:
+            dist_coeff = -40
+            
+        reward_distance = dist_coeff * np.abs(distance)
+        reward_angle = -0.03 * np.abs(angle)
+        reward_jerk = jerk_coeff * np.linalg.norm(current_action - previous_action)
 
-        d_info = self.unwrapped._compute_done_reward(processed_action)
+        return reward_speed, reward_distance, reward_alignment, reward_angle, reward_jerk
 
-        save_debug_image(processed_obs, f"step_{self.step_count}_{2}_TemporalWrapper")    
+    def adp_reward(self, speed, distance, heading, angle, danger_zone, current_action, previous_action):
+        dist_penalty_coeff, speed_coeff, jerk_coeff, k = -8.0, 2.0, -0.3, 5.0
 
-        return processed_obs, d_info.reward, d_info.done, False, self.unwrapped.get_agent_info()
+        if danger_zone:
+            speed_coeff, dist_penalty_coeff, jerk_coeff, k = 0.4, -15.0, -1.5, 10.0                      
+        
+        reward_speed = speed_coeff * speed * heading
+        reward_alignment = np.exp(k * (heading - 1.0))
+        reward_distance = dist_penalty_coeff * np.abs(distance)
+        reward_angle = -0.03 * np.abs(angle)
+        reward_jerk = jerk_coeff * np.linalg.norm(current_action - previous_action)
+
+        return reward_speed, reward_distance, reward_alignment, reward_angle, reward_jerk
+        
 
 
 class ResizeWrapper(gym.ObservationWrapper):
@@ -165,97 +184,70 @@ class CropResizeWrapper(gym.ObservationWrapper):
         return np.array(img)
     
 class DebugRewardWrapper(gym.RewardWrapper):
-    def __init__(self, env):
+    def __init__(self, env, reward_type="adl"):
         super().__init__(env)
+        self.reward_type = reward_type
+        self.reward_compute = RewardCompute()
         self.prev_action = np.zeros(2)
+        self.latest_reward_components = {}
 
     def reward(self, reward):
+        # Handle termination/crash rewards from the simulator directly
+        if reward <= -15.0: 
+            return reward
 
-        if reward == -1000:
-            return -20
-
-        # Get internal simulator state for custom math
         sim = self.env.unwrapped 
-        step = sim.step_count
         pos = sim.cur_pos
         angle = sim.cur_angle
-        speed = sim.speed
-        current_action = sim.last_action
         
         try:
             lp = sim.get_lane_pos2(pos, angle)
         except Exception:
             return -10.0 
             
-        # Asymmetric Logic
-        coords = sim.get_grid_coords(pos) #
-        tile = sim._get_tile(*coords) #
+        # Danger Zone Logic (Asymmetric behavior for Clockwise turns)
+        coords = sim.get_grid_coords(pos)
+        tile = sim._get_tile(*coords)
         tile_kind = tile["kind"] if tile else ""
-        direction = sim.episode_dir
-
-        # Lookahead Logic
-        lookahead_dist = 0.25 
-        dir_vec = np.array([np.cos(angle), 0, -np.sin(angle)]) # Based on get_dir_vec
-        lookahead_pos = pos + dir_vec * lookahead_dist
         
-        look_coords = sim.get_grid_coords(lookahead_pos)
-        look_tile = sim._get_tile(*look_coords)
+        # Lookahead Logic to detect upcoming curves
+        lookahead_dist = 0.25 
+        dir_vec = np.array([np.cos(angle), 0, -np.sin(angle)])
+        lookahead_pos = pos + dir_vec * lookahead_dist
+        look_tile = sim._get_tile(*sim.get_grid_coords(lookahead_pos))
         look_kind = look_tile["kind"] if look_tile else ""
 
-        in_curve = "curve" in tile_kind
-        approaching_curve = "curve" in look_kind
-        in_danger_zone = (direction == "CW") and approaching_curve
+        in_danger_zone = (sim.episode_dir == "CW") and ("curve" in look_kind)
 
+        # Compute components
+        comps = self.reward_compute.compute(
+            name=self.reward_type,
+            speed=sim.speed,
+            distance=lp.dist,
+            heading=lp.dot_dir,
+            angle=lp.angle_deg,
+            danger_zone=in_danger_zone,
+            current_action=sim.last_action,
+            previous_action=self.prev_action
+        )
 
-
-        if in_danger_zone:
-            # Special "Stabilization" Values
-            speed_coeff = 1.0
-            dist_coeff = -15.0
-            jerk_coeff = -1.2
-            target_offset = 0.05
-            alignment_k = 5.0
+        if isinstance(comps, tuple):
+            r_speed, r_dist, r_align, r_angle, r_jerk = comps
+            total_reward = sum(comps)
+            
+            self.latest_reward_components = {
+                "speed": r_speed,
+                "distance": r_dist,
+                "alignment": r_align,
+                "angle": r_angle,
+                "jerk": r_jerk,
+                "raw_dist": lp.dist,
+                "raw_heading": lp.dot_dir
+            }
         else:
-            # "Race Mode" for straights
-            speed_coeff = 2.5
-            dist_coeff = -10.0
-            jerk_coeff = -0.5
-            target_offset = 0.0
-            alignment_k = 2.0
-        if np.abs(lp.dist) >= 0.1:
-            dist_coeff = -30
+            total_reward = comps
 
-        reward_speed = speed_coeff * speed * lp.dot_dir
-        reward_alignment = np.exp(alignment_k * (lp.dot_dir - 1.0)) # tanh like behaviour to add a higher gradint near 1
-        reward_distance = dist_coeff * (lp.dist - target_offset)**2
-        reward_angle = -0.03 * np.abs(lp.angle_deg)
-        
-        action_diff = np.linalg.norm(current_action - self.prev_action) 
-        reward_jerk = jerk_coeff * action_diff
-
-        total_reward = reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
-
-        self.latest_reward_components = {
-            "speed": reward_speed,
-            "alignment": reward_alignment,
-            "distance": reward_distance,
-            "angle": reward_angle,
-            "jerk": reward_jerk,
-            "dist": lp.dist,
-            "heading": lp.dot_dir
-        }
-
-        """print(f"--- [Step {step}] Reward Breakdown ---")
-        print(f"  Danger Zone: {in_danger_zone} | Tile: {tile_kind} | Dir: {direction}")
-        print(f"  Speed: {speed:.2f} -> Rew: {reward_speed:.4f}")
-        print(f"  Dist: {lp.dist:.4f} (Target: {target_offset}) -> Rew: {reward_distance:.4f}")
-        print(f"  Align: {lp.dot_dir:.4f} -> Rew: {reward_alignment:.4f}")
-        print(f"  Jerk (Smoothness): -> Rew: {reward_jerk:.4f}")
-        print(f"  TOTAL STEP REWARD: {total_reward:.4f}")
-        print(f"---------------------------------------")"""
-
-        self.prev_action = current_action.copy()
-
+        self.prev_action = sim.last_action.copy()
         return total_reward
 
 class KinematicActionWrapper(gym.ActionWrapper):
