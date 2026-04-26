@@ -7,3 +7,67 @@ tiles:
 - [asphalt ,       asphalt,    asphalt,    asphalt,      asphalt, asphalt]
 
 tile_size: 0.585
+
+objects:
+  # --- Top-Left Corner Cluster (Turn 1) ---
+  tl_duckie_edge:
+    kind: duckie
+    pos: [0.5, 1.5]
+    optional: True
+    scale: 0.15
+  tl_tree_outer:
+    kind: tree
+    pos: [1.8, 0.8]
+    optional: True
+    scale: 0.1
+
+  # --- Top-Right Corner Cluster (Turn 2) ---
+  tr_house_distractor:
+    kind: house
+    pos: [4.2, 0.5]
+    optional: True
+    scale: 0.08
+    rotate: 90
+  tr_bus_parked:
+    kind: bus
+    pos: [5.5, 2.2]
+    optional: True
+    rotate: 90
+    scale: 0.08
+
+  # --- Bottom-Right Corner Cluster (Turn 3) ---
+  br_building_large:
+    kind: building
+    pos: [5.2, 4.2]
+    optional: True
+    scale: 0.1
+  br_duckie_family:
+    kind: duckie
+    pos: [4.2, 4.2]
+    optional: True
+    scale: 0.15
+
+  # --- Bottom-Left Corner Cluster (Turn 4) ---
+  bl_cone_safety:
+    kind: cone
+    pos: [1.5, 4.2]
+    optional: True
+    scale: 0.01
+  bl_tree_corner:
+    kind: tree
+    pos: [0.8, 3.4]
+    optional: True
+    scale: 0.1
+
+  # --- Middle/Empty Area Distractors ---
+  mid_building_1:
+    kind: building
+    pos: [2.5, 2.5]
+    optional: True
+    scale: 0.1
+  mid_building_2:
+    kind: building
+    pos: [0.5, 2.5]
+    optional: True
+    scale: 0.1
+  
