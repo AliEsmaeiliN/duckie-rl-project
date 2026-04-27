@@ -214,15 +214,16 @@ class CustomRewardWrapper(gym.RewardWrapper):
         if lp.dist < self.WRONG_LANE_LIMIT:
             dist_coeff = -50
 
-        reward_distance = dist_coeff * (lp.dist - target_offset) ** 2
+        reward_distance = dist_coeff * (lp.dist + target_offset) ** 2
             
         reward_angle = -0.03 * np.abs(lp.angle_deg)
         
         action_diff = np.linalg.norm(current_action - self.prev_action) 
         reward_jerk = jerk_coeff * action_diff
+        reward_survival = 2
 
         self.prev_action = current_action.copy()
-        total_reward = reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
+        total_reward = reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk + reward_survival
  
         return total_reward
     
