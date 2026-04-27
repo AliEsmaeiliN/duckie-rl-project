@@ -27,7 +27,7 @@ def debug_step():
     env = DuckieOvalEnv.create_wrapped(
         run_name=run_name,
         capture_video=False,
-        motion_blur=True,
+        motion_blur=False,
         grayscale=True,
         frame_stack=4,
         domain_rand=False,

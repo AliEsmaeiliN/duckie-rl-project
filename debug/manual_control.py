@@ -261,6 +261,7 @@ def update(dt):
             f"SPEED REW: {comps['speed']:.4f}\n"
             f"DIST REW:  {comps['distance']:.4f}\n"
             f"ALIGN REW: {comps['alignment']:.4f}\n"
+            f"ANGLE REW: {comps['angle']:.4f}\n"
             f"JERK REW:  {comps['jerk']:.4f}"
         )
     

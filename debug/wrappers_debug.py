@@ -31,7 +31,8 @@ class RewardCompute():
         funcs = {
             "adl": self.adl_reward,
             "simple": self.simple_reward,
-            "adp": self.adp_reward
+            "adp": self.adp_reward,
+            "dbg": self.dbg_reward
         }
         if name not in funcs:
             raise ValueError(f"Reward type '{name}' not recognized.")
@@ -81,6 +82,40 @@ class RewardCompute():
         reward_jerk = jerk_coeff * np.linalg.norm(current_action - previous_action)
 
         return reward_speed, reward_distance, reward_alignment, reward_angle, reward_jerk
+    
+    def dbg_reward(self, speed, distance, heading, angle, danger_zone, current_action, previous_action):
+
+        if danger_zone:
+            speed_coeff = 1.0
+            dist_coeff = -15.0
+            jerk_coeff = -1.2
+            target_offset = 0.05
+            alignment_k = 5.0
+        else:
+            # "Race Mode" for straights
+            speed_coeff = 2.5
+            dist_coeff = -10.0
+            jerk_coeff = - 2
+            target_offset = 0.0
+            alignment_k = 2.0
+        
+        if speed < 0.05:
+            reward_speed = -1
+        else:
+            reward_speed = speed_coeff * speed * heading
+
+        reward_alignment = np.exp(alignment_k * (heading - 1.0)) # tanh like behaviour to add a higher gradint near 1
+
+        if distance < self.WRONG_LANE_LIMIT / 2 :
+            dist_coeff = -30
+
+        reward_distance = 0.5 + dist_coeff * (distance - target_offset) ** 2
+        reward_angle = -0.03 * np.abs(angle)
+        action_diff = np.linalg.norm(current_action - previous_action)
+        reward_jerk = jerk_coeff * action_diff 
+
+        return reward_speed, reward_distance, reward_alignment, reward_angle, reward_jerk
+
         
 
 

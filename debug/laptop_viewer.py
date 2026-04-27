@@ -37,12 +37,24 @@ def start_laptop_receiver(ip='0.0.0.0', port=8089):
                 data = data[msg_size:]
                 
                 msg = pickle.loads(msg_data)
-                img = msg["image"]
+                img_stack = msg["image"]
+                action = msg["action"]
+                motors = msg["motors"]
+                
+                img_stack = np.array(img_stack, np.uint8)
+                combined_view = np.hstack([img_stack[i] for i in range(img_stack.shape[0])])                
 
-                img = np.array(img, dtype=np.uint8)
+                display_img = cv2.resize(combined_view, (0, 0), fx=4, fy=4, interpolation=cv2.INTER_NEAREST)
 
-                cv2.imshow("Duckiebot View (84x84)", img)
-                print(f"Action: {msg['action']} | Motors: {msg['motors']}")
+                for i in range(1, 4):
+                    cv2.line(display_img, (84*4*i, 0), (84*4*i, 84*4), (255), 1)
+
+                action_text = f"V: {action[0]:.2f} Omega: {action[1]:.2f} | Motors L/R: [{motors[0]:.2f}, {motors[1]:.2f}]"
+                cv2.putText(display_img, action_text, (10, 30), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255), 2)
+                
+                cv2.imshow("Duckiebot: Oldest Frame (Left) -> Newest Frame (Right)", display_img)
+                print(f"\r{action_text}", end="", flush=True)
                 
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     return
