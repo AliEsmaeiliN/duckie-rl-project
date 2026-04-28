@@ -35,6 +35,8 @@ parser.add_argument("--frame-skip", default=1, type=int, help="number of frames 
 parser.add_argument("--seed", default=1, type=int, help="seed")
 parser.add_argument("--no-grayscale", dest="grayscale", action="store_false", help="Disable the grayscale wrapper (default is True)")
 parser.add_argument("--motion-blur", default=False, action="store_true")
+parser.add_argument('--spawn-mode', default='curriculum', help='perfect, duckietown, or curriculum')
+parser.add_argument('--spawn-difficulty', type=float, default=0.0, help='difficulty 0.0 to 1.0')
 args = parser.parse_args()
 
 
@@ -61,11 +63,11 @@ else:
         
         domain_rand=args.domain_rand,
         dynamics_rand=args.dynamics_rand,
-        distortion=args.distortion
+        distortion=args.distortion,
     )
 
 render_modes = ["human", "top_down", "free_cam", "rgb_array"]
-view = render_modes[0]
+view = render_modes[1]
 
 env.reset(seed=args.seed)
 
@@ -90,6 +92,10 @@ def on_key_press(symbol, modifiers):
     elif symbol == key.ESCAPE:
         env.close()
         sys.exit(0)
+    elif symbol == key.D:
+        new_diff = min(1.0, env.unwrapped.spawn_difficulty + 0.1)
+        env.unwrapped.set_spawn_config(difficulty=new_diff)
+        print(f"Manual Test: Difficulty increased to {new_diff:.1f}")
 
 
 

@@ -360,6 +360,13 @@ if __name__ == "__main__":
         # TRY NOT TO MODIFY: execute the game and log data.
         next_obs, rewards, terminations, truncations, infos = envs.step(actions)
 
+        # Curriculum spawn
+        if any(terminations) or any(truncations):
+            new_difficulty = min(1.0, global_step / (0.6 * args.total_timesteps))
+            # This sets the attribute for ALL parallel sub-environments
+            envs.set_attr("spawn_difficulty", new_difficulty)
+            writer.add_scalar("charts/spawn_difficulty", new_difficulty, global_step)
+
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         if "episode" in infos:
             for i in range(envs.num_envs):

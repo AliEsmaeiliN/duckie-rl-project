@@ -16,10 +16,12 @@ class DuckieOvalEnv(Simulator):
         kwargs.setdefault('map_name', "oval_loop")
         kwargs.setdefault('camera_width', 640)
         kwargs.setdefault('camera_height', 480)
-        kwargs.setdefault('accept_start_angle_deg', 4)
+        kwargs.setdefault('accept_start_angle_deg', 10)
         kwargs.setdefault('full_transparency', True)
         kwargs.setdefault('max_steps', 4000)
-        kwargs.setdefault('frame_skip', 4) 
+        kwargs.setdefault('frame_skip', 4)
+        kwargs.setdefault('spawn_mode', 'curriculum')
+        kwargs.setdefault('spawn_difficulty', 0.0) 
         
         super().__init__(**kwargs)
         
@@ -98,3 +100,11 @@ class DuckieOvalEnv(Simulator):
                 from src.gym_duckietown.distortion import Distortion
                 print("Initializing Distortion Model...")
                 self.camera_model = Distortion(camera_rand=getattr(self, 'camera_rand', False))
+    
+    def set_spawn_config(self, mode: str = None, difficulty: float = None):
+        """Dynamically update spawn strategy during training."""
+        if mode is not None:
+            self.spawn_mode = mode
+        if difficulty is not None:
+            self.spawn_difficulty = np.clip(difficulty, 0.0, 1.0)
+        print(f"Spawn Config Updated: Mode={self.spawn_mode}, Difficulty={self.spawn_difficulty}")

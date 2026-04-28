@@ -235,7 +235,9 @@ class Simulator(gym.Env):
         style: str = "photos",
         enable_leds: bool = False,
         draw_trajectory: list[str] = None,
-        render_mode: str = None
+        render_mode: str = None,
+        spawn_mode: str = "curriculum", # "perfect", "duckietown", or "curriculum"
+        spawn_difficulty: float = 0.0
     ):
         """
 
@@ -270,6 +272,9 @@ class Simulator(gym.Env):
         )
         # adding render method 
         self.render_mode= render_mode
+        # spawn logic
+        self.spawn_mode = spawn_mode
+        self.spawn_difficulty = spawn_difficulty
         # first initialize the RNG
         self.seed_value = seed
         #self.seed(seed=self.seed_value)
@@ -645,7 +650,13 @@ class Simulator(gym.Env):
             #logger.info(f"Using map pose start. \n Pose: {propose_pos}, Angle: {propose_angle}")
 
         else:
-
+            if self.spawn_mode == "curriculum":
+                propose_pos, propose_angle = self._spawn_curriculum(tile)
+            elif self.spawn_mode == "duckietown":
+                propose_pos, propose_angle = self._spawn_duckietown(tile)
+            else: # "perfect"
+                propose_pos, propose_angle = self._spawn_perfect(tile)
+            '''    
             # ======================================================
             # NEW PERFECT SPAWN LOGIC (Using Geometry)
             # ======================================================
@@ -675,7 +686,7 @@ class Simulator(gym.Env):
             # ORIGINAL DUCKIETOWN SPAWN LOGIC
             # ======================================================
 
-            '''
+            
             # Keep trying to find a valid spawn position on this tile
             for _ in range(MAX_SPAWN_ATTEMPTS):
                 i, j = tile["coords"]
@@ -2131,6 +2142,77 @@ class Simulator(gym.Env):
         gl.glFlush()
 
         return img
+    
+    def _spawn_perfect(self, tile):
+        """Always aligned with the lane centerline."""
+        curves = tile["curves"]
+        curve = curves[self.np_random.integers(0, len(curves))]
+        t = self.np_random.uniform(0.2, 0.8)
+        pos = bezier_point(curve, t)
+        tangent = bezier_tangent(curve, t)
+        angle = math.atan2(-tangent[2], tangent[0])
+        return pos, angle
+
+
+    def _spawn_duckietown(self, tile):
+        """Original uniform randomization with full validation."""
+        for _ in range(MAX_SPAWN_ATTEMPTS):
+            i, j = tile["coords"]
+            x = self.np_random.uniform(i, i + 1) * self.road_tile_size
+            z = self.np_random.uniform(j, j + 1) * self.road_tile_size
+            propose_pos = np.array([x, 0, z])
+            propose_angle = self.np_random.uniform(0, 2 * math.pi)
+
+            if not self._valid_pose(propose_pos, propose_angle, safety_factor=1.3):
+                continue
+
+            try:
+                lp = self.get_lane_pos2(propose_pos, propose_angle)
+            except NotInLane:
+                continue
+
+            if -self.accept_start_angle_deg < lp.angle_deg < self.accept_start_angle_deg:
+                return propose_pos, propose_angle
+
+        return self._spawn_perfect(tile)  # fallback
+
+
+    def _spawn_curriculum(self, tile):
+        """Gradual injection of lateral and angular noise based on difficulty."""
+        curves = tile["curves"]
+        curve = curves[self.np_random.integers(0, len(curves))]
+        t = self.np_random.uniform(0.2, 0.8)
+        base_pos = bezier_point(curve, t)
+        tangent = bezier_tangent(curve, t)
+        curve_angle = math.atan2(-tangent[2], tangent[0])
+
+        perp = np.array([tangent[2], 0, -tangent[0]])
+        perp /= (np.linalg.norm(perp) + 1e-8)
+
+        diff = self.spawn_difficulty
+        r = self.np_random.uniform(0, 1)
+
+        if r < 0.6:
+            angle_noise = np.deg2rad(self.accept_start_angle_deg) * diff
+            lat_noise   = 0.03 * diff
+            angle = self.np_random.uniform(curve_angle - angle_noise,
+                                        curve_angle + angle_noise)
+            pos   = base_pos + perp * self.np_random.uniform(-lat_noise, lat_noise)
+
+        elif r < 0.85 or diff <= 0.5:
+            max_angle_err = np.deg2rad(20) * diff
+            max_lat       = 0.06 * diff
+            angle = curve_angle + self.np_random.uniform(-max_angle_err, max_angle_err)
+            pos   = base_pos + perp * self.np_random.uniform(-max_lat, max_lat)
+
+        else:
+            sign  = self.np_random.choice([-1, 1])  
+            angle = curve_angle + sign * np.deg2rad(self.np_random.uniform(10, 25))
+            pos   = base_pos + perp * self.np_random.uniform(0.08, 0.13)
+
+        if self._valid_pose(pos, angle):
+            return pos, angle
+        return self._spawn_perfect(tile)  # fallback
 
 
 def get_dir_vec(cur_angle: float) -> np.ndarray:
