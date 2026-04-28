@@ -276,9 +276,9 @@ if __name__ == "__main__":
             monitor_gym=False,
             save_code=True,
         )
-        reward_logic = wandb.Artifact('rl-logic-files', type='env')
+        reward_logic = wandb.Artifact('rl-logic-files', type='code')
         reward_logic.add_file('utils/wrappers.py') 
-        reward_logic.add_file('utils/env_lunch.py')
+        reward_logic.add_file('utils/rl_env.py')
         training_logic = wandb.Artifact('rl-training-files', type='configuration')
         training_logic.add_file('sac.slurm')
         training_logic.add_file('rl/sac_continuous_action.py')
