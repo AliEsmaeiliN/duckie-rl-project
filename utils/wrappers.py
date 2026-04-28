@@ -174,7 +174,7 @@ class CustomRewardWrapper(gym.RewardWrapper):
         direction = sim.episode_dir
 
         # Lookahead Logic
-        lookahead_dist = 0.1 
+        lookahead_dist = 0.2 
         dir_vec = np.array([np.cos(angle), 0, -np.sin(angle)]) # Based on get_dir_vec
         lookahead_pos = pos + dir_vec * lookahead_dist
         
@@ -211,7 +211,7 @@ class CustomRewardWrapper(gym.RewardWrapper):
 
         reward_alignment = 0.5 + np.exp(alignment_k * (lp.dot_dir - 1.0)) # tanh like behaviour to add a higher gradint near 1
 
-        if lp.dist < self.WRONG_LANE_LIMIT:
+        if lp.dist < (self.WRONG_LANE_LIMIT - target_offset):
             dist_coeff = -50
 
         reward_distance = dist_coeff * (lp.dist + target_offset) ** 2

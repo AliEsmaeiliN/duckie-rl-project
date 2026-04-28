@@ -5,6 +5,7 @@ os.environ["MKL_NUM_THREADS"] = "1"
 import random
 import time
 from dataclasses import dataclass
+from datetime import datetime
 
 import gymnasium as gym
 from gymnasium import spaces
@@ -57,7 +58,7 @@ class Args:
     """for wandb tracking notes"""
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
-    save_interval: int = 100000
+    save_interval: int = 50000
     """the interval to save the Actor periodically"""
     save_model: bool = True
     """whether to save model into the `runs/{run_name}` folder"""
@@ -65,6 +66,8 @@ class Args:
     """whether to convert the observation to grayscale"""
     eval_model: bool = True
     """whether to evaluate the saved model at the end of training"""
+    version: int = 0
+    """the version of the model, default zero is for the test"""
 
     # Algorithm specific arguments
     env_id: str = "Oval-"
@@ -250,7 +253,8 @@ if __name__ == "__main__":
 
     args = tyro.cli(Args)
     input_mode = "" if args.grayscale else "_RGB"
-    run_name = f"sac__{args.env_id}{input_mode}__{args.seed}__{int(time.time())}"
+    timestamp = datetime.now().strftime("%m%d_%H%M")
+    run_name = f"sac__{args.env_id}{input_mode}__{args.seed}__{timestamp}"
     if args.track:
         import wandb
         active_tags = [args.env_id]
@@ -272,14 +276,15 @@ if __name__ == "__main__":
             monitor_gym=False,
             save_code=True,
         )
-        reward_logic = wandb.Artifact('rl-logic-files', type='code')
+        reward_logic = wandb.Artifact('rl-logic-files', type='env')
         reward_logic.add_file('utils/wrappers.py') 
         reward_logic.add_file('utils/env_lunch.py')
-        try:
-            reward_logic.add_file('job_sac.sh')
-        except (ValueError, FileNotFoundError) as e:
-            print(f"Warning: Could not find job file for artifact logging: {e}")
+        training_logic = wandb.Artifact('rl-training-files', type='configuration')
+        training_logic.add_file('sac.slurm')
+        training_logic.add_file('rl/sac_continuous_action.py')
+        
         run.log_artifact(reward_logic)
+        run.log_artifact(training_logic)
     
     writer = SummaryWriter(f"runs/{run_name}")
     writer.add_text(
@@ -455,10 +460,15 @@ if __name__ == "__main__":
             elif global_step == 800000:
                 print("Curriculum Step 3: Activating Lens Distortion")
                 envs.call("set_randomization", distortion=args.distortion)
+            
+            if global_step == 499000:
+                save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix=f"v{args.version}_PRE_RAND")
+            if global_step % args.save_interval == 0 and global_step > 5e5:
+                save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix=f"v{args.version}")
 
 
     if args.save_model:
-        save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix="Final")
+        save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix=f"v{args.version}_Final")
     if args.eval_model:
         evaluate_policy(
             actor=actor,
