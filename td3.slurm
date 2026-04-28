@@ -2,12 +2,12 @@
 #SBATCH -J TD3
 #SBATCH -o logs/output_%j.txt
 #SBATCH -e logs/errors_%j.txt
-#SBATCH -t 30:00:00
+#SBATCH -t 20:00:00
 #SBATCH -n 1
-#SBATCH -c 6
+#SBATCH -c 4
 #SBATCH -p allgroups
-#SBATCH --mem=16G
-#SBATCH --gres=gpu:rtx
+#SBATCH --mem=12G
+#SBATCH --gres=gpu:l40s
 
 cd $HOME/duckie-rl-project
 mkdir -p logs
@@ -22,21 +22,21 @@ export PYGLET_HEADLESS=True
 export GALLIUM_DRIVER=llvmpipe
 
 
-srun singularity exec --nv \
+srun --cpu-bind=none singularity exec --nv \
     -B .:/app \
     --pwd /app \
     $SIF_IMAGE \
     bash -c "export PYTHONPATH=\$PYTHONPATH:/app:/app/src && \
     python3 rl/td3_continuous_action.py \
     --seed 1 \
-    --env-id 'sim2real_v2' \
+    --env-id 'sim2real_v6' \
     --total-timesteps 1000000 \
     --buffer-size 100000 \
     --batch-size 256 \
-    --learning-starts 15000 \
+    --learning-starts 20000 \
     --track \
+    --version 6 \
     --domain-rand \
     --camera-rand \
     --dynamics-rand \
-    --distortion \
-    --run-notes 'Simple Reward with Curriculum L and random spawn'"
+    --run-notes 'ALD Reward v6'"
