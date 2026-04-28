@@ -192,7 +192,7 @@ class CustomRewardWrapper(gym.RewardWrapper):
             # Special "Stabilization" Values
             speed_coeff = 1.0
             dist_coeff = -15.0
-            jerk_coeff = -1.2
+            jerk_coeff = -2.5
             target_offset = 0.05
             alignment_k = 5.0
         else:
@@ -220,7 +220,7 @@ class CustomRewardWrapper(gym.RewardWrapper):
         
         action_diff = np.linalg.norm(current_action - self.prev_action) 
         reward_jerk = jerk_coeff * action_diff
-        reward_survival = 2
+        reward_survival = 1.0
 
         self.prev_action = current_action.copy()
         total_reward = reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk + reward_survival
