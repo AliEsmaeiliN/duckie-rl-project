@@ -25,6 +25,7 @@ from agent import DuckiebotAgent
 from wrappers_debug import DebugRewardWrapper, ActionWrapper, KinematicActionWrapper
 from rl.sac_continuous_action import Actor as sac_sim_actor
 from rl.td3_continuous_action import Actor as td3_sim_actor
+from encoder_capture import FeatureVisualizer
 
 
 # from experiments.utils import save_img
@@ -103,8 +104,21 @@ def on_key_press(symbol, modifiers):
         env.close()
         sys.exit(0)
     elif symbol == key.A:
-        auto_mode = not auto_mode
-        print(f"Autonomous Mode: {auto_mode}")
+        if args.model:
+            auto_mode = not auto_mode
+            print(f"Autonomous Mode: {auto_mode}")
+        else:
+            print("the RL Agent has not been initialized. Continue Manual Mode.")
+    elif symbol== key.C:
+        if args.model:
+            model_path = args.model
+            algo = "sac" if "sac" in model_path.lower() else "td3"
+            stack_obs = torch.Tensor(obs).unsqueeze(0).to(device)
+            visualizer = FeatureVisualizer(model_path, algo_type=algo)
+            visualizer.visualize_layers(input_stack=stack_obs)
+        else:
+            print("the RL Agent has not been initialized. Continue Manual Mode.")
+
 
 
 
@@ -114,23 +128,23 @@ env.unwrapped.window.push_handlers(key_handler)
 
 rl_agent = None
 
-if args.debug:
-    if args.model:
-        model_path = args.model
-        algo = "sac" if "sac" in model_path.lower() else "td3"
-        rl_agent = DuckiebotAgent(
-            model_path=model_path, 
-            algo_type= algo
-            )
-        env.single_observation_space = env.observation_space
-        env.single_action_space = env.action_space
-        actor_class = sac_sim_actor if algo == "sac" else td3_sim_actor
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        rl_sim_agent = actor_class(env).to(device)
-        checkpoint = torch.load(model_path, map_location=rl_sim_agent.fc_mean.weight.device)
-        rl_sim_agent.load_state_dict(checkpoint['actor_state_dict'])
-        rl_sim_agent.eval()
-        print(f"{algo.upper()} Agent loaded from {args.model}")
+
+if args.model:
+    model_path = args.model
+    algo = "sac" if "sac" in model_path.lower() else "td3"
+    rl_agent = DuckiebotAgent(
+        model_path=model_path, 
+        algo_type= algo
+        )
+    env.single_observation_space = env.observation_space
+    env.single_action_space = env.action_space
+    actor_class = sac_sim_actor if algo == "sac" else td3_sim_actor
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    rl_sim_agent = actor_class(env).to(device)
+    checkpoint = torch.load(model_path, map_location=rl_sim_agent.fc_mean.weight.device)
+    rl_sim_agent.load_state_dict(checkpoint['actor_state_dict'])
+    rl_sim_agent.eval()
+    print(f"{algo.upper()} Agent loaded from {args.model}")
 
 rl_label = pyglet.text.Label(
     'Agent: Waiting...',
@@ -138,7 +152,7 @@ rl_label = pyglet.text.Label(
     font_size=10,
     x=5, y=40,
     anchor_x='left', anchor_y='top',
-    color=(255, 255, 0, 255), # Yellow color to make it stand out
+    color=(255, 255, 0, 255),
     multiline=True, 
     width=800
     )
