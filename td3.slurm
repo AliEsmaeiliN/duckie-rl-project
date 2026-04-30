@@ -29,14 +29,14 @@ srun --cpu-bind=none singularity exec --nv \
     bash -c "export PYTHONPATH=\$PYTHONPATH:/app:/app/src && \
     python3 rl/td3_continuous_action.py \
     --seed 1 \
-    --env-id 'sim2real_v6' \
+    --env-id 'Downsized' \
     --total-timesteps 1000000 \
     --buffer-size 100000 \
     --batch-size 256 \
     --learning-starts 20000 \
     --track \
-    --version 6 \
+    --version 1 \
     --domain-rand \
     --camera-rand \
     --dynamics-rand \
-    --run-notes 'ALD Reward v6'"
+    --run-notes 'Downsized observation + ALD r v1'"

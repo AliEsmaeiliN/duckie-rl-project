@@ -199,7 +199,7 @@ if __name__ == "__main__":
     args = tyro.cli(Args)
     input_mode = "" if args.grayscale else "_RGB"
     timestamp = datetime.now().strftime("%m%d_%H%M")
-    run_name = f"td3__{args.env_id}{input_mode}__{args.seed}__{timestamp}"
+    run_name = f"td3__{args.env_id}{input_mode}__v{args.version}__{args.seed}__{timestamp}"
     if args.track:
         import wandb
         active_tags = [args.env_id]
