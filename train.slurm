@@ -22,6 +22,7 @@ export PYGLET_HEADLESS=True
 export GALLIUM_DRIVER=llvmpipe
 
 
+
 srun singularity exec --nv \
     -B .:/app \
     --pwd /app \

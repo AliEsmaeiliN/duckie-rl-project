@@ -20,7 +20,7 @@ SIF_IMAGE="$HOME/duckie_rl.sif"
 export LIBGL_ALWAYS_SOFTWARE=1
 export PYGLET_HEADLESS=True
 export GALLIUM_DRIVER=llvmpipe
-
+export WANDB_MODE=offline
 
 srun --cpu-bind=none singularity exec --nv \
     -B .:/app \

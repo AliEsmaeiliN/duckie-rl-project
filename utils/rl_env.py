@@ -47,7 +47,7 @@ class DuckieOvalEnv(Simulator):
 
         # 3. Vision Pipeline (Sim2Real Insurance)
         env = ResizeWrapper(env, shape=(120, 160, 3)) # Ensure 120x160 base
-        env = CropResizeWrapper(env, shape=(84, 84))  # Crop sky, resize to 84x84
+        env = CropResizeWrapper(env, shape=(42, 42))  # Crop sky, resize to 84x84
         
         if grayscale:
             env = gym.wrappers.GrayscaleObservation(env, keep_dim=True)
