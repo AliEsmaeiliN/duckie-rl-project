@@ -22,6 +22,7 @@ export PYGLET_HEADLESS=True
 export GALLIUM_DRIVER=llvmpipe
 export WANDB_MODE=offline
 
+
 srun --cpu-bind=none singularity exec --nv \
     -B .:/app \
     --pwd /app \

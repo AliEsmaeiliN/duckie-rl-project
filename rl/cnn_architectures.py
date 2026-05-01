@@ -1,3 +1,5 @@
+# CNN Architectures By Matteo Cederle
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -74,10 +76,18 @@ class ImpalaCNN(nn.Module):
         else:
             init_ = lambda m:m # no init, use pytorch default
 
-        self.main = nn.Sequential(
+        self.conv = nn.Sequential(
             init_(nn.Conv2d(in_channels, 16, 8, stride=4)), nn.LeakyReLU(),
-            init_(nn.Conv2d(16, 32, 4, stride=2)), nn.LeakyReLU(), nn.Flatten(),
-            init_(nn.Linear(32 * 81, feature_dim)))
+            init_(nn.Conv2d(16, 32, 4, stride=2)), nn.LeakyReLU(), 
+            nn.Flatten())
+
+        with torch.no_grad():
+            dummy_input = torch.zeros(1, *obs_shape)
+            self.repr_dim = self.conv(dummy_input).shape[1]
+
+        self.linear = nn.Sequential(nn.Linear(self.repr_dim, feature_dim))
+
+
         
         num_params = sum(p.numel() for p in self.parameters())
         print(f"Num params of encoder: {num_params}")
@@ -86,7 +96,9 @@ class ImpalaCNN(nn.Module):
         #x = self.main(torch.unsqueeze(obs, dim=0)/255 - 0.5)
         #return torch.squeeze(F.layer_norm(x, x.size()))
         x = obs.float() / 255.0 - 0.5
-        h = self.main(x)
+        x2 = self.conv(x)
+        h = self.linear(x2)
+
         return F.layer_norm(h, (h.size(-1),))
 
 
