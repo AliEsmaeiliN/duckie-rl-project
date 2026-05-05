@@ -4,7 +4,7 @@ import numpy as np
 from PIL import Image
 import numpy as np 
 import cv2
-
+import collections
 
 class TemporalWrapper(gym.Wrapper):
     def __init__(self, env=None, frame_skip=3, motion_blur=True):
@@ -438,3 +438,28 @@ class UndistortWrapper(gym.ObservationWrapper):
             )
 
         return cv2.remap(observation, self.mapx, self.mapy, cv2.INTER_NEAREST)
+    
+class ActionLatencyWrapper(gym.Wrapper):
+    def __init__(self, env, min_latency=1, max_latency=4):
+        """
+        min_latency/max_latency: steps to delay an action.
+        If the simulator runs at 30Hz with frame_skip=4, 
+        1 step delay is approx 33ms.
+        """
+        super().__init__(env)
+        self.min_latency = min_latency
+        self.max_latency = max_latency
+        self.current_latency = min_latency
+        self.action_buffer = collections.deque()
+        
+    def reset(self, **kwargs):
+        self.current_latency = np.random.randint(self.min_latency, self.max_latency + 1)
+        self.action_buffer = collections.deque(
+        [np.zeros(self.action_space.shape)] * self.current_latency
+        )
+        return self.env.reset(**kwargs)
+
+    def step(self, action):
+        self.action_buffer.append(action)   # Push current intent to back
+        exec_action = self.action_buffer.popleft() # Pop oldest intent from front
+        return self.env.step(exec_action)

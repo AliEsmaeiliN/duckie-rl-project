@@ -108,13 +108,16 @@ class Args:
     """Simulates mounting misalignments"""
     motion_blur: bool = False
     """Simulates the blur from the moving duckiebot"""
+    action_latency: bool = False
+    """Simulates the action latency from the duckiebot"""
 
-def make_env(seed, idx, run_name, capture_video=False, motion_blur=False, **env_kwargs):
+def make_env(seed, idx, run_name, capture_video=False, motion_blur=False, latency_rand=False, **env_kwargs):
     def thunk():
         render_mode = "rgb_array" if (capture_video and idx == 0) else None
         env = DuckieOvalEnv.create_wrapped(
             run_name=run_name,
             motion_blur=motion_blur,
+            latency_rand=latency_rand,
             render_mode=render_mode,
             seed=seed,
             **env_kwargs
@@ -209,6 +212,7 @@ if __name__ == "__main__":
         if args.camera_rand: active_tags.append("CameraRand")
         if args.distortion: active_tags.append("Distortion")
         if args.motion_blur: active_tags.append("MotionBlur")
+        if args.action_latency: active_tags.append("ActionLatency")
 
 
         run = wandb.init(
@@ -255,7 +259,7 @@ if __name__ == "__main__":
     }
     
     envs = gym.vector.SyncVectorEnv(
-        [make_env(args.seed + i, i, run_name, args.capture_video, args.motion_blur) for i in range(args.num_envs)]
+        [make_env(args.seed + i, i, run_name, args.capture_video, args.motion_blur, args.action_latency) for i in range(args.num_envs)]
     )
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
