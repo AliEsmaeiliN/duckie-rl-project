@@ -5,7 +5,7 @@ from gym_duckietown.simulator import Simulator
 from utils.wrappers import (
     KinematicActionWrapper, ActionWrapper, ResizeWrapper, 
     CropResizeWrapper, ImgWrapper, CustomRewardWrapper, DtRewardWrapper,
-    TemporalWrapper, AdaptiveRewardWrapper, SimpleRewardWrapper, UndistortWrapper
+    TemporalWrapper, AdaptiveRewardWrapper, SimpleRewardWrapper, UndistortWrapper, ActionLatencyWrapper
 )
 
 class DuckieOvalEnv(Simulator):
@@ -30,7 +30,7 @@ class DuckieOvalEnv(Simulator):
         self.motor_k = 27.0
 
     @classmethod
-    def create_wrapped(cls, run_name, capture_video=False, motion_blur=False, grayscale=True, frame_stack=4, **kwargs):
+    def create_wrapped(cls, run_name, capture_video=False, motion_blur=False, grayscale=True, frame_stack=4, latency_rand=False, **kwargs):
         """
         Static method to build the fully wrapped stack.
         """
@@ -38,7 +38,10 @@ class DuckieOvalEnv(Simulator):
 
         env = UndistortWrapper(env)
 
-        # 1. Kinematics (v, w -> wl, wr)
+        if latency_rand:
+            print('acivated')
+            env = ActionLatencyWrapper(env, min_latency=1, max_latency=3)
+
         env = KinematicActionWrapper(env, wheel_dist=0.102, radius=0.0318, k=27.0)
         env = ActionWrapper(env)
 
@@ -47,9 +50,8 @@ class DuckieOvalEnv(Simulator):
             os.makedirs(video_folder, exist_ok=True)
             env = gym.wrappers.RecordVideo(env, video_folder, episode_trigger=lambda x: True)
 
-        # 3. Vision Pipeline (Sim2Real Insurance)
         env = ResizeWrapper(env, shape=(120, 160, 3)) # Ensure 120x160 base
-        env = CropResizeWrapper(env, shape=(42, 42))  # Crop sky, resize to 84x84
+        env = CropResizeWrapper(env, shape=(84, 84))  # Crop sky, resize to 84x84
         
         if grayscale:
             env = gym.wrappers.GrayscaleObservation(env, keep_dim=True)
@@ -57,11 +59,9 @@ class DuckieOvalEnv(Simulator):
         env = ImgWrapper(env) # Transpose to CHW
 
         
-        # 5. Reward System
         #env = DtRewardWrapper(env)
         env = CustomRewardWrapper(env)
 
-        # 6. Temporal Stacking
         if frame_stack > 1:
             env = gym.wrappers.FrameStackObservation(env, stack_size=frame_stack)
             c = 1 if grayscale else 3
@@ -69,12 +69,12 @@ class DuckieOvalEnv(Simulator):
             new_obs_space = gym.spaces.Box(
                 low=0, 
                 high=255, 
-                shape=(final_channels , 42, 42), 
+                shape=(final_channels , 84, 84), 
                 dtype=np.uint8
             )   
             env = gym.wrappers.TransformObservation(
                 env, 
-                lambda obs: np.array(obs).reshape(final_channels, 42, 42),
+                lambda obs: np.array(obs).reshape(final_channels, 84, 84),
                 observation_space=new_obs_space
             )
 

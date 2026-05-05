@@ -16,4 +16,5 @@ python rl/sac_continuous_action.py \
     --distortion \
     --camera-rand \
     --dynamics-rand \
+    --action-latency \
     --no-track 

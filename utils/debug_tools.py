@@ -65,7 +65,8 @@ def evaluate_policy(actor, args, device, algo_name, run_name = "run_name", num_e
     # Create a separate evaluation environment
     eval_env = DuckieOvalEnv.create_wrapped(
         run_name=custom_run_name,
-        motion_blur=args.motion_blur, 
+        motion_blur=args.motion_blur,
+        latency_rand=args.action_latency, 
         grayscale=True,
         frame_stack=4,
         capture_video = True,
