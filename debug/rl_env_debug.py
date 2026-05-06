@@ -5,7 +5,7 @@ from gym_duckietown.simulator import Simulator
 from wrappers_debug import (
     KinematicActionWrapper, ActionWrapper, ResizeWrapper, 
     CropResizeWrapper, ImgWrapper, DebugRewardWrapper, DtRewardWrapper,
-    UndistortWrapper
+    UndistortWrapper, RecoveryTrainingWrapper
 )
 
 class DuckieOvalEnv(Simulator):
@@ -35,9 +35,6 @@ class DuckieOvalEnv(Simulator):
         """
         env = cls(**kwargs)
 
-        env = UndistortWrapper(env)
-
-        # 1. Kinematics (v, w -> wl, wr)
         env = KinematicActionWrapper(env, wheel_dist=0.102, radius=0.0318, k=27.0)
         env = ActionWrapper(env)
 
@@ -46,7 +43,6 @@ class DuckieOvalEnv(Simulator):
             os.makedirs(video_folder, exist_ok=True)
             env = gym.wrappers.RecordVideo(env, video_folder, episode_trigger=lambda x: True)
 
-        # 3. Vision Pipeline (Sim2Real Insurance)
         env = ResizeWrapper(env, shape=(120, 160, 3)) # Ensure 120x160 base
         env = CropResizeWrapper(env, shape=(84, 84))  # Crop sky, resize to 84x84
         
@@ -56,9 +52,9 @@ class DuckieOvalEnv(Simulator):
         env = ImgWrapper(env) # Transpose to CHW
 
         
-        # 5. Reward System
-        #env = DtRewardWrapper(env)
+        
         env = DebugRewardWrapper(env, reward_type=reward_type)
+        env = RecoveryTrainingWrapper(env, max_recovery_steps=30, ood_penalty=-50.0)
 
         # 6. Temporal Stacking
         if frame_stack > 1:
