@@ -1,7 +1,6 @@
 import os
 from setuptools import find_packages, setup
 
-# 1. Dynamically find the version from the source
 def get_version(filename):
     import ast
     with open(filename) as f:
@@ -20,7 +19,7 @@ setup(
     version=version,
     description="Modified Duckietown for SAC/TD3 Reinforcement Learning Using CleanRL",
     
-    # --- THIS IS THE KEY CHANGE ---
+    
     package_dir={
         "": "src",
         "rl": "rl",

@@ -18,9 +18,7 @@ class TemporalWrapper(gym.Wrapper):
     def step(self, action: np.ndarray):
         action = np.clip(action, -1, 1)
         motion_blur_window = []
-        processed_action = self.env.action(action)
-        if hasattr(self.env, 'action'):
-            processed_action = self.env.action(action)
+        processed_action = action
 
         for _ in range(self.frame_skip + 1):
             obs = self.unwrapped.render_obs()
