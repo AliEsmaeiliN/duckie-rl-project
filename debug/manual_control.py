@@ -69,6 +69,7 @@ else:
         motion_blur=args.motion_blur, 
         grayscale=True,
         frame_stack=4,
+        latency_rand=True,
         reward_type=args.reward,
         domain_rand=args.domain_rand,
         dynamics_rand=args.dynamics_rand,

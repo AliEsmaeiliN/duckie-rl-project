@@ -5,7 +5,7 @@ from gym_duckietown.simulator import Simulator
 from utils.wrappers import (
     KinematicActionWrapper, ActionWrapper, ResizeWrapper, 
     CropResizeWrapper, ImgWrapper, CustomRewardWrapper, DtRewardWrapper,
-    TemporalWrapper, AdaptiveRewardWrapper, SimpleRewardWrapper, UndistortWrapper, ActionLatencyWrapper
+    TemporalWrapper, UndistortWrapper, ActionLatencyWrapper, RecoveryTrainingWrapper
 )
 from gym_duckietown.wrappers import UndistortWrapper
 
@@ -66,6 +66,7 @@ class DuckieOvalEnv(Simulator):
         
         #env = DtRewardWrapper(env)
         env = CustomRewardWrapper(env)
+        env = RecoveryTrainingWrapper(env, max_recovery_steps=30, ood_penalty=-50.0)
 
         if frame_stack > 1:
             env = gym.wrappers.FrameStackObservation(env, stack_size=frame_stack)

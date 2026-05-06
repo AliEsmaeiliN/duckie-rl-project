@@ -5,7 +5,7 @@ from gym_duckietown.simulator import Simulator
 from wrappers_debug import (
     KinematicActionWrapper, ActionWrapper, ResizeWrapper, 
     CropResizeWrapper, ImgWrapper, DebugRewardWrapper, DtRewardWrapper,
-    UndistortWrapper, RecoveryTrainingWrapper
+    UndistortWrapper, RecoveryTrainingWrapper, ActionLatencyWrapper
 )
 
 class DuckieOvalEnv(Simulator):
@@ -29,11 +29,15 @@ class DuckieOvalEnv(Simulator):
         self.motor_k = 27.0
 
     @classmethod
-    def create_wrapped(cls, run_name, capture_video=False, motion_blur=False, grayscale=True, frame_stack=4, reward_type="adp", **kwargs):
+    def create_wrapped(cls, run_name, capture_video=False, motion_blur=False, grayscale=True, frame_stack=4, reward_type="adp", latency_rand=False, **kwargs):
         """
         Static method to build the fully wrapped stack.
         """
         env = cls(**kwargs)
+
+        if latency_rand:
+            print('acivated')
+            env = ActionLatencyWrapper(env, min_latency=1, max_latency=3)
 
         env = KinematicActionWrapper(env, wheel_dist=0.102, radius=0.0318, k=27.0)
         env = ActionWrapper(env)
