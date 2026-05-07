@@ -230,7 +230,7 @@ class DebugRewardWrapper(gym.RewardWrapper):
     def reward(self, reward):
         # Handle termination/crash rewards from the simulator directly
         if reward <= -15.0: 
-            return reward
+            return -15
 
         sim = self.env.unwrapped 
         pos = sim.cur_pos
@@ -434,7 +434,7 @@ class RecoveryTrainingWrapper(gym.Wrapper):
         obs, reward, done, truncated, info = self.env.step(action)
         
         is_ood = done and (reward <= -1000 or info.get("Simulator", {}).get("done_code") == "invalid-pose")
-
+        print(info.get("Simulator", {}).get("done_code"))
         if is_ood or self.recovery_steps > 0:
             self.recovery_steps += 1
             

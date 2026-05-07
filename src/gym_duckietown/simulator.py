@@ -1753,6 +1753,7 @@ class Simulator(gym.Env):
 
         d = self._compute_done_reward(current_step_action)
         misc["Simulator"]["msg"] = d.done_why
+        misc["Simulator"]["done_code"] = d.done_code
         
         return obs, d.reward, d.done, False, misc
 

@@ -46,9 +46,6 @@ class DuckieOvalEnv(Simulator):
         env = KinematicActionWrapper(env, wheel_dist=0.102, radius=0.0318, k=27.0)
         env = ActionWrapper(env)
 
-        # 1. Kinematics (v, w -> wl, wr)
-        env = KinematicActionWrapper(env, wheel_dist=0.102, radius=0.0318, k=27.0)
-        env = ActionWrapper(env)
 
         if capture_video:
             video_folder = f"videos/{run_name}"
