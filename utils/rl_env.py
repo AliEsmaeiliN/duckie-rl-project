@@ -2,12 +2,10 @@ import os
 import gymnasium as gym
 import numpy as np
 from gym_duckietown.simulator import Simulator
-from utils.wrappers import (
-    KinematicActionWrapper, ActionWrapper, ResizeWrapper, 
-    CropResizeWrapper, ImgWrapper, CustomRewardWrapper, DtRewardWrapper,
-    TemporalWrapper, UndistortWrapper, ActionLatencyWrapper, RecoveryTrainingWrapper
-)
-from gym_duckietown.wrappers import UndistortWrapper
+from utils.wrappers.wrappers import *
+from utils.wrappers.observation_wrappers import *
+from utils.wrappers.action_wrappers import *
+from utils.wrappers.reward_wrappers import *
 
 class DuckieOvalEnv(Simulator):
     """

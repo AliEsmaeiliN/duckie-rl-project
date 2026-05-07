@@ -19,7 +19,6 @@ import torch
 
 from gym_duckietown.simulator import WINDOW_WIDTH, WINDOW_HEIGHT
 from gym_duckietown.envs import DuckietownEnv
-from utils.wrappers import CropResizeWrapper
 from rl_env_debug import DuckieOvalEnv
 from agent import DuckiebotAgent
 from wrappers_debug import DebugRewardWrapper, ActionWrapper, KinematicActionWrapper
@@ -62,7 +61,6 @@ if args.env_name and args.env_name.find("Duckietown") != -1:
         dynamics_rand=args.dynamics_rand,
         accept_start_angle_deg = 4,
     )
-    env = CropResizeWrapper(env, shape=(84, 84))
 else:
     env = DuckieOvalEnv.create_wrapped(
         run_name="manual_control",

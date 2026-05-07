@@ -1,9 +1,5 @@
 import gymnasium as gym
-from gymnasium import spaces
 import numpy as np
-from PIL import Image
-import cv2
-import collections
 
 class TemporalWrapper(gym.Wrapper):
     def __init__(self, env=None, frame_skip=3, motion_blur=True):

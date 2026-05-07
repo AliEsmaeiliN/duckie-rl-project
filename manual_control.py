@@ -17,7 +17,6 @@ import pyglet
 from pyglet.window import key
 
 from src.gym_duckietown.envs import DuckietownEnv
-from utils.wrappers import CropResizeWrapper
 from utils.rl_env import DuckieOvalEnv
 
 # from experiments.utils import save_img
@@ -53,7 +52,6 @@ if args.env_name and args.env_name.find("Duckietown") != -1:
         dynamics_rand=args.dynamics_rand,
         accept_start_angle_deg = 4,
     )
-    env = CropResizeWrapper(env, shape=(84, 84))
 else:
     env = DuckieOvalEnv.create_wrapped(
         run_name="manual_control",

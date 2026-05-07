@@ -1,5 +1,6 @@
 import gymnasium as gym
 import numpy as np
+import collections
 
 class ActionWrapper(gym.ActionWrapper):
     def __init__(self, env):
