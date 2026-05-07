@@ -1,3 +1,6 @@
+import gymnasium as gym
+import numpy as np
+
 class DtRewardWrapper(gym.RewardWrapper):
     def __init__(self, env):
         super().__init__(env)
@@ -8,12 +11,6 @@ class DtRewardWrapper(gym.RewardWrapper):
 
         return reward
 
-
-# this is needed because at max speed the duckie can't turn anymore
-
-
-
-    
 class CustomRewardWrapper(gym.RewardWrapper):
     def __init__(self, env):
         super().__init__(env)
