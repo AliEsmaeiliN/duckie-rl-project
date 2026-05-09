@@ -5,7 +5,7 @@ from gym_duckietown.simulator import Simulator
 from utils.wrappers.wrappers import *
 from utils.wrappers.observation_wrappers import *
 from utils.wrappers.action_wrappers import *
-from utils.wrappers.reward_wrappers import *
+from utils.wrappers.reward_wrappers import LanePositionReward
 
 class DuckieOvalEnv(Simulator):
     """
@@ -59,9 +59,7 @@ class DuckieOvalEnv(Simulator):
         env = ImgWrapper(env) # Transpose to CHW
 
         
-        #env = DtRewardWrapper(env)
-        env = CustomRewardWrapper(env)
-        #env = RecoveryTrainingWrapper(env, max_recovery_steps=30, ood_penalty=-50.0)
+        env = LanePositionReward(env)
 
         if frame_stack > 1:
             env = gym.wrappers.FrameStackObservation(env, stack_size=frame_stack)

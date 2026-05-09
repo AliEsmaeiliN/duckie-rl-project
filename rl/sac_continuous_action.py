@@ -279,7 +279,7 @@ if __name__ == "__main__":
             save_code=True,
         )
         reward_logic = wandb.Artifact('rl-logic-files', type='code')
-        reward_logic.add_file('utils/wrappers.py') 
+        reward_logic.add_file('utils/wrappers/reward_wrappers.py') 
         reward_logic.add_file('utils/rl_env.py')
         training_logic = wandb.Artifact('rl-training-files', type='configuration')
         training_logic.add_file('sac.slurm')
