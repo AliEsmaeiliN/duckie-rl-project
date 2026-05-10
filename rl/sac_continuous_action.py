@@ -114,18 +114,20 @@ class Args:
     """Simulates the action latency from the duckiebot"""
 
 def make_env(seed, idx, run_name, capture_video=False, motion_blur=False, latency_rand=False, **env_kwargs):
+    def thunk():
+        render_mode = "rgb_array" if (capture_video and idx == 0) else None
+        env = DuckieOvalEnv.create_wrapped(
+            run_name=run_name,
+            motion_blur=motion_blur,
+            latency_rand=latency_rand,
+            render_mode=render_mode,
+            seed=seed, 
+            **env_kwargs
+        )
+        env.action_space.seed(seed)
+        return env
 
-    render_mode = "rgb_array" if (capture_video and idx == 0) else None
-    env = DuckieOvalEnv.create_wrapped(
-        run_name=run_name,
-        motion_blur=motion_blur,
-        latency_rand=latency_rand,
-        render_mode=render_mode,
-        seed=seed, 
-        **env_kwargs
-    )
-    env.action_space.seed(seed)
-    return env
+    return thunk
 
 # ALGO LOGIC: initialize agent here:
 class SoftQNetwork(nn.Module):
@@ -136,12 +138,12 @@ class SoftQNetwork(nn.Module):
         # Independent Visual Encoder
         self.encoder = cnn_encoder(
             in_channels=self.channels,
-            obs_shape=env.observation_space.shape,
+            obs_shape=env.single_observation_space.shape,
             feature_dim=feature_dim
         )
 
         # The input size is feature_dim (visuals) + action_dim (robot commands)
-        action_dim = np.prod(env.action_space.shape)
+        action_dim = np.prod(env.single_action_space.shape)
 
         self.fc1 = nn.Linear(feature_dim + action_dim, 512)
         self.fc2 = nn.Linear(512, 256)
@@ -177,28 +179,28 @@ class Actor(nn.Module):
         # Modified Encoder
         self.encoder = cnn_encoder(
             in_channels=self.channels,
-            obs_shape=env.observation_space.shape,
+            obs_shape=env.single_observation_space.shape,
             feature_dim=256
         )
         
 
 
-        #self.fc1 = nn.Linear(np.array(env.observation_space.shape).prod(), 256)
+        #self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod(), 256)
         #self.fc2 = nn.Linear(256, 256)
-        self.fc_mean = nn.Linear(256, np.prod(env.action_space.shape))
-        self.fc_logstd = nn.Linear(256, np.prod(env.action_space.shape))
+        self.fc_mean = nn.Linear(256, np.prod(env.single_action_space.shape))
+        self.fc_logstd = nn.Linear(256, np.prod(env.single_action_space.shape))
         # action rescaling
         self.register_buffer(
             "action_scale",
             torch.tensor(
-                (env.action_space.high - env.action_space.low) / 2.0,
+                (env.single_action_space.high - env.single_action_space.low) / 2.0,
                 dtype=torch.float32,
             ),
         )
         self.register_buffer(
             "action_bias",
             torch.tensor(
-                (env.action_space.high + env.action_space.low) / 2.0,
+                (env.single_action_space.high + env.single_action_space.low) / 2.0,
                 dtype=torch.float32,
             ),
         )
@@ -282,7 +284,7 @@ if __name__ == "__main__":
         reward_logic.add_file('utils/wrappers/reward_wrappers.py') 
         reward_logic.add_file('utils/rl_env.py')
         training_logic = wandb.Artifact('rl-training-files', type='configuration')
-        training_logic.add_file('sac.slurm')
+        training_logic.add_file('job_sac.sh')
         training_logic.add_file('rl/sac_continuous_action.py')
         
         run.log_artifact(reward_logic)
@@ -310,16 +312,18 @@ if __name__ == "__main__":
         "camera_rand": args.camera_rand,
     }
 
-    env = make_env(args.seed, 0, run_name, args.capture_video, args.motion_blur, args.action_latency)
-    assert isinstance(env.action_space, gym.spaces.Box), "only continuous action space is supported"
+    envs = gym.vector.SyncVectorEnv(
+        [make_env(args.seed + i, i, run_name, args.capture_video, args.motion_blur, args.action_latency) for i in range(args.num_envs)]
+    )
+    assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
-    max_action = float(env.action_space.high[0])
+    max_action = float(envs.single_action_space.high[0])
 
-    actor = Actor(env, grayscale=args.grayscale).to(device)
-    qf1 = SoftQNetwork(env, feature_dim=256).to(device)
-    qf2 = SoftQNetwork(env, feature_dim=256).to(device)
-    qf1_target = SoftQNetwork(env, feature_dim=256).to(device)
-    qf2_target = SoftQNetwork(env, feature_dim=256).to(device)
+    actor = Actor(envs, grayscale=args.grayscale).to(device)
+    qf1 = SoftQNetwork(envs, feature_dim=256).to(device)
+    qf2 = SoftQNetwork(envs, feature_dim=256).to(device)
+    qf1_target = SoftQNetwork(envs, feature_dim=256).to(device)
+    qf2_target = SoftQNetwork(envs, feature_dim=256).to(device)
     qf1_target.load_state_dict(qf1.state_dict())
     qf2_target.load_state_dict(qf2.state_dict())
     q_optimizer = optim.Adam(list(qf1.parameters()) + list(qf2.parameters()), lr=args.q_lr)
@@ -327,19 +331,19 @@ if __name__ == "__main__":
 
     # Automatic entropy tuning
     if args.autotune:
-        target_entropy = -torch.prod(torch.Tensor(env.action_space.shape).to(device)).item()
+        target_entropy = -torch.prod(torch.Tensor(envs.single_action_space.shape).to(device)).item()
         log_alpha = torch.zeros(1, requires_grad=True, device=device)
         alpha = log_alpha.exp().item()
         a_optimizer = optim.Adam([log_alpha], lr=args.q_lr)
     else:
         alpha = args.alpha
 
-    #envs.observation_space.dtype = np.float32  previous version
-    env.observation_space.dtype = np.uint8
+    #envs.single_observation_space.dtype = np.float32  previous version
+    envs.single_observation_space.dtype = np.uint8
     rb = ReplayBuffer(
         args.buffer_size,
-        env.observation_space,
-        env.action_space,
+        envs.single_observation_space,
+        envs.single_action_space,
         device,
         n_envs=args.num_envs,
         handle_timeout_termination=False,
@@ -347,42 +351,44 @@ if __name__ == "__main__":
     start_time = time.time()
 
     # TRY NOT TO MODIFY: start the game
-    obs, _ = env.reset(seed=args.seed)
+    obs, _ = envs.reset(seed=args.seed)
     for global_step in range(args.total_timesteps):
         # ALGO LOGIC: put action logic here
         if global_step < args.learning_starts:
-            actions = env.action_space.sample()
+            actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
         else:
-            obs_tensor = torch.Tensor(obs).unsqueeze(0).to(device)
+            obs_tensor = torch.Tensor(obs).to(device)
             actions, _, _ = actor.get_action(obs_tensor)
-            actions = actions.detach().cpu().numpy()[0]
+            actions = actions.detach().cpu().numpy()
 
         # TRY NOT TO MODIFY: execute the game and log data.
-        next_obs, rewards, terminations, truncations, infos = env.step(actions)
+        next_obs, rewards, terminations, truncations, infos = envs.step(actions)
 
         # Curriculum spawn
-        if terminations or truncations:
-            new_difficulty = min(1.0, global_step / (0.8 * args.total_timesteps))
-            env.unwrapped.set_spawn_config("spawn_difficulty", new_difficulty)
+        if any(terminations) or any(truncations):
+            new_difficulty = min(1.0, global_step / (0.6 * args.total_timesteps))
+            # This sets the attribute for ALL parallel sub-environments
+            envs.set_attr("spawn_difficulty", new_difficulty)
             writer.add_scalar("charts/spawn_difficulty", new_difficulty, global_step)
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         if "episode" in infos:
-            print(f"global_step={global_step}, episodic_return={infos['episode']['r']}")
-            writer.add_scalar("charts/episodic_return", infos['episode']['r'], global_step)
-            writer.add_scalar("charts/episodic_length", infos['episode']['l'], global_step)  
+            for i in range(envs.num_envs):
+                # Using the mask '_episode' to see which sub-env actually finished
+                if "_episode" in infos and infos["_episode"][i]:
+                    print(f"global_step={global_step}, episodic_return={infos['episode']['r'][i]}")
+                    writer.add_scalar("charts/episodic_return", infos['episode']['r'][i], global_step)
+                    writer.add_scalar("charts/episodic_length", infos['episode']['l'][i], global_step)  
 
         # TRY NOT TO MODIFY: save data to reply buffer; handle `final_observation`
         real_next_obs = next_obs.copy()
-        if truncations and "final_observation" in infos:
-            real_next_obs = infos["final_observation"]
+        for idx, trunc in enumerate(truncations):
+            if trunc:
+                real_next_obs[idx] = infos["final_observation"][idx]
         rb.add(obs, real_next_obs, actions, rewards, terminations, infos)
 
         # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
         obs = next_obs
-
-        if terminations or truncations:
-            obs, _ = env.reset()
 
         # ALGO LOGIC: training.
         if global_step > args.learning_starts:
@@ -458,13 +464,13 @@ if __name__ == "__main__":
                     writer.add_scalar("losses/alpha_loss", alpha_loss.item(), global_step)
             if global_step == 300000:
                 print("Curriculum Step 1: Activating Domain Randomization")
-                env.unwrapped.set_randomization(domain_rand=args.domain_rand)
+                envs.call("set_randomization", domain_rand=args.domain_rand)
             elif global_step == 500000:
                 print("Curriculum Step 2: Activating Camera and Dynamics Randomization")
-                env.unwrapped.set_randomization(camera_rand=args.camera_rand, dynamics_rand=args.dynamics_rand)
+                envs.call("set_randomization", camera_rand=args.camera_rand, dynamics_rand=args.dynamics_rand)
             elif global_step == 800000:
                 print("Curriculum Step 3: Activating Lens Distortion")
-                env.unwrapped.set_randomization(distortion=args.distortion)
+                envs.call("set_randomization", distortion=args.distortion)
             
             if global_step == 499000:
                 save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix=f"v{args.version}_PRE_RAND")
@@ -485,5 +491,5 @@ if __name__ == "__main__":
             **env_params
         )
     
-    env.close()
+    envs.close()
     writer.close()
