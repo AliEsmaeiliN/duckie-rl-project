@@ -25,7 +25,7 @@ fi
 python rl/sac_continuous_action.py \
     --seed 1 \
     --env-id CV \
-    --total-timesteps 1000000 \
+    --total-timesteps 1500000 \
     --track \
     --version 11 \
     --buffer-size 100000 \
@@ -33,5 +33,4 @@ python rl/sac_continuous_action.py \
     --domain-rand \
     --camera-rand \
     --dynamics-rand \
-    --action-latency \
     --run-notes "LaneP R + larger margins + opencv preprocessing" 
