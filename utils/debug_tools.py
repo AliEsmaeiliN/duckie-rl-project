@@ -138,3 +138,35 @@ def evaluate_policy(actor, args, device, algo_name, run_name = "run_name", num_e
         wandb.log(metrics)
         
     actor.train() # just in case
+
+def log_pid_metrics(pid_info: dict, global_step: int, prefix: str = "pid") -> None:
+    """
+    Logs the most useful subset of pid_stabilizer info to W&B.
+    """
+    if pid_info is None:
+        return
+ 
+    wandb.log({
+        # Core tracking quality
+        f"{prefix}/omega_error":        abs(pid_info.get("e_omega", 0)),
+        f"{prefix}/v_error":            abs(pid_info.get("e_v", 0)),
+ 
+        # Jerk reduction (key stabilization metric)
+        f"{prefix}/omega_jerk_raw":     pid_info.get("omega_jerk_raw", 0),
+        f"{prefix}/omega_jerk_smooth":  pid_info.get("omega_jerk_smooth", 0),
+        f"{prefix}/jerk_reduction_pct": pid_info.get("jerk_reduction_pct", 0),
+ 
+        # Action comparison
+        f"{prefix}/omega_rl":           pid_info.get("omega_rl", 0),
+        f"{prefix}/omega_out":          pid_info.get("omega_out", 0),
+        f"{prefix}/v_rl":               pid_info.get("v_rl", 0),
+        f"{prefix}/v_out":              pid_info.get("v_out", 0),
+ 
+        # PID internals (useful for tuning)
+        f"{prefix}/steer_P":            pid_info.get("steer_P", 0),
+        f"{prefix}/steer_I":            pid_info.get("steer_I", 0),
+        f"{prefix}/steer_D":            pid_info.get("steer_D", 0),
+        f"{prefix}/steer_integral":     pid_info.get("steer_integral", 0),
+ 
+        "global_step": global_step,
+    })

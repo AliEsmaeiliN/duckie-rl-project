@@ -58,7 +58,7 @@ class DuckieOvalEnv(Simulator):
         
         
         env = DebugRewardWrapper(env, reward_type=reward_type)
-        env = RecoveryTrainingWrapper(env, max_recovery_steps=30, ood_penalty=-50.0)
+        #env = RecoveryTrainingWrapper(env, max_recovery_steps=30, ood_penalty=-50.0)
 
         # 6. Temporal Stacking
         if frame_stack > 1:

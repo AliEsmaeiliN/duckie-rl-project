@@ -57,18 +57,20 @@ class RewardCompute():
         return reward_speed, reward_distance, reward_alignment, reward_angle, reward_jerk
     
     def simple_reward(self, speed, distance, heading, angle, danger_zone, current_action, previous_action):
-        speed_coeff, dist_coeff, jerk_coeff, alignment_k = 1.5, -15.0, -1.0, 2.0
         
-        reward_speed = speed_coeff * speed
-        reward_alignment = alignment_k * (heading ** 2) if heading > 0 else 4.0 * heading
-        if np.abs(distance) >= np.abs(self.WRONG_LANE_LIMIT) / 2:
-            dist_coeff = -40
-            
-        reward_distance = dist_coeff * np.abs(distance)
-        reward_angle = -0.03 * np.abs(angle)
-        reward_jerk = jerk_coeff * np.linalg.norm(current_action - previous_action)
+        
+        reward_speed = 2.0 * speed * heading
+        
+        if distance < self.WRONG_LANE_LIMIT:
+            reward_distance = -30.0 
+        else:
+            reward_distance = -15.0 * (distance + 0.2)**2
+        
+        reward_survival = 1.0 if speed > 0.05 else -1.0
+        
+        reward_jerk = -2 * np.linalg.norm(current_action - previous_action)
 
-        return reward_speed, reward_distance, reward_alignment, reward_angle, reward_jerk
+        return reward_speed, reward_distance, reward_survival, 0, reward_jerk
 
     def adp_reward(self, speed, distance, heading, angle, danger_zone, current_action, previous_action):
         dist_penalty_coeff, speed_coeff, jerk_coeff, k = -8.0, 2.0, -0.3, 5.0
