@@ -2,11 +2,11 @@ import os
 import gymnasium as gym
 import numpy as np
 from gym_duckietown.simulator import Simulator
-from wrappers_debug import (
-    KinematicActionWrapper, ActionWrapper, ResizeWrapper, 
-    CropResizeWrapper, ImgWrapper, DebugRewardWrapper, DtRewardWrapper,
-    UndistortWrapper, RecoveryTrainingWrapper, ActionLatencyWrapper
-)
+from utils.wrappers.wrappers import *
+from utils.wrappers.observation_wrappers import *
+from utils.wrappers.action_wrappers import *
+from utils.wrappers.reward_wrappers import PIDReward as RewardWrapper
+from utils.wrappers.pid_stabilizer import PIDStabilizerWrapper, StabilizerConfig
 
 class DuckieOvalEnv(Simulator):
     """
@@ -16,11 +16,12 @@ class DuckieOvalEnv(Simulator):
         kwargs.setdefault('map_name', "oval_loop")
         kwargs.setdefault('camera_width', 640)
         kwargs.setdefault('camera_height', 480)
-        kwargs.setdefault('accept_start_angle_deg', 4)
+        kwargs.setdefault('accept_start_angle_deg', 20)
         kwargs.setdefault('full_transparency', True)
-        kwargs.setdefault('max_steps', 10000)
-        
-        kwargs.setdefault('frame_skip', 4) 
+        kwargs.setdefault('max_steps', 4000)
+        kwargs.setdefault('frame_skip', 4)
+        kwargs.setdefault('spawn_mode', 'curriculum')
+        kwargs.setdefault('spawn_difficulty', 0.0) 
         
         super().__init__(**kwargs)
         
@@ -29,11 +30,13 @@ class DuckieOvalEnv(Simulator):
         self.motor_k = 27.0
 
     @classmethod
-    def create_wrapped(cls, run_name, capture_video=False, motion_blur=False, grayscale=True, frame_stack=4, reward_type="adp", latency_rand=False, **kwargs):
+    def create_wrapped(cls, run_name, capture_video=False, use_pid=False, grayscale=True, frame_stack=4, latency_rand=False, **kwargs):
         """
         Static method to build the fully wrapped stack.
         """
         env = cls(**kwargs)
+
+        env = UndistortWrapper(env)
 
         if latency_rand:
             print('acivated')
@@ -41,6 +44,14 @@ class DuckieOvalEnv(Simulator):
 
         env = KinematicActionWrapper(env, wheel_dist=0.102, radius=0.0318, k=27.0)
         env = ActionWrapper(env)
+
+        if use_pid:
+            pid_cfg = StabilizerConfig(
+                ema_alpha_v=0.6, 
+                ema_alpha_omega=0.4 
+            )
+            env = PIDStabilizerWrapper(env, config=pid_cfg)
+
 
         if capture_video:
             video_folder = f"videos/{run_name}"
@@ -51,16 +62,13 @@ class DuckieOvalEnv(Simulator):
         env = CropResizeWrapper(env, shape=(84, 84))  # Crop sky, resize to 84x84
         
         if grayscale:
-            env = gym.wrappers.GrayscaleObservation(env, keep_dim=True)
+            env = GrayScaleWrapper(env)
         
         env = ImgWrapper(env) # Transpose to CHW
 
         
-        
-        env = DebugRewardWrapper(env, reward_type=reward_type)
-        #env = RecoveryTrainingWrapper(env, max_recovery_steps=30, ood_penalty=-50.0)
+        env = RewardWrapper(env)
 
-        # 6. Temporal Stacking
         if frame_stack > 1:
             env = gym.wrappers.FrameStackObservation(env, stack_size=frame_stack)
             c = 1 if grayscale else 3
@@ -99,3 +107,11 @@ class DuckieOvalEnv(Simulator):
                 from src.gym_duckietown.distortion import Distortion
                 print("Initializing Distortion Model...")
                 self.camera_model = Distortion(camera_rand=getattr(self, 'camera_rand', False))
+    
+    def set_spawn_config(self, mode: str = None, difficulty: float = None):
+        """Dynamically update spawn strategy during training."""
+        if mode is not None:
+            self.spawn_mode = mode
+        if difficulty is not None:
+            self.spawn_difficulty = np.clip(difficulty, 0.0, 1.0)
+        print(f"Spawn Config Updated: Mode={self.spawn_mode}, Difficulty={self.spawn_difficulty}")

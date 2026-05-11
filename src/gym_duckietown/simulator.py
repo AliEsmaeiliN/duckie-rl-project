@@ -1551,7 +1551,7 @@ class Simulator(gym.Env):
         # No collision with any object
         return False
 
-    def _valid_pose(self, pos: g.T3value, angle: float, safety_factor: float = 0.2) -> bool:
+    def _valid_pose(self, pos: g.T3value, angle: float, safety_factor: float = 1.0) -> bool:
         """
         Check that the agent is in a valid pose
 

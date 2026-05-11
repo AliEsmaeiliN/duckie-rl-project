@@ -58,6 +58,22 @@ class CropResizeWrapper(gym.ObservationWrapper):
             interpolation=cv2.INTER_AREA
         )
     
+class GrayScaleWrapper(gym.ObservationWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        obs_shape = self.observation_space.shape
+        # Change observation space to 1 channel while keeping H, W
+        self.observation_space = spaces.Box(
+            low=0, 
+            high=255, 
+            shape=(obs_shape[0], obs_shape[1], 1), 
+            dtype=np.uint8
+        )
+
+    def observation(self, obs):
+        gray = cv2.cvtColor(obs, cv2.COLOR_RGB2GRAY)
+        return gray[:, :, np.newaxis]
+    
 class UndistortWrapper(gym.ObservationWrapper):
     """
     Undoes the fisheye transformation using plumb_bob distortion.

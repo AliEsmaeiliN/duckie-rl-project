@@ -33,7 +33,8 @@ class RewardCompute():
             "adl": self.adl_reward,
             "simple": self.simple_reward,
             "adp": self.adp_reward,
-            "dbg": self.dbg_reward
+            "dbg": self.dbg_reward,
+            "pid": self.pid_reward
         }
         if name not in funcs:
             raise ValueError(f"Reward type '{name}' not recognized.")
@@ -118,6 +119,19 @@ class RewardCompute():
         reward_jerk = jerk_coeff * action_diff 
 
         return reward_speed, reward_distance, reward_alignment, reward_angle, reward_jerk
+    
+    def pid_reward(self, speed, distance, heading, angle, danger_zone):
+
+        reward_speed = 2.0 * speed * heading
+        
+        if distance < -0.2:
+            reward_distance = -30.0 
+        else:
+            reward_distance = -15.0 * (distance + 0.03)**2
+        
+        reward_survival = 1.0 if speed > 0.05 else -1.0
+
+        return reward_speed, reward_distance, 0, 0, 0
 
         
 

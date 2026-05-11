@@ -27,16 +27,15 @@ def debug_step():
     env = DuckieOvalEnv.create_wrapped(
         run_name=run_name,
         capture_video=False,
-        motion_blur=False,
         grayscale=True,
         frame_stack=4,
-        domain_rand=False,
-        distortion=True
+        domain_rand=False
     )
 
     obs, info = env.reset(seed=42)
     
     constant_action = np.array([0.4, 0.2], dtype=np.float32)
+    freq  = 10
 
     print(f"{'Step':<6} | {'Reward':<10} | {'Action [v, w]':<15}")
     print("-" * 40)
@@ -48,25 +47,32 @@ def debug_step():
         print(f"{i:<6} | {reward:<10.4f} | {str(constant_action):<15}")
 
         current_obs = env.unwrapped.render_obs()
-        if i % 20 == 0:
-            save_image(current_obs, f"step_{int(i/20)}_0_Raw_Simulator")
+        if i % freq == 0:
+            save_image(current_obs, f"step_{i}_0_Raw_Simulator")
 
         wrappers = []
         curr = env
         while hasattr(curr, 'env'):
             wrappers.append(curr)
             curr = curr.env
-        if i % 20 == 0:
+        if i % freq == 0:
             for idx, wrapper in enumerate(reversed(wrappers)):
                 wrapper_name = wrapper.__class__.__name__
                 if hasattr(wrapper, 'observation'):
                     try:
                         current_obs = wrapper.observation(current_obs)
                         save_image(current_obs, f"step_{i}_{idx+1}_{wrapper_name}")
+                        print(f"step_{i}_{idx+1}_{wrapper_name}, obs shape: {current_obs.shape}")
                     except Exception as e:
                         frames = [next_obs[t] for t in range(next_obs.shape[0])]
                         combined_stack = np.concatenate(frames, axis=1) 
                         save_image(combined_stack, f"step_{i}_{idx+1}_{wrapper_name}")
+                if hasattr(wrapper, 'action') or hasattr(wrapper, 'step'):
+                    try:
+                        wrapped_action = wrapper.action(constant_action)
+                        print(f"step_{i}_{idx+1}_{wrapper_name}, action = {wrapped_action}")
+                    except:
+                        print(f"step_{i}_{idx+1}_{wrapper_name}")
         if done:
             break
 
