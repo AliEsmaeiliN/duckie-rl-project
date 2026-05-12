@@ -203,7 +203,7 @@ class AdaptiveRewardWrapper(gym.RewardWrapper):
         return reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
 
 class LanePositionReward(gym.RewardWrapper):
-    def __init__(self, env, target_offset= -0.03):
+    def __init__(self, env, target_offset= -0.02):
         super().__init__(env)
         self.target_offset = target_offset 
         self.wrong_lane_limit = -0.2
@@ -211,8 +211,8 @@ class LanePositionReward(gym.RewardWrapper):
 
     def reward(self, reward):
 
-        if self.reward == -1000:
-            return -15
+        if reward == -1000:
+            return -10
         
         sim = self.env.unwrapped
         try:
@@ -224,7 +224,7 @@ class LanePositionReward(gym.RewardWrapper):
         reward_speed = 2.0 * v * lp.dot_dir
         
         if lp.dist < self.wrong_lane_limit:
-            reward_distance = -30.0 
+            reward_distance = -10.0 
         else:
             reward_distance = -15.0 * (lp.dist - self.target_offset)**2
         

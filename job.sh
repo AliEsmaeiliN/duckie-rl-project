@@ -24,14 +24,13 @@ fi
 
 python rl/sac_continuous_action.py \
     --seed 1 \
-    --env-id Sim2Real \
+    --env-id CV \
     --total-timesteps 1500000 \
     --track \
+    --version 10 \
     --buffer-size 100000 \
-    --motion-blur \
     --learning-starts 40000 \
     --domain-rand \
     --camera-rand \
     --dynamics-rand \
-    --distortion \
-    --run-notes "Adaptive reward with curriculum learning: 500k DR, 800k Dyn, 1M Distort" 
+    --run-notes "LaneP R + recovery 10 step + opencv preprocessing" 

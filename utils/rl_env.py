@@ -58,13 +58,13 @@ class DuckieOvalEnv(Simulator):
             os.makedirs(video_folder, exist_ok=True)
             env = gym.wrappers.RecordVideo(env, video_folder, episode_trigger=lambda x: True)
 
-        env = ResizeWrapper(env, shape=(120, 160, 3)) # Ensure 120x160 base
+        #env = ResizeWrapper(env, shape=(120, 160, 3)) # Ensure 120x160 base
         env = CropResizeWrapper(env, shape=(84, 84))  # Crop sky, resize to 84x84
         
         if grayscale:
-            env = gym.wrappers.GrayscaleObservation(env, keep_dim=True)
-        
-        env = ImgWrapper(env) # Transpose to CHW
+            env = GrayscaleWrapper(env)
+        else:
+            env = ImgWrapper(env) # Transpose to CHW
 
         
         env = RewardWrapper(env)

@@ -154,3 +154,25 @@ class UndistortWrapper(gym.ObservationWrapper):
             )
 
         return cv2.remap(observation, self.mapx, self.mapy, cv2.INTER_LINEAR)
+
+class GrayscaleWrapper(gym.ObservationWrapper):
+    """
+    Optimized Grayscale Wrapper for Duckietown.
+    Converts RGB (H, W, 3) to Grayscale (1, H, W).
+    Using OpenCV for maximum speed to minimize control loop latency.
+    """
+    def __init__(self, env):
+        super().__init__(env)
+        h, w, _ = self.observation_space.shape
+        
+        self.observation_space = spaces.Box(
+            low=0, 
+            high=255, 
+            shape=(1, h, w), 
+            dtype=np.uint8
+        )
+
+    def observation(self, obs):
+        
+        gray = cv2.cvtColor(obs, cv2.COLOR_RGB2GRAY)
+        return np.expand_dims(gray, axis=0)
