@@ -8,11 +8,7 @@ import wandb
 from utils.rl_env import DuckieOvalEnv
 
 def plot_model_input(s_obs, global_step):
-    # Take the first environment's observation from the batch
-    # s_obs shape is (Batch, 12, 120, 160)
     sample_obs = s_obs[0].cpu().numpy() 
-
-    # Extract the first 3 channels (the most recent RGB frame)
     first_frame = sample_obs[0:3, :, :].transpose(1, 2, 0)
 
     plt.imshow(first_frame)
@@ -65,14 +61,15 @@ def evaluate_policy(actor, args, device, algo_name, run_name = "run_name", num_e
     # Create a separate evaluation environment
     eval_env = DuckieOvalEnv.create_wrapped(
         run_name=custom_run_name,
-        motion_blur=args.motion_blur, 
         grayscale=True,
         frame_stack=4,
         capture_video = True,
         render_mode = "rgb_array",
+        use_pid=args.pid,
         domain_rand=args.domain_rand,
         dynamics_rand=args.dynamics_rand,
-        distortion=args.distortion
+        distortion=args.distortion,
+        latency_rand=args.action_latency
     )
     
 

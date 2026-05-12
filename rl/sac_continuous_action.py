@@ -58,7 +58,7 @@ class Args:
     """for wandb tracking notes"""
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
-    save_interval: int = 50000
+    save_interval: int = 200000
     """the interval to save the Actor periodically"""
     save_model: bool = True
     """whether to save model into the `runs/{run_name}` folder"""
@@ -112,13 +112,15 @@ class Args:
     """Simulates the blur from the moving duckiebot"""
     action_latency: bool = False
     """Simulates the action latency from the duckiebot"""
+    pid: bool = False
+    """Use PID action stabilizer"""
 
-def make_env(seed, idx, run_name, capture_video=False, motion_blur=False, latency_rand=False, **env_kwargs):
+def make_env(seed, idx, run_name, capture_video=False, use_pid=False, latency_rand=False, **env_kwargs):
     def thunk():
         render_mode = "rgb_array" if (capture_video and idx == 0) else None
         env = DuckieOvalEnv.create_wrapped(
             run_name=run_name,
-            motion_blur=motion_blur,
+            use_pid=use_pid,
             latency_rand=latency_rand,
             render_mode=render_mode,
             seed=seed, 
@@ -266,7 +268,7 @@ if __name__ == "__main__":
         if args.dynamics_rand: active_tags.append("DynamicsRand")
         if args.camera_rand: active_tags.append("CameraRand")
         if args.distortion: active_tags.append("Distortion")
-        if args.motion_blur: active_tags.append("MotionBlur")
+        if args.pid: active_tags.append("PID")
         if args.action_latency: active_tags.append("ActionLatency")
 
         run = wandb.init(
@@ -310,10 +312,12 @@ if __name__ == "__main__":
         "distortion": args.distortion,
         "dynamics_rand": args.dynamics_rand,
         "camera_rand": args.camera_rand,
+        "latency_rand": args.action_latency,
+        "use_pid": args.pid
     }
 
     envs = gym.vector.SyncVectorEnv(
-        [make_env(args.seed + i, i, run_name, args.capture_video, args.motion_blur, args.action_latency) for i in range(args.num_envs)]
+        [make_env(args.seed + i, i, run_name, args.capture_video, args.pid, args.action_latency) for i in range(args.num_envs)]
     )
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
@@ -367,7 +371,6 @@ if __name__ == "__main__":
         # Curriculum spawn
         if any(terminations) or any(truncations):
             new_difficulty = min(1.0, global_step / (0.6 * args.total_timesteps))
-            # This sets the attribute for ALL parallel sub-environments
             envs.set_attr("spawn_difficulty", new_difficulty)
             writer.add_scalar("charts/spawn_difficulty", new_difficulty, global_step)
 
@@ -462,6 +465,15 @@ if __name__ == "__main__":
                 )
                 if args.autotune:
                     writer.add_scalar("losses/alpha_loss", alpha_loss.item(), global_step)
+                if args.pid and "pid_stabilizer" in infos:
+                    pid = infos["pid_stabilizer"]
+                    writer.add_scalar("pid/omega_jerk_raw",      np.mean(pid["omega_jerk_raw"]),      global_step)
+                    writer.add_scalar("pid/omega_jerk_smooth",   np.mean(pid["omega_jerk_smooth"]),   global_step)
+                    writer.add_scalar("pid/jerk_reduction_pct",  np.mean(pid["jerk_reduction_pct"]),  global_step)
+                    writer.add_scalar("pid/mean_omega_error",    np.mean(np.abs(pid["e_omega"])),      global_step)
+                    writer.add_scalar("pid/omega_rl",            np.mean(pid["omega_rl"]),             global_step)
+                    writer.add_scalar("pid/omega_out",           np.mean(pid["omega_out"]),            global_step)
+            
             if global_step == 300000:
                 print("Curriculum Step 1: Activating Domain Randomization")
                 envs.call("set_randomization", domain_rand=args.domain_rand)

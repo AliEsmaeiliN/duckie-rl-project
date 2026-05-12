@@ -59,8 +59,6 @@ class PIDStabilizerWrapper(gym.Wrapper):
         return obs, info
 
     def step(self, action: np.ndarray):
-        current_step = self.env.unwrapped.step_count
-        print(f"PID step at {current_step}")
         v_rl     = float(np.clip(action[0], self.cfg.v_min,     self.cfg.v_max))
         omega_rl = float(np.clip(action[1], self.cfg.omega_min, self.cfg.omega_max))
 

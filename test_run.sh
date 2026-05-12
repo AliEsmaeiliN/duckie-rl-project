@@ -7,7 +7,7 @@ export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 
 echo "Starting Duckie-RL smoke test..."
 python rl/sac_continuous_action.py \
-    --env-id "testforCV" \
+    --env-id "testforPID" \
     --buffer-size 10000 \
     --batch-size 64 \
     --learning-starts 300 \
@@ -15,4 +15,6 @@ python rl/sac_continuous_action.py \
     --domain-rand \
     --camera-rand \
     --dynamics-rand \
-    --no-track 
+    --action-latency \
+    --pid \
+    --track
