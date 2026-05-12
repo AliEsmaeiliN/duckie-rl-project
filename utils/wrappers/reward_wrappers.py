@@ -212,7 +212,7 @@ class LanePositionReward(gym.RewardWrapper):
     def reward(self, reward):
 
         if reward == -1000:
-            return -15
+            return -10
         
         sim = self.env.unwrapped
         try:

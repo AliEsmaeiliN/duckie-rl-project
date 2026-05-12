@@ -27,10 +27,10 @@ python rl/sac_continuous_action.py \
     --env-id CV \
     --total-timesteps 1500000 \
     --track \
-    --version 11 \
+    --version 10 \
     --buffer-size 100000 \
     --learning-starts 40000 \
     --domain-rand \
     --camera-rand \
     --dynamics-rand \
-    --run-notes "LaneP R + larger margins + opencv preprocessing" 
+    --run-notes "LaneP R + recovery 10 step + opencv preprocessing" 
