@@ -120,18 +120,18 @@ class RewardCompute():
 
         return reward_speed, reward_distance, reward_alignment, reward_angle, reward_jerk
     
-    def pid_reward(self, speed, distance, heading, angle, danger_zone):
+    def pid_reward(self, speed, distance, heading, angle, danger_zone, current_action, previous_action):
 
         reward_speed = 2.0 * speed * heading
         
         if distance < -0.2:
-            reward_distance = -30.0 
+            reward_distance = -10.0 
         else:
             reward_distance = -15.0 * (distance + 0.03)**2
         
         reward_survival = 1.0 if speed > 0.05 else -1.0
 
-        return reward_speed, reward_distance, 0, 0, 0
+        return reward_speed, reward_distance, reward_survival, 0, 0
 
         
 

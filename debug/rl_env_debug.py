@@ -48,10 +48,19 @@ class DuckieOvalEnv(Simulator):
 
         if use_pid:
             pid_cfg = StabilizerConfig(
-                ema_alpha_v=0.6, 
-                ema_alpha_omega=0.4 
+                ema_alpha_v=0.8,
+                ema_alpha_omega=0.65,
+                kp_v=0.8,
+                kp_omega=0.9,
+                ki_v=0.0,
+                ki_omega=0.0,
+                kd_v=0.0,
+                kd_omega=0.0,
+                v_min=-1.0, v_max=1.0,
+                omega_min=-1.0, omega_max=1.0,
             )
             env = PIDStabilizerWrapper(env, config=pid_cfg)
+
 
 
         if capture_video:
@@ -69,7 +78,7 @@ class DuckieOvalEnv(Simulator):
 
         
         env = DebugRewardWrapper(env, reward_type=reward_type)
-        env = RecoveryTrainingWrapper(env, max_recovery_steps=10, ood_penalty=-10.0)
+        #env = RecoveryTrainingWrapper(env, max_recovery_steps=10, ood_penalty=-10.0)
 
         if frame_stack > 1:
             env = gym.wrappers.FrameStackObservation(env, stack_size=frame_stack)

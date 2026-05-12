@@ -70,7 +70,8 @@ else:
         reward_type=args.reward,
         domain_rand=args.domain_rand,
         dynamics_rand=args.dynamics_rand,
-        distortion=args.distortion
+        distortion=args.distortion,
+        use_pid=True
     )
 
 render_modes = ["human", "top_down", "free_cam", "rgb_array"]
