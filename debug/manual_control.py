@@ -64,7 +64,6 @@ if args.env_name and args.env_name.find("Duckietown") != -1:
 else:
     env = DuckieOvalEnv.create_wrapped(
         run_name="manual_control",
-        motion_blur=args.motion_blur, 
         grayscale=True,
         frame_stack=4,
         latency_rand=True,

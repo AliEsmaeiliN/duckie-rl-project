@@ -7,6 +7,7 @@ from utils.wrappers.observation_wrappers import *
 from utils.wrappers.action_wrappers import *
 from utils.wrappers.reward_wrappers import PIDReward as RewardWrapper
 from utils.wrappers.pid_stabilizer import PIDStabilizerWrapper, StabilizerConfig
+from wrappers_debug import DebugRewardWrapper
 
 class DuckieOvalEnv(Simulator):
     """
@@ -30,7 +31,7 @@ class DuckieOvalEnv(Simulator):
         self.motor_k = 27.0
 
     @classmethod
-    def create_wrapped(cls, run_name, capture_video=False, use_pid=False, grayscale=True, frame_stack=4, latency_rand=False, **kwargs):
+    def create_wrapped(cls, run_name, capture_video=False, use_pid=False, grayscale=True, frame_stack=4, latency_rand=False, reward_type="adp", **kwargs):
         """
         Static method to build the fully wrapped stack.
         """
@@ -67,7 +68,8 @@ class DuckieOvalEnv(Simulator):
         env = ImgWrapper(env) # Transpose to CHW
 
         
-        env = RewardWrapper(env)
+        env = DebugRewardWrapper(env, reward_type=reward_type)
+        env = RecoveryTrainingWrapper(env, max_recovery_steps=10, ood_penalty=-10.0)
 
         if frame_stack > 1:
             env = gym.wrappers.FrameStackObservation(env, stack_size=frame_stack)
