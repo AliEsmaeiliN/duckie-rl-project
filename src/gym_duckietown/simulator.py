@@ -2150,7 +2150,7 @@ class Simulator(gym.Env):
         curves = tile["curves"]
         for _ in range(MAX_SPAWN_ATTEMPTS):
             
-            curve = curves[0]
+            curve = curves[1]
             t = self.np_random.uniform(0.2, 0.8)
             pos = bezier_point(curve, t)
             tangent = bezier_tangent(curve, t)
