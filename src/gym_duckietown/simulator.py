@@ -2146,13 +2146,19 @@ class Simulator(gym.Env):
     
     def _spawn_perfect(self, tile):
         """Always aligned with the lane centerline."""
+        print("prefect spawn")
         curves = tile["curves"]
-        curve = curves[self.np_random.integers(0, len(curves))]
-        t = self.np_random.uniform(0.2, 0.8)
-        pos = bezier_point(curve, t)
-        tangent = bezier_tangent(curve, t)
-        angle = math.atan2(-tangent[2], tangent[0])
-        return pos, angle
+        for _ in range(MAX_SPAWN_ATTEMPTS):
+            
+            curve = curves[0]
+            t = self.np_random.uniform(0.2, 0.8)
+            pos = bezier_point(curve, t)
+            tangent = bezier_tangent(curve, t)
+            angle = math.atan2(-tangent[2], tangent[0])
+            noise_rad = np.deg2rad(self.np_random.uniform(-self.accept_start_angle_deg, self.accept_start_angle_deg))
+            direction = get_driving_direction(tile, angle)
+            angle_noisy = angle + noise_rad
+            return pos, angle_noisy
 
 
     def _spawn_duckietown(self, tile):
