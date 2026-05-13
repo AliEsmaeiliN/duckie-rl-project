@@ -36,6 +36,7 @@ parser.add_argument("--no-grayscale", dest="grayscale", action="store_false", he
 parser.add_argument("--motion-blur", default=False, action="store_true")
 parser.add_argument('--spawn-mode', default='curriculum', help='perfect, duckietown, or curriculum')
 parser.add_argument('--spawn-difficulty', type=float, default=0.0, help='difficulty 0.0 to 1.0')
+parser.add_argument('--direction', default='mixed', help="cw, ccw or mixed")
 args = parser.parse_args()
 
 
@@ -61,6 +62,7 @@ else:
         domain_rand=args.domain_rand,
         dynamics_rand=args.dynamics_rand,
         distortion=args.distortion,
+        direction=args.direction
     )
 
 render_modes = ["human", "top_down", "free_cam", "rgb_array"]

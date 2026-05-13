@@ -237,7 +237,8 @@ class Simulator(gym.Env):
         draw_trajectory: list[str] = None,
         render_mode: str = None,
         spawn_mode: str = "curriculum", # "perfect", "duckietown", or "curriculum"
-        spawn_difficulty: float = 0.0
+        spawn_difficulty: float = 0.0,
+        direction: str = "mixed"
     ):
         """
 
@@ -275,6 +276,7 @@ class Simulator(gym.Env):
         # spawn logic
         self.spawn_mode = spawn_mode
         self.spawn_difficulty = spawn_difficulty
+        self.direction = direction
         # first initialize the RNG
         self.seed_value = seed
         #self.seed(seed=self.seed_value)
@@ -2146,7 +2148,6 @@ class Simulator(gym.Env):
     
     def _spawn_perfect(self, tile):
         """Always aligned with the lane centerline."""
-        print("prefect spawn")
         curves = tile["curves"]
         for _ in range(MAX_SPAWN_ATTEMPTS):
             
@@ -2155,10 +2156,7 @@ class Simulator(gym.Env):
             pos = bezier_point(curve, t)
             tangent = bezier_tangent(curve, t)
             angle = math.atan2(-tangent[2], tangent[0])
-            noise_rad = np.deg2rad(self.np_random.uniform(-self.accept_start_angle_deg, self.accept_start_angle_deg))
-            direction = get_driving_direction(tile, angle)
-            angle_noisy = angle + noise_rad
-            return pos, angle_noisy
+            return pos, angle
 
 
     def _spawn_duckietown(self, tile):
@@ -2184,10 +2182,16 @@ class Simulator(gym.Env):
         return self._spawn_perfect(tile)  # fallback
 
 
-    def _spawn_curriculum(self, tile):
+    def _spawn_curriculum(self, tile,):
         """Gradual injection of lateral and angular noise based on difficulty."""
         curves = tile["curves"]
-        curve = curves[self.np_random.integers(0, len(curves))]
+        if self.direction.lower() == "cw": 
+            curve = curves[1]
+        elif self.direction.lower() == "ccw":
+            curve = curves[0]
+        else:
+            curve = curves[self.np_random.integers(0, len(curves))]
+
         t = self.np_random.uniform(0.2, 0.8)
         base_pos = bezier_point(curve, t)
         tangent = bezier_tangent(curve, t)

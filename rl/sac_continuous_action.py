@@ -114,6 +114,8 @@ class Args:
     """Simulates the action latency from the duckiebot"""
     pid: bool = False
     """Use PID action stabilizer"""
+    direction: str = "mixed"
+    """Choosing the direction of the loop. CW, CCW or mixed"""
 
 def make_env(seed, idx, run_name, capture_video=False, use_pid=False, latency_rand=False, **env_kwargs):
     def thunk():
@@ -123,7 +125,8 @@ def make_env(seed, idx, run_name, capture_video=False, use_pid=False, latency_ra
             use_pid=use_pid,
             latency_rand=latency_rand,
             render_mode=render_mode,
-            seed=seed, 
+            seed=seed,
+            direction=args.direction,
             **env_kwargs
         )
         env.action_space.seed(seed)
@@ -264,6 +267,7 @@ if __name__ == "__main__":
         import wandb
         active_tags = [args.env_id]
         active_tags.append("Grayscale" if args.grayscale else "RGB")
+        active_tags.append(args.direction)
         if args.domain_rand: active_tags.append("DomainRand")
         if args.dynamics_rand: active_tags.append("DynamicsRand")
         if args.camera_rand: active_tags.append("CameraRand")
@@ -491,7 +495,7 @@ if __name__ == "__main__":
 
 
     if args.save_model:
-        save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix=f"v{args.version}_Final")
+        save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix="Final")
     if args.eval_model:
         evaluate_policy(
             actor=actor,

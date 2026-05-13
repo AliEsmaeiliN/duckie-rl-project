@@ -110,6 +110,10 @@ class Args:
     """Simulates the blur from the moving duckiebot"""
     action_latency: bool = False
     """Simulates the action latency from the duckiebot"""
+    pid: bool = False
+    """Use PID action stabilizer"""
+    direction: str = "mixed"
+    """Choosing the direction of the loop. CW, CCW or mixed"""
 
 def make_env(seed, idx, run_name, capture_video=False, motion_blur=False, latency_rand=False, **env_kwargs):
     def thunk():
@@ -207,12 +211,14 @@ if __name__ == "__main__":
         import wandb
         active_tags = [args.env_id]
         active_tags.append("Grayscale" if args.grayscale else "RGB")
+        active_tags.append(args.direction)
         if args.domain_rand: active_tags.append("DomainRand")
         if args.dynamics_rand: active_tags.append("DynamicsRand")
         if args.camera_rand: active_tags.append("CameraRand")
         if args.distortion: active_tags.append("Distortion")
-        if args.motion_blur: active_tags.append("MotionBlur")
+        if args.pid: active_tags.append("PID")
         if args.action_latency: active_tags.append("ActionLatency")
+
 
 
         run = wandb.init(
@@ -227,10 +233,10 @@ if __name__ == "__main__":
             save_code=True,
         )
         reward_logic = wandb.Artifact('rl-logic-files', type='code')
-        reward_logic.add_file('utils/wrappers.py') 
+        reward_logic.add_file('utils/wrappers/reward_wrappers.py') 
         reward_logic.add_file('utils/rl_env.py')
         training_logic = wandb.Artifact('rl-training-files', type='configuration')
-        training_logic.add_file('td3.slurm')
+        training_logic.add_file('job_sac.sh')
         training_logic.add_file('rl/td3_continuous_action.py')
         
         run.log_artifact(reward_logic)
@@ -259,7 +265,7 @@ if __name__ == "__main__":
     }
     
     envs = gym.vector.SyncVectorEnv(
-        [make_env(args.seed + i, i, run_name, args.capture_video, args.motion_blur, args.action_latency) for i in range(args.num_envs)]
+        [make_env(args.seed + i, i, run_name, args.capture_video, args.pid, args.action_latency) for i in range(args.num_envs)]
     )
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
@@ -381,6 +387,15 @@ if __name__ == "__main__":
                     int(global_step / (time.time() - start_time)),
                     global_step,
                 )
+            if args.pid and "pid_stabilizer" in infos:
+                    pid = infos["pid_stabilizer"]
+                    writer.add_scalar("pid/omega_jerk_raw",      np.mean(pid["omega_jerk_raw"]),      global_step)
+                    writer.add_scalar("pid/omega_jerk_smooth",   np.mean(pid["omega_jerk_smooth"]),   global_step)
+                    writer.add_scalar("pid/jerk_reduction_pct",  np.mean(pid["jerk_reduction_pct"]),  global_step)
+                    writer.add_scalar("pid/mean_omega_error",    np.mean(np.abs(pid["e_omega"])),      global_step)
+                    writer.add_scalar("pid/omega_rl",            np.mean(pid["omega_rl"]),             global_step)
+                    writer.add_scalar("pid/omega_out",           np.mean(pid["omega_out"]),            global_step)
+                    
             if global_step == 300000:
                 print("Curriculum Step 1: Activating Domain Randomization")
                 envs.call("set_randomization", domain_rand=args.domain_rand)
