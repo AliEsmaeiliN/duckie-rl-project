@@ -115,12 +115,12 @@ class Args:
     direction: str = "mixed"
     """Choosing the direction of the loop. CW, CCW or mixed"""
 
-def make_env(seed, idx, run_name, capture_video=False, motion_blur=False, latency_rand=False, **env_kwargs):
+def make_env(seed, idx, run_name, capture_video=False, pid=False, latency_rand=False, **env_kwargs):
     def thunk():
         render_mode = "rgb_array" if (capture_video and idx == 0) else None
         env = DuckieOvalEnv.create_wrapped(
             run_name=run_name,
-            motion_blur=motion_blur,
+            use_pid=pid,
             latency_rand=latency_rand,
             render_mode=render_mode,
             seed=seed,
