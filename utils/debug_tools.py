@@ -93,22 +93,28 @@ def evaluate_policy(eval_env, actor, args, device, is_interval=False, global_ste
     std_reward = np.std(all_rewards)
     print(f"--- {eval_type} Evaluation Complete | Average Reward: {avg_reward:.2f} (Std: {std_reward:.2f}) ---")
 
-    is_best = avg_reward > best_reward
+    beta = 0.5
+    risk_adjusted_score = avg_reward - (beta * std_reward)
+
+    print(f"    Risk-Adjusted Score: {risk_adjusted_score:.2f}")
+
+    is_best = risk_adjusted_score > best_reward
     prefix = f"interval_eval" if is_interval else "final_eval"
 
     # Log to WandB
     if args.track:
-        import time
-        metrics = {
-            f"{prefix}/avg_reward": avg_reward,
-            f"{prefix}/std_reward": std_reward,
-            f"{prefix}/avg_length": np.mean(all_lengths),
-            "global_step": global_step
-        }
-        wandb.log(metrics)
+        if is_interval:
+            metrics = {
+                f"{prefix}/avg_reward": avg_reward,
+                f"{prefix}/std_reward": std_reward,
+                f"{prefix}/risk_adjusted_score": risk_adjusted_score,
+                f"{prefix}/avg_length": np.mean(all_lengths),
+                "global_step": global_step
+            }
+            wandb.log(metrics)
         
     actor.train() 
-    return avg_reward, std_reward, is_best
+    return risk_adjusted_score, avg_reward, std_reward, is_best
 
 def log_pid_metrics(pid_info: dict, global_step: int, prefix: str = "pid") -> None:
     """

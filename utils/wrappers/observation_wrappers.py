@@ -57,23 +57,55 @@ class CropResizeWrapper(gym.ObservationWrapper):
             (self.shape[1], self.shape[0]), 
             interpolation=cv2.INTER_AREA
         )
-    
-class GrayScaleWrapper(gym.ObservationWrapper):
+
+class GrayscaleWrapper(gym.ObservationWrapper):
+    """
+    Optimized Grayscale Wrapper for Duckietown.
+    Converts RGB (H, W, 3) to Grayscale (1, H, W).
+    Using OpenCV for maximum speed to minimize control loop latency.
+    """
     def __init__(self, env):
         super().__init__(env)
-        obs_shape = self.observation_space.shape
-        # Change observation space to 1 channel while keeping H, W
+        h, w, _ = self.observation_space.shape
+        
         self.observation_space = spaces.Box(
             low=0, 
             high=255, 
-            shape=(obs_shape[0], obs_shape[1], 1), 
+            shape=(1, h, w), 
             dtype=np.uint8
         )
 
     def observation(self, obs):
+        
         gray = cv2.cvtColor(obs, cv2.COLOR_RGB2GRAY)
-        return gray[:, :, np.newaxis]
+        return np.expand_dims(gray, axis=0)
     
+class GaussianBlurWrapper(gym.ObservationWrapper):
+    """Matches the Gaussian blur applied on the real bot."""
+    def __init__(self, env):
+        super().__init__(env)
+    def observation(self, obs):
+        return cv2.GaussianBlur(obs, (3, 3), 0)
+    
+class CLAHEWrapper(gym.ObservationWrapper):
+    """Simulates real-world lighting variation via CLAHE."""
+    def __init__(self, env, clip_limit=2.0):
+        super().__init__(env)
+        self.clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(8,8))
+    
+    def observation(self, obs):
+        yuv = cv2.cvtColor(obs, cv2.COLOR_RGB2YUV)
+        yuv[:, :, 0] = self.clahe.apply(yuv[:, :, 0])
+        return cv2.cvtColor(yuv, cv2.COLOR_YUV2RGB)
+
+class  ContrastStretchingWrapper(gym.ObservationWrapper):
+    """Dynamically expands the contrast."""
+    def __init__(self, env):
+        super().__init__(env)
+    def observation(self, observation):
+        return cv2.normalize(observation, None, 0, 255, cv2.NORM_MINMAX)
+    
+
 class UndistortWrapper(gym.ObservationWrapper):
     """
     Undoes the fisheye transformation using plumb_bob distortion.
@@ -154,25 +186,3 @@ class UndistortWrapper(gym.ObservationWrapper):
             )
 
         return cv2.remap(observation, self.mapx, self.mapy, cv2.INTER_LINEAR)
-
-class GrayscaleWrapper(gym.ObservationWrapper):
-    """
-    Optimized Grayscale Wrapper for Duckietown.
-    Converts RGB (H, W, 3) to Grayscale (1, H, W).
-    Using OpenCV for maximum speed to minimize control loop latency.
-    """
-    def __init__(self, env):
-        super().__init__(env)
-        h, w, _ = self.observation_space.shape
-        
-        self.observation_space = spaces.Box(
-            low=0, 
-            high=255, 
-            shape=(1, h, w), 
-            dtype=np.uint8
-        )
-
-    def observation(self, obs):
-        
-        gray = cv2.cvtColor(obs, cv2.COLOR_RGB2GRAY)
-        return np.expand_dims(gray, axis=0)

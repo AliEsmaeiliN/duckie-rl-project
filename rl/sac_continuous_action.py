@@ -48,7 +48,7 @@ class Args:
     """if toggled, cuda will be enabled by default"""
     track: bool = False
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "Duckie-RL"
+    wandb_project_name: str = "Duckie-RL-V2"
     """the wandb's project name"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
@@ -315,16 +315,13 @@ if __name__ == "__main__":
         "domain_rand": args.domain_rand,
         "distortion": args.distortion,
         "dynamics_rand": args.dynamics_rand,
-        "camera_rand": args.camera_rand,
-        "latency_rand": args.action_latency,
-        "use_pid": args.pid,
-        "direction": args.direction
+        "camera_rand": args.camera_rand
     }
 
     # LIGHTWEIGHT UNIFIED EVALUATION ENVIRONMENT
     best_eval_reward = -float('inf')
     
-    eval_env = make_env(seed=args.seed + 100, idx=0, run_name=f"{run_name}_eval", **env_params)()
+    eval_env = make_env(seed=args.seed + 100, idx=0, run_name=f"{run_name}_eval",capture_video=False, use_pid=args.pid, latency_rand=args.action_latency, **env_params)()
 
     envs = gym.vector.SyncVectorEnv(
         [make_env(args.seed + i, i, run_name, args.capture_video, args.pid, args.action_latency) for i in range(args.num_envs)]
@@ -492,7 +489,7 @@ if __name__ == "__main__":
                 envs.call("set_randomization", camera_rand=args.camera_rand, dynamics_rand=args.dynamics_rand)
             
             if global_step % args.eval_interval == 0 and global_step > int(args.total_timesteps * 0.5):
-                avg_rew, std_rew, is_best = evaluate_policy(
+                score, avg_rew, std_rew, is_best = evaluate_policy(
                     eval_env=eval_env,
                     actor=actor,
                     args=args,
@@ -507,7 +504,7 @@ if __name__ == "__main__":
                 writer.add_scalar("interval_eval/std_reward", std_rew, global_step)
 
                 if is_best:
-                    best_eval_reward = avg_rew
+                    best_eval_reward = score
                     print(f" New Peak Performance Milestone! Saving weights...")
                     save_models(
                         actor=actor, qf1=qf1, qf2=qf2, 
