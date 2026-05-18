@@ -58,8 +58,8 @@ class Args:
     """for wandb tracking notes"""
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
-    save_interval: int = 200000
-    """the interval to save the Actor periodically"""
+    eval_interval: int = 20000
+    """the interval to evaluate the Actor periodically"""
     save_model: bool = True
     """whether to save model into the `runs/{run_name}` folder"""
     grayscale: bool = True
@@ -317,8 +317,14 @@ if __name__ == "__main__":
         "dynamics_rand": args.dynamics_rand,
         "camera_rand": args.camera_rand,
         "latency_rand": args.action_latency,
-        "use_pid": args.pid
+        "use_pid": args.pid,
+        "direction": args.direction
     }
+
+    # LIGHTWEIGHT UNIFIED EVALUATION ENVIRONMENT
+    best_eval_reward = -float('inf')
+    
+    eval_env = make_env(seed=args.seed + 100, idx=0, run_name=f"{run_name}_eval", **env_params)()
 
     envs = gym.vector.SyncVectorEnv(
         [make_env(args.seed + i, i, run_name, args.capture_video, args.pid, args.action_latency) for i in range(args.num_envs)]
@@ -478,34 +484,53 @@ if __name__ == "__main__":
                     writer.add_scalar("pid/omega_rl",            np.mean(pid["omega_rl"]),             global_step)
                     writer.add_scalar("pid/omega_out",           np.mean(pid["omega_out"]),            global_step)
             
-            if global_step == 300000:
+            if global_step == int(args.total_timesteps * 0.3):
                 print("Curriculum Step 1: Activating Domain Randomization")
                 envs.call("set_randomization", domain_rand=args.domain_rand)
-            elif global_step == 500000:
+            elif global_step == int(args.total_timesteps * 0.5):
                 print("Curriculum Step 2: Activating Camera and Dynamics Randomization")
                 envs.call("set_randomization", camera_rand=args.camera_rand, dynamics_rand=args.dynamics_rand)
-            elif global_step == 800000:
-                print("Curriculum Step 3: Activating Lens Distortion")
-                envs.call("set_randomization", distortion=args.distortion)
             
-            if global_step == 499000:
-                save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix=f"v{args.version}_PRE_RAND")
-            if global_step % args.save_interval == 0 and global_step > 5e5:
-                save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix=f"v{args.version}")
+            if global_step % args.eval_interval == 0 and global_step > int(args.total_timesteps * 0.5):
+                avg_rew, std_rew, is_best = evaluate_policy(
+                    eval_env=eval_env,
+                    actor=actor,
+                    args=args,
+                    device=device,
+                    is_interval=True,
+                    global_step=global_step,
+                    best_reward=best_eval_reward,
+                    num_episodes=10
+                )
+                
+                writer.add_scalar("interval_eval/avg_reward", avg_rew, global_step)
+                writer.add_scalar("interval_eval/std_reward", std_rew, global_step)
+
+                if is_best:
+                    best_eval_reward = avg_rew
+                    print(f" New Peak Performance Milestone! Saving weights...")
+                    save_models(
+                        actor=actor, qf1=qf1, qf2=qf2, 
+                        step=global_step, run_name=run_name, 
+                        args=args, env_params=env_params, 
+                        suffix=f"v{args.version}_BEST"
+                    )
 
 
     if args.save_model:
-        save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix="Final")
+        save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix=f"v{args.version}_Final")
     if args.eval_model:
         evaluate_policy(
+            eval_env=eval_env,  # Fixed comma placement here
             actor=actor,
             args=args,
             device=device,
-            algo_name="SAC",
-            num_episodes=10,
-            run_name=run_name,
-            **env_params
+            is_interval=False,
+            global_step=global_step,
+            best_reward=-float('inf'),  # Forces evaluation execution cleanly
+            num_episodes=10
         )
     
+    eval_env.close()
     envs.close()
     writer.close()

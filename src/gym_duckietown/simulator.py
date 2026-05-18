@@ -369,7 +369,7 @@ class Simulator(gym.Env):
         # Distortion params, if so, load the library, only if not bbox mode
         self.camera_model = None
         self.distortion = distortion and not draw_bbox
-        self.camera_rand = False
+        self.camera_rand = camera_rand
         if not draw_bbox and distortion:
             if distortion:
                 from .distortion import Distortion
@@ -564,7 +564,7 @@ class Simulator(gym.Env):
         self.cam_fov_y = CAMERA_FOV_Y
 
         # Perturb using randomization API (either if domain rand or only camera rand
-        if self.domain_rand or self.camera_rand:
+        if self.camera_rand:
             self.cam_height *= self.randomization_settings["camera_height"]
             self.cam_angle = [CAMERA_ANGLE * self.randomization_settings["camera_angle"], 0, 0]
             self.cam_fov_y *= self.randomization_settings["camera_fov_y"]
@@ -658,86 +658,6 @@ class Simulator(gym.Env):
                 propose_pos, propose_angle = self._spawn_duckietown(tile)
             else: # "perfect"
                 propose_pos, propose_angle = self._spawn_perfect(tile)
-            '''    
-            # ======================================================
-            # NEW PERFECT SPAWN LOGIC (Using Geometry)
-            # ======================================================
-            
-            # Finding the coordinate and curves of the specific tile
-            i, j = tile["coords"]
-            curves = tile["curves"]
-
-            # Randomly picking one of the cureves 
-            curve_idx = self.np_random.integers(0, len(curves))
-            curve_rand = curves[curve_idx]
-
-            # Choosing a random point along the curve
-            t = self.np_random.uniform(0.2, 0.8)
-
-            # Getting the complete position and angles on the selected point
-            propose_pos = bezier_point(curve_rand, t)
-            tangent = bezier_tangent(curve_rand, t)
-
-            # Converting to heading angle
-            # In Duckietown's coordinate system, angle is math.atan2(-dz, dx)
-            curve_angle = math.atan2(-tangent[2], tangent[0]) #in radian
-            accept_limit_rad = np.deg2rad(self.accept_start_angle_deg)
-            propose_angle = self.np_random.uniform(curve_angle - accept_limit_rad, curve_angle + accept_limit_rad)
-
-            # ======================================================
-            # ORIGINAL DUCKIETOWN SPAWN LOGIC
-            # ======================================================
-
-            
-            # Keep trying to find a valid spawn position on this tile
-            for _ in range(MAX_SPAWN_ATTEMPTS):
-                i, j = tile["coords"]
-
-                # Choose a random position on this tile
-                x = self.np_random.uniform(i, i + 1) * self.road_tile_size
-                z = self.np_random.uniform(j, j + 1) * self.road_tile_size
-                propose_pos = np.array([x, 0, z])
-
-                # Choose a random direction
-                propose_angle = self.np_random.uniform(0, 2 * math.pi)
-
-                # logger.debug('Sampled %s %s angle %s' % (propose_pos[0],
-                #                                          propose_pos[1],
-                #                                          np.rad2deg(propose_angle)))
-
-                # If this is too close to an object or not a valid pose, retry
-                inconvenient = self._inconvenient_spawn(propose_pos)
-
-                if inconvenient:
-                    # msg = 'The spawn was inconvenient.'
-                    # logger.warning(msg)
-                    continue
-
-                invalid = not self._valid_pose(propose_pos, propose_angle, safety_factor=1.3)
-                if invalid:
-                    # msg = 'The spawn was invalid.'
-                    # logger.warning(msg)
-                    continue
-
-                # If the angle is too far away from the driving direction, retry
-                try:
-                    lp = self.get_lane_pos2(propose_pos, propose_angle)
-                except NotInLane:
-                    continue
-                M = self.accept_start_angle_deg
-                ok = -M < lp.angle_deg < +M
-                if not ok:
-                    continue
-                # Found a valid initial pose
-                break
-            else:
-                msg = f"Could not find a valid starting pose after {MAX_SPAWN_ATTEMPTS} attempts"
-                logger.warn(msg)
-                propose_pos = np.array([1, 0, 1])
-                propose_angle = 1
-
-                # raise Exception(msg)
-            '''
 
         self.cur_pos = propose_pos
         self.cur_angle = propose_angle
