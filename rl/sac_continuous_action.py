@@ -1,4 +1,3 @@
-# docs and experiment results can be found at https://docs.cleanrl.dev/rl-algorithms/sac/#sac_continuous_actionpy
 import os
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
@@ -112,19 +111,20 @@ class Args:
     """Simulates the blur from the moving duckiebot"""
     action_latency: bool = False
     """Simulates the action latency from the duckiebot"""
-    pid: bool = False
+    ema: bool = False
     """Use PID action stabilizer"""
     direction: str = "mixed"
     """Choosing the direction of the loop. CW, CCW or mixed"""
 
-def make_env(seed, idx, run_name, capture_video=False, use_pid=False, latency_rand=False, **env_kwargs):
+def make_env(seed, idx, run_name, capture_video=False, action_smoothing=False, motion_blur=False, latency_rand=False, **env_kwargs):
     def thunk():
         render_mode = "rgb_array" if (capture_video and idx == 0) else None
         env = DuckieOvalEnv.create_wrapped(
             run_name=run_name,
-            use_pid=use_pid,
+            ema=action_smoothing,
             latency_rand=latency_rand,
             render_mode=render_mode,
+            motion_blur=motion_blur,
             seed=seed,
             direction=args.direction,
             **env_kwargs
@@ -272,7 +272,7 @@ if __name__ == "__main__":
         if args.dynamics_rand: active_tags.append("DynamicsRand")
         if args.camera_rand: active_tags.append("CameraRand")
         if args.distortion: active_tags.append("Distortion")
-        if args.pid: active_tags.append("PID")
+        if args.ema: active_tags.append("EMA")
         if args.action_latency: active_tags.append("ActionLatency")
 
         run = wandb.init(
@@ -321,10 +321,10 @@ if __name__ == "__main__":
     # LIGHTWEIGHT UNIFIED EVALUATION ENVIRONMENT
     best_eval_reward = -float('inf')
     
-    eval_env = make_env(seed=args.seed + 100, idx=0, run_name=f"{run_name}_eval",capture_video=False, use_pid=args.pid, latency_rand=args.action_latency, **env_params)()
+    eval_env = make_env(seed=args.seed + 100, idx=0, run_name=f"{run_name}_eval",capture_video=False, action_smoothing=args.ema, motion_blur=args.motion_blur, latency_rand=args.action_latency, **env_params)()
 
     envs = gym.vector.SyncVectorEnv(
-        [make_env(args.seed + i, i, run_name, args.capture_video, args.pid, args.action_latency) for i in range(args.num_envs)]
+        [make_env(args.seed + i, i, run_name, capture_video=False, action_smoothing=args.ema, motion_blur=args.motion_blur, latency_rand=args.action_latency) for i in range(args.num_envs)]
     )
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
@@ -386,7 +386,6 @@ if __name__ == "__main__":
             for i in range(envs.num_envs):
                 # Using the mask '_episode' to see which sub-env actually finished
                 if "_episode" in infos and infos["_episode"][i]:
-                    print(f"global_step={global_step}, episodic_return={infos['episode']['r'][i]}")
                     writer.add_scalar("charts/episodic_return", infos['episode']['r'][i], global_step)
                     writer.add_scalar("charts/episodic_length", infos['episode']['l'][i], global_step)  
 
@@ -464,7 +463,6 @@ if __name__ == "__main__":
                 writer.add_scalar("losses/qf_loss", qf_loss.item() / 2.0, global_step)
                 writer.add_scalar("losses/actor_loss", actor_loss.item(), global_step)
                 writer.add_scalar("losses/alpha", alpha, global_step)
-                print("SPS:", int(global_step / (time.time() - start_time)))
                 writer.add_scalar(
                     "charts/SPS",
                     int(global_step / (time.time() - start_time)),
@@ -472,23 +470,18 @@ if __name__ == "__main__":
                 )
                 if args.autotune:
                     writer.add_scalar("losses/alpha_loss", alpha_loss.item(), global_step)
-                if args.pid and "pid_stabilizer" in infos:
-                    pid = infos["pid_stabilizer"]
-                    writer.add_scalar("pid/omega_jerk_raw",      np.mean(pid["omega_jerk_raw"]),      global_step)
-                    writer.add_scalar("pid/omega_jerk_smooth",   np.mean(pid["omega_jerk_smooth"]),   global_step)
-                    writer.add_scalar("pid/jerk_reduction_pct",  np.mean(pid["jerk_reduction_pct"]),  global_step)
-                    writer.add_scalar("pid/mean_omega_error",    np.mean(np.abs(pid["e_omega"])),      global_step)
-                    writer.add_scalar("pid/omega_rl",            np.mean(pid["omega_rl"]),             global_step)
-                    writer.add_scalar("pid/omega_out",           np.mean(pid["omega_out"]),            global_step)
             
-            if global_step == int(args.total_timesteps * 0.3):
+            if global_step == 3e5:
                 print("Curriculum Step 1: Activating Domain Randomization")
                 envs.call("set_randomization", domain_rand=args.domain_rand)
-            elif global_step == int(args.total_timesteps * 0.5):
-                print("Curriculum Step 2: Activating Camera and Dynamics Randomization")
-                envs.call("set_randomization", camera_rand=args.camera_rand, dynamics_rand=args.dynamics_rand)
+            elif global_step == 4.5e5:
+                print("Curriculum Step 2: Activating Camera Randomization")
+                envs.call("set_randomization", camera_rand=args.camera_rand)
+            elif global_step == 6e5:
+                print("Curriculum Step 2: Activating Dynamics Randomization")
+                envs.call("set_randomization", dynamics_rand=args.dynamics_rand)
             
-            if global_step % args.eval_interval == 0 and global_step > int(args.total_timesteps * 0.5):
+            if global_step % args.eval_interval == 0 and global_step > 5e5:
                 score, avg_rew, std_rew, is_best = evaluate_policy(
                     eval_env=eval_env,
                     actor=actor,

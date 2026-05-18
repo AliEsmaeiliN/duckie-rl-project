@@ -106,83 +106,58 @@ class  ContrastStretchingWrapper(gym.ObservationWrapper):
         return cv2.normalize(observation, None, 0, 255, cv2.NORM_MINMAX)
     
 
-class UndistortWrapper(gym.ObservationWrapper):
+class FastKinematicBlurWrapper(gym.ObservationWrapper):
     """
-    Undoes the fisheye transformation using plumb_bob distortion.
-    Uses the exact calibration parameters from the physical Duckiebot (duckie1nav).
+    Applies dynamic directional motion blur based on robot's
+    physical velocity and angular velocity.
+    Updated and faster version of previous Temporal wrapper.
     """
-    def __init__(self, env=None):
+    def __init__(self, env, max_blur_size=7, v_scale=1.0, omega_scale=1.5):
         super().__init__(env)
-        
-        # Access the unwrapped environment to check if distortion is enabled
-        self.env.unwrapped.undistort = False
+        self.max_blur_size = max_blur_size
+        self.v_scale = v_scale
+        self.omega_scale = omega_scale
+        # Derived from actual max physical values: v~1.2 m/s, omega~1.0
+        self.max_magnitude = np.sqrt((1.2 * v_scale)**2 + (1.0 * omega_scale)**2)
 
-        # K - Intrinsic camera matrix (Raw distorted image mapping)
-        # Represents focal lengths (fx, fy) and optical centers (cx, cy)
-        self.camera_matrix = np.array([
-            [560.2421673869314, 0.0, 318.8173154671802],
-            [0.0, 564.9631346359404, 235.6814689313625],
-            [0.0, 0.0, 1.0]
-        ], dtype=np.float32)
+    def observation(self, obs):
+        sim = self.unwrapped
+        v     = float(sim.speed) if hasattr(sim, 'speed') else 0.0
+        omega = float(sim.last_action[1]) if sim.last_action is not None else 0.0
 
-        # D - Distortion coefficients (k1, k2, p1, p2, k3)
-        # k1 = -0.911 indicates severe barrel (fisheye) distortion
-        self.distortion_coefs = np.array([
-            -0.9111617456077904, 0.603501770314888, 
-            -0.014333851834234601, 0.010320245199077559, 0.0
-        ], dtype=np.float32)
+        blur_y = v * self.v_scale
+        blur_x = omega * self.omega_scale
+        magnitude = np.sqrt(blur_x**2 + blur_y**2)
+        magnitude_norm = np.clip(magnitude / self.max_magnitude, 0.0, 1.0)
 
-        # R - Rectification matrix (Identity for a monocular setup)
-        self.rectification_matrix = np.eye(3, dtype=np.float32)
+        if magnitude_norm < 0.05:
+            return obs
 
-        # P - Projection Matrix (Optimal new camera matrix after undistortion)
-        # Notice focal lengths drop to ~392/439 to account for cropped curved edges
-        self.projection_matrix = np.array([
-            [392.5531005859375, 0.0, 326.73844408192963, 0.0],
-            [0.0, 439.04815673828125, 220.5653813603385, 0.0],
-            [0.0, 0.0, 1.0, 0.0]
-        ], dtype=np.float32)
+        kernel_size = max(3, int(magnitude_norm * self.max_blur_size))
+        if kernel_size % 2 == 0:
+            kernel_size += 1
 
-        # Caching the remapping grids
-        self.mapx = None
-        self.mapy = None
+        angle  = np.arctan2(blur_y, blur_x)
+        center = kernel_size // 2
 
-    def observation(self, observation):
-        # Only apply math if the simulator is actually generating distorted images
-        if getattr(self.env.unwrapped, 'distortion', False):
-            return self._undistort(observation)
-        return observation
+        x1 = int(np.clip(center - np.cos(angle) * center, 0, kernel_size - 1))
+        y1 = int(np.clip(center - np.sin(angle) * center, 0, kernel_size - 1))
+        x2 = int(np.clip(center + np.cos(angle) * center, 0, kernel_size - 1))
+        y2 = int(np.clip(center + np.sin(angle) * center, 0, kernel_size - 1))
 
-    def _undistort(self, observation):
-        # Calculate the mapping matrices ONCE on the first frame
-        if self.mapx is None:
-            h, w = observation.shape[:2]
-            
-            # Sanity check: Ensure simulation resolution matches calibration (640x480)
-            # If the simulator outputs a different shape, this math will warp incorrectly.
-            if w != 640 or h != 480:
-                # Dynamically adjust the camera matrices to match the scale
-                scale_x = w / 640.0
-                scale_y = h / 480.0
-                
-                scaled_camera_matrix = self.camera_matrix.copy()
-                scaled_camera_matrix[0, :] *= scale_x
-                scaled_camera_matrix[1, :] *= scale_y
-                
-                scaled_proj_matrix = self.projection_matrix.copy()
-                scaled_proj_matrix[0, :] *= scale_x
-                scaled_proj_matrix[1, :] *= scale_y
-            else:
-                scaled_camera_matrix = self.camera_matrix
-                scaled_proj_matrix = self.projection_matrix
+        kernel = np.zeros((kernel_size, kernel_size), dtype=np.float32)
+        cv2.line(kernel, (x1, y1), (x2, y2), 1.0, thickness=1)
 
-            self.mapx, self.mapy = cv2.initUndistortRectifyMap(
-                scaled_camera_matrix,
-                self.distortion_coefs,
-                self.rectification_matrix,
-                scaled_proj_matrix,
-                (w, h),
-                cv2.CV_32FC1,
-            )
+        kernel_sum = kernel.sum()
+        if kernel_sum == 0:
+            return obs
+        kernel /= kernel_sum
 
-        return cv2.remap(observation, self.mapx, self.mapy, cv2.INTER_LINEAR)
+        if obs.ndim == 3 and obs.shape[0] in (1, 3):
+            obs_hw = obs.transpose(1, 2, 0)
+            blurred = cv2.filter2D(obs_hw, -1, kernel)
+            if blurred.ndim == 2:
+                blurred = np.expand_dims(blurred, axis=-1)
+            return blurred.transpose(2, 0, 1).astype(obs.dtype)
+
+        return cv2.filter2D(obs, -1, kernel).astype(obs.dtype)

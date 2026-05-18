@@ -17,5 +17,7 @@ python rl/sac_continuous_action.py \
     --dynamics-rand \
     --action-latency \
     --direction "cw" \
+    --motion-blur \
+    --ema \
     --track \
     --eval-interval 100

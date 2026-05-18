@@ -297,3 +297,52 @@ class SingleDirectionReward(gym.RewardWrapper):
         self.prev_action = current_action.copy()
         
         return reward_speed + reward_distance + reward_survival + reward_jerk
+    
+class UnifiedReward(gym.RewardWrapper):
+    def __init__(self, env, target_offset= -0.02):
+        super().__init__(env)
+        self.target_offset = target_offset 
+        self.wrong_lane_limit = -0.2
+        self.prev_action = np.zeros(2) 
+
+    def reward(self, reward):
+
+        if reward == -1000:
+            return -10
+        
+        sim = self.env.unwrapped
+        try:
+            lp = sim.get_lane_pos2(sim.cur_pos, sim.cur_angle)
+        except Exception:
+            return -10.0 
+
+        v = sim.speed
+        reward_speed = 2.0 * v * lp.dot_dir
+        
+        
+        reward_distance = -15.0 * (lp.dist - self.target_offset)**2
+        
+        reward_survival = 1.0 if v > 0.05 else -1.0
+        
+        return reward_speed + reward_distance + reward_survival    
+class AdditiveJerkPenalty(gym.RewardWrapper):
+    """
+    Penalizes large changes between consecutive actions.
+    Can be stacked on top of any existing RewardWrapper.
+    """
+    def __init__(self, env, jerk_coeff=-2):
+        super().__init__(env)
+        self.jerk_coeff = jerk_coeff
+        self.prev_action = np.zeros(env.action_space.shape)
+        
+    def reward(self, reward):
+        
+        current_action = self.env.unwrapped.last_action 
+        
+        action_diff = np.linalg.norm(current_action - self.prev_action)
+        jerk_penalty = self.jerk_coeff * action_diff
+
+        self.prev_action = current_action.copy()
+
+        return reward + jerk_penalty
+        

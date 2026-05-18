@@ -91,7 +91,8 @@ def evaluate_policy(eval_env, actor, args, device, is_interval=False, global_ste
 
     avg_reward = np.mean(all_rewards)
     std_reward = np.std(all_rewards)
-    print(f"--- {eval_type} Evaluation Complete | Average Reward: {avg_reward:.2f} (Std: {std_reward:.2f}) ---")
+    avg_length = np.mean(all_lengths)
+    print(f"--- {eval_type} Evaluation Complete | Average Reward: {avg_reward:.2f} (Std: {std_reward:.2f}) | Average Length: {avg_length:.2f} ---")
 
     beta = 0.5
     risk_adjusted_score = avg_reward - (beta * std_reward)

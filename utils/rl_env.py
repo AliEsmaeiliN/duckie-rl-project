@@ -5,8 +5,9 @@ from gym_duckietown.simulator import Simulator
 from utils.wrappers.wrappers import *
 from utils.wrappers.observation_wrappers import *
 from utils.wrappers.action_wrappers import *
-from utils.wrappers.reward_wrappers import SingleDirectionReward as RewardWrapper
-from utils.wrappers.pid_stabilizer import PIDStabilizerWrapper, StabilizerConfig
+from utils.wrappers.reward_wrappers import UnifiedReward as RewardWrapper
+from utils.wrappers.reward_wrappers import AdditiveJerkPenalty
+
 
 class DuckieOvalEnv(Simulator):
     """
@@ -30,42 +31,33 @@ class DuckieOvalEnv(Simulator):
         self.motor_k = 27.0
 
     @classmethod
-    def create_wrapped(cls, run_name, capture_video=False, use_pid=False, grayscale=True, frame_stack=4, latency_rand=False, **kwargs):
+    def create_wrapped(cls, run_name, capture_video=False, ema=False, motion_blur=False, grayscale=True, frame_stack=4, latency_rand=False, **kwargs):
         """
         Static method to build the fully wrapped stack.
         """
         env = cls(**kwargs)
 
+        env = KinematicActionWrapper(env, wheel_dist=0.102, radius=0.0318, k=27.0)
+
+        if ema:
+            env = ActionSmoothingWrapper(env)
 
         if latency_rand:
-            env = ActionLatencyWrapper(env, min_latency=1, max_latency=3)
-
-        env = KinematicActionWrapper(env, wheel_dist=0.102, radius=0.0318, k=27.0)
-        env = ActionWrapper(env)
-
-        if use_pid:
-            pid_cfg = StabilizerConfig(
-                ema_alpha_v=0.8,
-                ema_alpha_omega=0.65,
-                kp_v=0.8,
-                kp_omega=0.9,
-                ki_v=0.0,
-                ki_omega=0.0,
-                kd_v=0.0,
-                kd_omega=0.0,
-                v_min=-1.0, v_max=1.0,
-                omega_min=-1.0, omega_max=1.0,
-            )
-            env = PIDStabilizerWrapper(env, config=pid_cfg)
+            env = ActionLatencyWrapper(env)
 
 
         if capture_video:
             video_folder = f"videos/{run_name}"
             os.makedirs(video_folder, exist_ok=True)
             env = gym.wrappers.RecordVideo(env, video_folder, episode_trigger=lambda x: True)
+        
+        if motion_blur:
+            env = FastKinematicBlurWrapper(env)
 
         env = CLAHEWrapper(env)
+        
         env = GaussianBlurWrapper(env)
+        
         env = CropResizeWrapper(env, shape=(84, 84))
 
         
@@ -77,6 +69,7 @@ class DuckieOvalEnv(Simulator):
 
         
         env = RewardWrapper(env)
+        env = AdditiveJerkPenalty(env)
         env = RecoveryTrainingWrapper(env, max_recovery_steps=10, ood_penalty=-10.0)
 
         if frame_stack > 1:
@@ -112,11 +105,6 @@ class DuckieOvalEnv(Simulator):
                 print(f"Simulator config updated: {key} = {value}")
             else:
                 print(f"Warning: Simulator has no attribute '{key}'")
-
-            if getattr(self, 'distortion', False) and self.camera_model is None:
-                from src.gym_duckietown.distortion import Distortion
-                print("Initializing Distortion Model...")
-                self.camera_model = Distortion(camera_rand=getattr(self, 'camera_rand', False))
     
     def set_spawn_config(self, mode: str = None, difficulty: float = None):
         """Dynamically update spawn strategy during training."""
