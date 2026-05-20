@@ -12,6 +12,7 @@ python rl/sac_continuous_action.py \
     --batch-size 64 \
     --learning-starts 300 \
     --total-timesteps 2000 \
+    --eval-interval 200 \
     --domain-rand \
     --camera-rand \
     --dynamics-rand \

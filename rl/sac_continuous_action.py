@@ -112,7 +112,7 @@ class Args:
     action_latency: bool = False
     """Simulates the action latency from the duckiebot"""
     ema: bool = False
-    """Use PID action stabilizer"""
+    """Use EMA action smoothing"""
     direction: str = "mixed"
     """Choosing the direction of the loop. CW, CCW or mixed"""
 
@@ -363,7 +363,7 @@ if __name__ == "__main__":
 
     # TRY NOT TO MODIFY: start the game
     obs, _ = envs.reset(seed=args.seed)
-    for global_step in range(args.total_timesteps):
+    for global_step in range(args.total_timesteps + 1):
         # ALGO LOGIC: put action logic here
         if global_step < args.learning_starts:
             actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
@@ -481,7 +481,7 @@ if __name__ == "__main__":
                 print("Curriculum Step 2: Activating Dynamics Randomization")
                 envs.call("set_randomization", dynamics_rand=args.dynamics_rand)
             
-            if global_step % args.eval_interval == 0 and global_step > 5e5:
+            if global_step % args.eval_interval == 0 and global_step > 1000:
                 score, avg_rew, std_rew, is_best = evaluate_policy(
                     eval_env=eval_env,
                     actor=actor,
@@ -493,8 +493,8 @@ if __name__ == "__main__":
                     num_episodes=10
                 )
                 
-                writer.add_scalar("interval_eval/avg_reward", avg_rew, global_step)
-                writer.add_scalar("interval_eval/std_reward", std_rew, global_step)
+                writer.add_scalar("charts/risk_adjusted_score", score, global_step)
+                #writer.add_scalar("interval_eval/std_reward", std_rew, global_step)
 
                 if is_best:
                     best_eval_reward = score
@@ -509,17 +509,6 @@ if __name__ == "__main__":
 
     if args.save_model:
         save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix=f"v{args.version}_Final")
-    if args.eval_model:
-        evaluate_policy(
-            eval_env=eval_env,  # Fixed comma placement here
-            actor=actor,
-            args=args,
-            device=device,
-            is_interval=False,
-            global_step=global_step,
-            best_reward=-float('inf'),  # Forces evaluation execution cleanly
-            num_episodes=10
-        )
     
     eval_env.close()
     envs.close()

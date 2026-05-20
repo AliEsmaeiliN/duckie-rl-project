@@ -63,14 +63,16 @@ else:
         dynamics_rand=args.dynamics_rand,
         camera_rand=args.camera_rand,
         distortion=args.distortion,
-        direction=args.direction
+        direction=args.direction,
+        draw_curve=args.draw_curve
+
         
     )
 
 print(args.camera_rand)
 
 render_modes = ["human", "top_down", "free_cam", "rgb_array"]
-view = render_modes[0]
+view = render_modes[1]
 
 env.reset(seed=args.seed)
 
