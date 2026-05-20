@@ -67,6 +67,8 @@ class Args:
     """whether to evaluate the saved model at the end of training"""
     version: int = 0
     """the version of the model, default zero is for the test"""
+    start_evaluation: int = 700000
+    """timestamp to start the internal evaluation (usually after finalizing the randomizations)"""
 
     # Algorithm specific arguments
     env_id: str = "Oval-"
@@ -481,7 +483,7 @@ if __name__ == "__main__":
                 print("Curriculum Step 2: Activating Dynamics Randomization")
                 envs.call("set_randomization", dynamics_rand=args.dynamics_rand)
             
-            if global_step % args.eval_interval == 0 and global_step > 1000:
+            if global_step % args.eval_interval == 0 and global_step > args.start_evaluation:
                 score, avg_rew, std_rew, is_best = evaluate_policy(
                     eval_env=eval_env,
                     actor=actor,
