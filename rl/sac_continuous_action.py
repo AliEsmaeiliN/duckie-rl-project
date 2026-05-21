@@ -326,8 +326,9 @@ if __name__ == "__main__":
     # LIGHTWEIGHT UNIFIED EVALUATION ENVIRONMENT
     best_eval_reward = -float('inf')
     eval_env_seed = args.seed + 100
-    eval_env = make_env(seed=args.seed + 100, idx=0, run_name=f"{run_name}_eval",capture_video=False, action_smoothing=args.ema, motion_blur=args.motion_blur, latency_rand=args.action_latency, **env_params)()
-    
+
+    eval_env_imperfect = make_env(seed=args.seed + 100, idx=0, run_name=f"{run_name}_eval",capture_video=False, action_smoothing=args.ema, motion_blur=args.motion_blur, latency_rand=args.action_latency, **env_params)()
+    eval_env_perfect =make_env(seed=args.seed + 100, idx=0, run_name=f"{run_name}_eval2",capture_video=False)() 
     envs = gym.vector.SyncVectorEnv(
         [make_env(args.seed + i, i, run_name, capture_video=False, action_smoothing=args.ema, motion_blur=args.motion_blur, latency_rand=args.action_latency, **active_env_params) for i in range(args.num_envs)]
     )
