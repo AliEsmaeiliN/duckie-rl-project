@@ -413,9 +413,10 @@ if __name__ == "__main__":
         # TRY NOT TO MODIFY: save data to reply buffer; handle `final_observation`
         real_next_obs = next_obs.copy()
         if "final_observation" in infos:
-            for idx, final_obs in enumerate(infos["final_observation"]):
-                if final_obs is not None:  # This env actually finished
-                    real_next_obs[idx] = final_obs
+            for idx, has_final_obs in enumerate(infos.get("_final_observation", [])):
+                if has_final_obs:
+                    real_next_obs[idx] = infos["final_observation"][idx]
+        rb.add(obs, real_next_obs, actions, rewards, terminations, infos)
 
         # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
         obs = next_obs
