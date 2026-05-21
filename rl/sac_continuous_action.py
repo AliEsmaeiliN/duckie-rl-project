@@ -117,6 +117,8 @@ class Args:
     """Use EMA action smoothing"""
     direction: str = "mixed"
     """Choosing the direction of the loop. CW, CCW or mixed"""
+    curriculum_randomization: bool = True
+    """Acivating the randomizations gradually based on curriculum learning"""
 
 def make_env(seed, idx, run_name, capture_video=False, action_smoothing=False, motion_blur=False, latency_rand=False, **env_kwargs):
     def thunk():
@@ -319,15 +321,17 @@ if __name__ == "__main__":
         "dynamics_rand": args.dynamics_rand,
         "camera_rand": args.camera_rand
     }
+    active_env_params = {} if args.curriculum_randomization else env_params.copy()
 
     # LIGHTWEIGHT UNIFIED EVALUATION ENVIRONMENT
     best_eval_reward = -float('inf')
     
     eval_env = make_env(seed=args.seed + 100, idx=0, run_name=f"{run_name}_eval",capture_video=False, action_smoothing=args.ema, motion_blur=args.motion_blur, latency_rand=args.action_latency, **env_params)()
-
+    
     envs = gym.vector.SyncVectorEnv(
-        [make_env(args.seed + i, i, run_name, capture_video=False, action_smoothing=args.ema, motion_blur=args.motion_blur, latency_rand=args.action_latency) for i in range(args.num_envs)]
+        [make_env(args.seed + i, i, run_name, capture_video=False, action_smoothing=args.ema, motion_blur=args.motion_blur, latency_rand=args.action_latency, **active_env_params) for i in range(args.num_envs)]
     )
+   
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
     max_action = float(envs.single_action_space.high[0])
@@ -472,16 +476,16 @@ if __name__ == "__main__":
                 )
                 if args.autotune:
                     writer.add_scalar("losses/alpha_loss", alpha_loss.item(), global_step)
-            
-            if global_step == 3e5:
-                print("Curriculum Step 1: Activating Domain Randomization")
-                envs.call("set_randomization", domain_rand=args.domain_rand)
-            elif global_step == 4.5e5:
-                print("Curriculum Step 2: Activating Camera Randomization")
-                envs.call("set_randomization", camera_rand=args.camera_rand)
-            elif global_step == 6e5:
-                print("Curriculum Step 2: Activating Dynamics Randomization")
-                envs.call("set_randomization", dynamics_rand=args.dynamics_rand)
+            if args.curriculum_randomization:
+                if global_step == 3e5:
+                    print("Curriculum Step 1: Activating Domain Randomization")
+                    envs.call("set_randomization", domain_rand=args.domain_rand)
+                elif global_step == 4.5e5:
+                    print("Curriculum Step 2: Activating Camera Randomization")
+                    envs.call("set_randomization", camera_rand=args.camera_rand)
+                elif global_step == 6e5:
+                    print("Curriculum Step 2: Activating Dynamics Randomization")
+                    envs.call("set_randomization", dynamics_rand=args.dynamics_rand)
             
             if global_step % args.eval_interval == 0 and global_step >= args.start_evaluation:
                 score, avg_rew, std_rew, is_best = evaluate_policy(
