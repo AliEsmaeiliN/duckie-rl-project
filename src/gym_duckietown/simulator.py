@@ -643,15 +643,9 @@ class Simulator(gym.Env):
 
         # If the map specifies a starting pose
         if self.start_pose is not None:
-            #logger.info(f"using map pose start: {self.start_pose}")
 
-            '''i, j = tile["coords"]
-            x = i * self.road_tile_size + self.start_pose[0][0]
-            z = j * self.road_tile_size + self.start_pose[0][2]
-            propose_pos = np.array([x, 0, z])'''
             propose_pos = self.start_pose[0]
             propose_angle = self.start_pose[1]*np.pi/180
-
             #logger.info(f"Using map pose start. \n Pose: {propose_pos}, Angle: {propose_angle}")
 
         else:
@@ -1276,40 +1270,6 @@ class Simulator(gym.Env):
             pts += np.array([(i + 0.5) * self.road_tile_size, 0, (j + 0.5) * self.road_tile_size])
 
         return pts
-
-    '''def closest_curve_point(
-        self, pos: np.array, angle: float
-    ) -> Tuple[Optional[np.array], Optional[np.array]]:
-        """
-        Get the closest point on the curve to a given point
-        Also returns the tangent at that point.
-
-        Returns None, None if not in a lane.
-        """
-
-        i, j = self.get_grid_coords(pos)
-        tile = self._get_tile(i, j)
-
-        if tile is None or not tile["drivable"]:
-            return None, None
-
-        # Find curve with largest dotproduct with heading
-        curves = self._get_tile(i, j)["curves"]
-        curve_headings = curves[:, -1, :] - curves[:, 0, :]
-        curve_headings = curve_headings / np.linalg.norm(curve_headings).reshape(1, -1)
-        dir_vec = get_dir_vec(angle)
-
-        dot_prods = np.dot(curve_headings, dir_vec)
-
-        # Closest curve = one with largest dotprod
-        cps = curves[np.argmax(dot_prods)]
-
-        # Find closest point and tangent to this curve
-        t = bezier_closest(cps, pos)
-        point = bezier_point(cps, t)
-        tangent = bezier_tangent(cps, t)
-
-        return point, tangent'''
     
     def closest_curve_point(
         self, pos: np.array, angle: float

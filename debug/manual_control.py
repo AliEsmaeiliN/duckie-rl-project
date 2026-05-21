@@ -94,7 +94,7 @@ def on_key_press(symbol, modifiers):
 
     if symbol == key.BACKSPACE or symbol == key.SLASH:
         print("RESET")
-        env.reset()
+        env.reset(seed=args.seed)
         env.unwrapped.render(mode=view)
     elif symbol == key.PAGEUP:
         env.unwrapped.cam_angle[0] = 0
