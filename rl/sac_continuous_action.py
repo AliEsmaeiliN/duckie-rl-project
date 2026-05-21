@@ -325,7 +325,7 @@ if __name__ == "__main__":
 
     # LIGHTWEIGHT UNIFIED EVALUATION ENVIRONMENT
     best_eval_reward = -float('inf')
-    
+    eval_env_seed = args.seed + 100
     eval_env = make_env(seed=args.seed + 100, idx=0, run_name=f"{run_name}_eval",capture_video=False, action_smoothing=args.ema, motion_blur=args.motion_blur, latency_rand=args.action_latency, **env_params)()
     
     envs = gym.vector.SyncVectorEnv(
@@ -490,6 +490,7 @@ if __name__ == "__main__":
             if global_step % args.eval_interval == 0 and global_step >= args.start_evaluation:
                 score, avg_rew, std_rew, is_best = evaluate_policy(
                     eval_env=eval_env,
+                    seed=eval_env_seed,
                     actor=actor,
                     args=args,
                     device=device,

@@ -294,7 +294,7 @@ def generate_trajectory(eval_env, actor, args, device, global_step, prefix="inte
 
     return log_payload
 
-def evaluate_policy(eval_env, actor, args, device, is_interval=False, global_step=0, best_reward=-float('inf'), num_episodes=10):
+def evaluate_policy(eval_env, seed, actor, args, device, is_interval=False, global_step=0, best_reward=-float('inf'), num_episodes=10):
     """
     Unified policy evaluation method for both intermediate training intervals and final verification.
     Returns: (avg_reward, std_reward, is_best)
@@ -312,7 +312,7 @@ def evaluate_policy(eval_env, actor, args, device, is_interval=False, global_ste
 
     all_rewards = []
     completed_episodes = 0
-
+    eval_env.reset(seed=seed)
     for ep in range(num_episodes):
         obs, _ = eval_env.reset()
         done = False
