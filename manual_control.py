@@ -37,6 +37,8 @@ parser.add_argument("--motion-blur", default=False, action="store_true")
 parser.add_argument('--spawn-mode', default='curriculum', help='perfect, duckietown, or curriculum')
 parser.add_argument('--spawn-difficulty', type=float, default=0.0, help='difficulty 0.0 to 1.0')
 parser.add_argument('--direction', default='mixed', help="cw, ccw or mixed")
+parser.add_argument('--ema', action="store_true", help="action smoothing using low-pass filter")
+parser.add_argument('--recovery', action="store_true", help="giving recovery steps to the agent")
 args = parser.parse_args()
 
 
@@ -64,8 +66,10 @@ else:
         camera_rand=args.camera_rand,
         distortion=args.distortion,
         direction=args.direction,
-        draw_curve=args.draw_curve
-
+        draw_curve=args.draw_curve,
+        recovery_step=args.recovery,
+        ema=args.ema,
+        motion_blur=args.motion_blur,
         
     )
 

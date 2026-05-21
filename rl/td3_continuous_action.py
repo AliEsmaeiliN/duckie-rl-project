@@ -55,8 +55,8 @@ class Args:
     """the entity (team) of wandb's project"""
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
-    eval_model: bool = True
-    """whether to evaluate the saved model at the end of training"""
+    eval_interval: int = 20000
+    """the interval to evaluate the Actor periodically"""
     run_notes: str = ""
     """for wandb tracking notes"""
     save_interval: int = 50000
@@ -67,12 +67,14 @@ class Args:
     """whether to convert the observation to grayscale"""
     version: int = 0
     """the version of the model, default zero is for the test"""
+    start_evaluation: int = 700000
+    """timestamp to start the internal evaluation (usually after finalizing the randomizations)"""
 
 
     # Algorithm specific arguments
     env_id: str = "Oval_td3"
     """the id of the environment"""
-    total_timesteps: int = 1000001
+    total_timesteps: int = 1000000
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
@@ -110,20 +112,29 @@ class Args:
     """Simulates the blur from the moving duckiebot"""
     action_latency: bool = False
     """Simulates the action latency from the duckiebot"""
-    pid: bool = False
-    """Use PID action stabilizer"""
+    ema: bool = False
+    """Use EMA action smoothing"""
     direction: str = "mixed"
     """Choosing the direction of the loop. CW, CCW or mixed"""
+    curriculum_randomization: bool = True
+    """Acivating the randomizations gradually based on curriculum learning"""
+    recovery: bool = False
+    """Gives the robot 20 steps to recover"""
+    jerk_penalty: bool = False
+    """Adding the jerk penalty to the final reward"""
 
-def make_env(seed, idx, run_name, capture_video=False, pid=False, latency_rand=False, **env_kwargs):
+def make_env(seed, idx, run_name, capture_video=False, action_smoothing=False, motion_blur=False, latency_rand=False, jerk_penalty=False, **env_kwargs):
     def thunk():
         render_mode = "rgb_array" if (capture_video and idx == 0) else None
         env = DuckieOvalEnv.create_wrapped(
             run_name=run_name,
-            use_pid=pid,
+            ema=action_smoothing,
             latency_rand=latency_rand,
             render_mode=render_mode,
+            motion_blur=motion_blur,
             seed=seed,
+            jerk_penalty=jerk_penalty,
+            direction=args.direction,
             **env_kwargs
         )
         env.action_space.seed(seed)
@@ -215,9 +226,13 @@ if __name__ == "__main__":
         if args.domain_rand: active_tags.append("DomainRand")
         if args.dynamics_rand: active_tags.append("DynamicsRand")
         if args.camera_rand: active_tags.append("CameraRand")
-        if args.distortion: active_tags.append("Distortion")
-        if args.pid: active_tags.append("PID")
+        if args.curriculum_randomization: active_tags.append("Crcm Rand")
+        if args.ema: active_tags.append("EMA")
         if args.action_latency: active_tags.append("ActionLatency")
+        if args.recovery: active_tags.append("Recovery")
+        if args.jerk_penalty: active_tags.append("JerkPenalty")
+
+
 
 
 
@@ -235,12 +250,9 @@ if __name__ == "__main__":
         reward_logic = wandb.Artifact('rl-logic-files', type='code')
         reward_logic.add_file('utils/wrappers/reward_wrappers.py') 
         reward_logic.add_file('utils/rl_env.py')
-        training_logic = wandb.Artifact('rl-training-files', type='configuration')
-        training_logic.add_file('job_sac.sh')
-        training_logic.add_file('rl/td3_continuous_action.py')
+        reward_logic.add_file('rl/td3_continuous_action.py')
         
         run.log_artifact(reward_logic)
-        run.log_artifact(training_logic)
 
     writer = SummaryWriter(f"runs/{run_name}")
     writer.add_text(
@@ -259,13 +271,27 @@ if __name__ == "__main__":
     # env setup
     env_params = {
         "domain_rand": args.domain_rand,
-        "distortion": args.distortion,
         "dynamics_rand": args.dynamics_rand,
         "camera_rand": args.camera_rand,
     }
     
+    base_cfg = {key: False for key in env_params}
+    robust_cfg = {key: True for key in env_params}
+        
+    active_env_params = {} if args.curriculum_randomization else env_params.copy()
+
+    # LIGHTWEIGHT UNIFIED EVALUATION ENVIRONMENTS
+    best_eval_reward = -float('inf')
+    eval_env_seed = args.seed + 100
+
+    eval_env_imperfect = make_env(seed=eval_env_seed, idx=0, run_name=f"{run_name}_eval", action_smoothing=True, motion_blur=True, latency_rand=True, jerk_penalty=args.jerk_penalty, **robust_cfg)()
+    eval_env_perfect = make_env(seed=eval_env_seed, idx=0, run_name=f"{run_name}_eval2", jerk_penalty=args.jerk_penalty, **base_cfg)() 
+    eval_env_perfect.unwrapped.set_randomization(margin_factor=0.1)
+    eval_env_imperfect.unwrapped.set_randomization(margin_factor=0.1)
+    eval_env_imperfect.unwrapped.set_spawn_config(mode="curriculum", difficulty=1)
+    
     envs = gym.vector.SyncVectorEnv(
-        [make_env(args.seed + i, i, run_name, args.capture_video, args.pid, args.action_latency) for i in range(args.num_envs)]
+        [make_env(args.seed + i, i, run_name, recovery_step=args.recovery, action_smoothing=args.ema, motion_blur=args.motion_blur, latency_rand=args.action_latency, jerk_penalty=args.jerk_penalty, **active_env_params) for i in range(args.num_envs)]
     )
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
@@ -281,6 +307,9 @@ if __name__ == "__main__":
     q_optimizer = optim.Adam(list(qf1.parameters()) + list(qf2.parameters()), lr=args.learning_rate)
     actor_optimizer = optim.Adam(list(actor.parameters()), lr=args.learning_rate)
 
+    evaluator1 = DuckiebotEvaluator(eval_env_perfect, eval_env_seed, actor, args, device, prefix="eval_perfect")
+    evaluator2 = DuckiebotEvaluator(eval_env_imperfect, eval_env_seed, actor, args, device, prefix="eval_imperfect")
+    
     envs.single_observation_space.dtype = np.uint8
     rb = ReplayBuffer(
         args.buffer_size,
@@ -294,7 +323,7 @@ if __name__ == "__main__":
 
     # TRY NOT TO MODIFY: start the game
     obs, _ = envs.reset(seed=args.seed)
-    for global_step in range(args.total_timesteps):
+    for global_step in range(args.total_timesteps + 1):
         # ALGO LOGIC: put action logic here
         if global_step < args.learning_starts:
             actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
@@ -387,43 +416,50 @@ if __name__ == "__main__":
                     int(global_step / (time.time() - start_time)),
                     global_step,
                 )
-            if args.pid and "pid_stabilizer" in infos:
-                    pid = infos["pid_stabilizer"]
-                    writer.add_scalar("pid/omega_jerk_raw",      np.mean(pid["omega_jerk_raw"]),      global_step)
-                    writer.add_scalar("pid/omega_jerk_smooth",   np.mean(pid["omega_jerk_smooth"]),   global_step)
-                    writer.add_scalar("pid/jerk_reduction_pct",  np.mean(pid["jerk_reduction_pct"]),  global_step)
-                    writer.add_scalar("pid/mean_omega_error",    np.mean(np.abs(pid["e_omega"])),      global_step)
-                    writer.add_scalar("pid/omega_rl",            np.mean(pid["omega_rl"]),             global_step)
-                    writer.add_scalar("pid/omega_out",           np.mean(pid["omega_out"]),            global_step)
                     
-            if global_step == 300000:
-                print("Curriculum Step 1: Activating Domain Randomization")
-                envs.call("set_randomization", domain_rand=args.domain_rand)
-            elif global_step == 500000:
-                print("Curriculum Step 2: Activating Camera and Dynamics Randomization")
-                envs.call("set_randomization", camera_rand=args.camera_rand, dynamics_rand=args.dynamics_rand)
-            elif global_step == 800000:
-                print("Curriculum Step 3: Activating Lens Distortion")
-                envs.call("set_randomization", distortion=args.distortion)
+            if args.curriculum_randomization:
+                if global_step == 3e5:
+                    print("Curriculum Step 1: Activating Domain Randomization")
+                    envs.call("set_randomization", domain_rand=args.domain_rand)
+                elif global_step == 4.5e5:
+                    print("Curriculum Step 2: Activating Camera Randomization")
+                    envs.call("set_randomization", camera_rand=args.camera_rand)
+                elif global_step == 6e5:
+                    print("Curriculum Step 2: Activating Dynamics Randomization")
+                    envs.call("set_randomization", dynamics_rand=args.dynamics_rand)
             
-            if global_step == 499000:
-                save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix=f"v{args.version}_PRE_RAND")
-            if global_step % args.save_interval == 0 and global_step > 5e5:
-                save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix=f"v{args.version}")
+            if global_step % args.eval_interval == 0 and global_step >= args.start_evaluation:
+                score1, _, _, is_best = evaluator1.evaluate(
+                    is_interval=True,
+                    global_step=global_step,
+                    best_reward=best_eval_reward,
+                    num_episodes=10
+                )
+                score2, _, _, _ = evaluator2.evaluate(
+                    is_interval=True,
+                    global_step=global_step,
+                    best_reward=best_eval_reward,
+                    num_episodes=10
+                )
+                
+                writer.add_scalar("charts/risk_adjusted_score_perfect", score1, global_step)
+                writer.add_scalar("charts/risk_adjusted_score_imperfect", score1, global_step)
+
+                if is_best:
+                    best_eval_reward = score1
+                    print(f" New Peak Performance Milestone! Saving weights...")
+                    save_models(
+                        actor=actor, qf1=qf1, qf2=qf2, 
+                        step=global_step, run_name=run_name, 
+                        args=args, env_params=env_params, 
+                        suffix=f"v{args.version}_BEST"
+                    )
 
 
     if args.save_model:
-        save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix="Final")
-    if args.eval_model:
-        evaluate_policy(
-            actor=actor,
-            args=args,
-            device=device,
-            algo_name="TD3",
-            num_episodes=10,
-            run_name=run_name,
-            **env_params
-        )
+        save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix=f"v{args.version}_Final")
 
+    eval_env_perfect.close()
+    eval_env_imperfect.close()
     envs.close()
     writer.close()

@@ -21,4 +21,6 @@ python rl/sac_continuous_action.py \
     --direction "cw" \
     --motion-blur \
     --ema \
+    --jerk-penalty \
+    --recovery \
     --track

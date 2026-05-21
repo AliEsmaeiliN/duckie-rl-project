@@ -280,9 +280,11 @@ if __name__ == "__main__":
         if args.domain_rand: active_tags.append("DomainRand")
         if args.dynamics_rand: active_tags.append("DynamicsRand")
         if args.camera_rand: active_tags.append("CameraRand")
-        if args.distortion: active_tags.append("Distortion")
+        if args.curriculum_randomization: active_tags.append("Crcm Rand")
         if args.ema: active_tags.append("EMA")
         if args.action_latency: active_tags.append("ActionLatency")
+        if args.recovery: active_tags.append("Recovery")
+        if args.jerk_penalty: active_tags.append("JerkPenalty")
 
         run = wandb.init(
             project=args.wandb_project_name,
@@ -298,12 +300,9 @@ if __name__ == "__main__":
         reward_logic = wandb.Artifact('rl-logic-files', type='code')
         reward_logic.add_file('utils/wrappers/reward_wrappers.py') 
         reward_logic.add_file('utils/rl_env.py')
-        training_logic = wandb.Artifact('rl-training-files', type='configuration')
-        training_logic.add_file('job_sac.sh')
-        training_logic.add_file('rl/sac_continuous_action.py')
+        reward_logic.add_file('rl/sac_continuous_action.py')
         
         run.log_artifact(reward_logic)
-        run.log_artifact(training_logic)
     
     writer = SummaryWriter(f"runs/{run_name}")
     writer.add_text(
