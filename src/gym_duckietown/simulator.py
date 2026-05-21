@@ -1640,8 +1640,8 @@ class Simulator(gym.Env):
         misc["Simulator"]["msg"] = d.done_why
         misc["Simulator"]["done_code"] = d.done_code
 
-        if d.done or d.truncated:
-            misc["final_observation"] = obs
+        #if d.done or d.truncated:
+        #    misc["final_observation"] = obs
         
         return obs, d.reward, d.done, d.truncated, misc
 

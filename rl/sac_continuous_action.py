@@ -412,10 +412,10 @@ if __name__ == "__main__":
 
         # TRY NOT TO MODIFY: save data to reply buffer; handle `final_observation`
         real_next_obs = next_obs.copy()
-        for idx, trunc in enumerate(truncations):
-            if trunc:
-                real_next_obs[idx] = infos["final_observation"][idx]
-        rb.add(obs, real_next_obs, actions, rewards, terminations, infos)
+        if "final_observation" in infos:
+            for idx, final_obs in enumerate(infos["final_observation"]):
+                if final_obs is not None:  # This env actually finished
+                    real_next_obs[idx] = final_obs
 
         # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
         obs = next_obs
