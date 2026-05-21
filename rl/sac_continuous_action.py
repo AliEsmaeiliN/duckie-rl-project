@@ -23,7 +23,7 @@ from rl.cnn_architectures import ImpalaCNN as cnn_encoder
 
 # Utilities
 from utils.rl_env import DuckieOvalEnv
-from utils.debug_tools import save_models, evaluate_policy
+from utils.debug_tools import save_models, DuckiebotEvaluator
 
 # Target the specific logger used in the simulator
 import logging
@@ -119,6 +119,8 @@ class Args:
     """Choosing the direction of the loop. CW, CCW or mixed"""
     curriculum_randomization: bool = True
     """Acivating the randomizations gradually based on curriculum learning"""
+    recovery: bool = True
+    """Gives the robot 20 steps to recover"""
 
 def make_env(seed, idx, run_name, capture_video=False, action_smoothing=False, motion_blur=False, latency_rand=False, **env_kwargs):
     def thunk():
@@ -317,20 +319,27 @@ if __name__ == "__main__":
     # env setup
     env_params = {
         "domain_rand": args.domain_rand,
-        "distortion": args.distortion,
         "dynamics_rand": args.dynamics_rand,
         "camera_rand": args.camera_rand
     }
+
+    base_cfg = {key: False for key in env_params}
+    robust_cfg = {key: True for key in env_params}
+        
     active_env_params = {} if args.curriculum_randomization else env_params.copy()
 
-    # LIGHTWEIGHT UNIFIED EVALUATION ENVIRONMENT
+    # LIGHTWEIGHT UNIFIED EVALUATION ENVIRONMENTS
     best_eval_reward = -float('inf')
     eval_env_seed = args.seed + 100
 
-    eval_env_imperfect = make_env(seed=args.seed + 100, idx=0, run_name=f"{run_name}_eval",capture_video=False, action_smoothing=args.ema, motion_blur=args.motion_blur, latency_rand=args.action_latency, **env_params)()
-    eval_env_perfect =make_env(seed=args.seed + 100, idx=0, run_name=f"{run_name}_eval2",capture_video=False)() 
+    eval_env_imperfect = make_env(seed=eval_env_seed, idx=0, run_name=f"{run_name}_eval", action_smoothing=True, motion_blur=True, latency_rand=True, **robust_cfg)()
+    eval_env_perfect = make_env(seed=eval_env_seed, idx=0, run_name=f"{run_name}_eval2", **base_cfg)() 
+    eval_env_perfect.unwrapped.set_randomization(margin_factor=0.1)
+    eval_env_imperfect.unwrapped.set_randomization(margin_factor=0.1)
+    eval_env_imperfect.unwrapped.set_spawn_config(mode="curriculum", difficulty=1)
+    
     envs = gym.vector.SyncVectorEnv(
-        [make_env(args.seed + i, i, run_name, capture_video=False, action_smoothing=args.ema, motion_blur=args.motion_blur, latency_rand=args.action_latency, **active_env_params) for i in range(args.num_envs)]
+        [make_env(args.seed + i, i, run_name, recovery_step=args.recovery, action_smoothing=args.ema, motion_blur=args.motion_blur, latency_rand=args.action_latency, **active_env_params) for i in range(args.num_envs)]
     )
    
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
@@ -346,6 +355,9 @@ if __name__ == "__main__":
     qf2_target.load_state_dict(qf2.state_dict())
     q_optimizer = optim.Adam(list(qf1.parameters()) + list(qf2.parameters()), lr=args.q_lr)
     actor_optimizer = optim.Adam(list(actor.parameters()), lr=args.policy_lr)
+
+    evaluator1 = DuckiebotEvaluator(eval_env_perfect, eval_env_seed, actor, args, device, prefix="eval_perfect")
+    evaluator2 = DuckiebotEvaluator(eval_env_imperfect, eval_env_seed, actor, args, device, prefix="eval_imperfect")
 
     # Automatic entropy tuning
     if args.autotune:
@@ -489,23 +501,24 @@ if __name__ == "__main__":
                     envs.call("set_randomization", dynamics_rand=args.dynamics_rand)
             
             if global_step % args.eval_interval == 0 and global_step >= args.start_evaluation:
-                score, avg_rew, std_rew, is_best = evaluate_policy(
-                    eval_env=eval_env,
-                    seed=eval_env_seed,
-                    actor=actor,
-                    args=args,
-                    device=device,
+                score1, _, _, is_best = evaluator1.evaluate(
+                    is_interval=True,
+                    global_step=global_step,
+                    best_reward=best_eval_reward,
+                    num_episodes=10
+                )
+                score2, _, _, _ = evaluator2.evaluate(
                     is_interval=True,
                     global_step=global_step,
                     best_reward=best_eval_reward,
                     num_episodes=10
                 )
                 
-                writer.add_scalar("charts/risk_adjusted_score", score, global_step)
-                #writer.add_scalar("interval_eval/std_reward", std_rew, global_step)
+                writer.add_scalar("charts/risk_adjusted_score_perfect", score1, global_step)
+                writer.add_scalar("charts/risk_adjusted_score_imperfect", score1, global_step)
 
                 if is_best:
-                    best_eval_reward = score
+                    best_eval_reward = score1
                     print(f" New Peak Performance Milestone! Saving weights...")
                     save_models(
                         actor=actor, qf1=qf1, qf2=qf2, 
@@ -518,6 +531,7 @@ if __name__ == "__main__":
     if args.save_model:
         save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix=f"v{args.version}_Final")
     
-    eval_env.close()
+    eval_env_perfect.close()
+    eval_env_imperfect.close()
     envs.close()
     writer.close()

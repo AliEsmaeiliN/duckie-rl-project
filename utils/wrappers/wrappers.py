@@ -25,7 +25,7 @@ class RecoveryTrainingWrapper(gym.Wrapper):
             self.in_recovery_mode  = True
 
         if self.in_recovery_mode:
-            print(f"recovery step: {self.recovery_steps}")
+            #print(f"recovery step: {self.recovery_steps}")
             self.recovery_steps += 1
             
             reward = self.ood_penalty

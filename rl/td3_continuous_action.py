@@ -23,7 +23,7 @@ from rl.cnn_architectures import ImpalaCNN as cnn_encoder
 
 # Utilities
 from utils.rl_env import DuckieOvalEnv
-from utils.debug_tools import save_models, evaluate_policy
+from utils.debug_tools import save_models, DuckiebotEvaluator
 
 # Target the specific logger used in the simulator
 import logging
