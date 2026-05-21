@@ -279,6 +279,7 @@ class Simulator(gym.Env):
         self.spawn_mode = spawn_mode
         self.spawn_difficulty = spawn_difficulty
         self.direction = direction
+        self.margin_factor = margin_factor
         # first initialize the RNG
         self.seed_value = seed
         #self.seed(seed=self.seed_value)
@@ -1683,7 +1684,7 @@ class Simulator(gym.Env):
 
     def _compute_done_reward(self, action) -> DoneRewardInfo:
         # If the agent is not in a valid pose (on drivable tiles)
-        if not self._valid_pose(self.cur_pos, self.cur_angle):
+        if not self._valid_pose(self.cur_pos, self.cur_angle, safety_factor=self.margin_factor):
             msg = "Stopping the simulator because we are at an invalid pose."
             # logger.info(msg)
             reward = REWARD_INVALID_POSE

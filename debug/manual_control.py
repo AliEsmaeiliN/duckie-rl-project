@@ -101,6 +101,10 @@ def on_key_press(symbol, modifiers):
     elif symbol == key.ESCAPE:
         env.close()
         sys.exit(0)
+    elif symbol == key.M:
+        new_margin = min(1.0, env.unwrapped.margin_factor - 0.1)
+        env.unwrapped.set_randomization(margin_factor=new_margin)
+        print(f"Manual Test: Margin decreased to {new_margin:.1f}")
     elif symbol == key.A:
         if args.model:
             auto_mode = not auto_mode
