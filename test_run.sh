@@ -10,6 +10,7 @@ python rl/sac_continuous_action.py \
     --env-id "test_intervalEval_newObsPipline" \
     --buffer-size 10000 \
     --batch-size 64 \
+    --version 0 \
     --learning-starts 300 \
     --total-timesteps 2000 \
     --eval-interval 200 \
@@ -18,9 +19,9 @@ python rl/sac_continuous_action.py \
     --camera-rand \
     --dynamics-rand \
     --action-latency \
-    --direction "cw" \
     --motion-blur \
     --ema \
     --jerk-penalty \
     --recovery \
+    --curriculum_randomization \
     --track

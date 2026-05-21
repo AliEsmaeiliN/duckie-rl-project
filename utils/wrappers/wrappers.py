@@ -37,7 +37,7 @@ class RecoveryTrainingWrapper(gym.Wrapper):
                     sim = self.unwrapped
                     lp = sim.get_lane_pos2(sim.cur_pos, sim.cur_angle)
                     if abs(lp.dist) < self.reset_threshold: 
-                        print("Recovered")
+                        #print("Recovered")
                         self.recovery_steps = 0
                         self.in_recovery_mode = False
                 except Exception:
