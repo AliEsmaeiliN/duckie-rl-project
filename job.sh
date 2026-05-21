@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=duckie_sac
+#SBATCH --job-name=ali_td3
 #SBATCH --output=output/duckie_%j.out
 #SBATCH -e output/duckie_%j.err
-#SBATCH --time=24:00:00
+#SBATCH --time=12:00:00
 #SBATCH --partition=pgpu_most
 #SBATCH --account=dei_most
 #SBATCH --gpus=1
-#SBATCH --mem=16G
+#SBATCH --mem=32G
 #SBATCH --cpus-per-task=4
 
 source $(conda info --base)/etc/profile.d/conda.sh
@@ -22,15 +22,19 @@ if [ ! -f $CONDA_PREFIX/lib/libtiff.so.5 ]; then
     ln -s $CONDA_PREFIX/lib/libtiff.so.6 $CONDA_PREFIX/lib/libtiff.so.5
 fi
 
-python rl/sac_continuous_action.py \
+python rl/td3_continuous_action.py \
     --seed 1 \
-    --env-id CV \
+    --env-id Final_test \
     --total-timesteps 1500000 \
     --track \
-    --version 10 \
-    --buffer-size 100000 \
+    --version 0 \
+    --buffer-size 300000 \
     --learning-starts 40000 \
     --domain-rand \
     --camera-rand \
     --dynamics-rand \
-    --run-notes "LaneP R + recovery 10 step + opencv preprocessing" 
+    --action-latency \
+    --curriculum_randomization \
+    --jerk_penalty \
+    --recovery \
+    --run-notes "Checking the data logs"
