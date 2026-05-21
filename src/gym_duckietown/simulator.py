@@ -239,7 +239,8 @@ class Simulator(gym.Env):
         render_mode: str = None,
         spawn_mode: str = "curriculum", # "perfect", "duckietown", or "curriculum"
         spawn_difficulty: float = 0.0,
-        direction: str = "mixed"
+        direction: str = "mixed",
+        margin_factor: int = 1
     ):
         """
 

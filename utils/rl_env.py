@@ -31,7 +31,11 @@ class DuckieOvalEnv(Simulator):
         self.motor_k = 27.0
 
     @classmethod
-    def create_wrapped(cls, run_name, capture_video=False, ema=False, motion_blur=False, grayscale=True, frame_stack=4, latency_rand=False, **kwargs):
+    def create_wrapped(cls, run_name, capture_video=False, 
+                        ema=False, motion_blur=False, grayscale=True, 
+                        frame_stack=4, latency_rand=False, recovery_step=False,
+                        **kwargs
+                    ):
         """
         Static method to build the fully wrapped stack.
         """
@@ -70,7 +74,9 @@ class DuckieOvalEnv(Simulator):
         
         env = RewardWrapper(env)
         env = AdditiveJerkPenalty(env)
-        env = RecoveryTrainingWrapper(env, max_recovery_steps=10, ood_penalty=-10.0)
+        
+        if recovery_step:
+            env = RecoveryTrainingWrapper(env, max_recovery_steps=10, ood_penalty=-10.0)
 
         if frame_stack > 1:
             env = gym.wrappers.FrameStackObservation(env, stack_size=frame_stack)

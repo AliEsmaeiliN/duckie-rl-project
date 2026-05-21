@@ -11,13 +11,21 @@ class RecoveryTrainingWrapper(gym.Wrapper):
         self.recovery_steps = 0
         self.max_recovery_steps = max_recovery_steps
         self.ood_penalty = ood_penalty
+        self.reset_threshold = 0.07   # Must get back near centerline to clear mode
+        self.in_recovery_mode = False
 
     def step(self, action):
         obs, reward, done, truncated, info = self.env.step(action)
-        
-        is_ood = done and (reward <= -1000 or info.get("Simulator", {}).get("done_code") == "invalid-pose")
 
-        if is_ood or self.recovery_steps > 0:
+        sim_code = info.get("Simulator", {}).get("done_code")
+        is_sim_ood = done and (sim_code == "invalid-pose")
+        
+        #is_ood = done and (reward <= -1000 or info.get("Simulator", {}).get("done_code") == "invalid-pose")
+        if is_sim_ood:
+            self.in_recovery_mode  = True
+
+        if self.in_recovery_mode:
+            print(f"recovery step: {self.recovery_steps}")
             self.recovery_steps += 1
             
             reward = self.ood_penalty
@@ -28,13 +36,16 @@ class RecoveryTrainingWrapper(gym.Wrapper):
                 try:
                     sim = self.unwrapped
                     lp = sim.get_lane_pos2(sim.cur_pos, sim.cur_angle)
-                    if abs(lp.dist) < 0.18: 
+                    if abs(lp.dist) < self.reset_threshold: 
+                        print("Recovered")
                         self.recovery_steps = 0
+                        self.in_recovery_mode = False
                 except Exception:
                     pass 
             else:
                 # Agent failed to recover in time
                 done = True
+                self.in_recovery_mode = False
         else:
             self.recovery_steps = 0
             
@@ -42,4 +53,5 @@ class RecoveryTrainingWrapper(gym.Wrapper):
 
     def reset(self, **kwargs):
         self.recovery_steps = 0
+        self.in_recovery_mode = False
         return self.env.reset(**kwargs)

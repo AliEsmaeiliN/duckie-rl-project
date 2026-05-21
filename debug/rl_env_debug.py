@@ -59,7 +59,7 @@ class DuckieOvalEnv(Simulator):
 
         
         env = DebugRewardWrapper(env, reward_type=reward_type)
-        #env = RecoveryTrainingWrapper(env, max_recovery_steps=10, ood_penalty=-10.0)
+        env = RecoveryTrainingWrapper(env, max_recovery_steps=10, ood_penalty=-10.0)
 
         if frame_stack > 1:
             env = gym.wrappers.FrameStackObservation(env, stack_size=frame_stack)
