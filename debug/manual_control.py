@@ -66,12 +66,11 @@ else:
         run_name="manual_control",
         grayscale=True,
         frame_stack=4,
-        latency_rand=True,
+        latency_rand=False,
         reward_type=args.reward,
         domain_rand=args.domain_rand,
         dynamics_rand=args.dynamics_rand,
         distortion=args.distortion,
-        use_pid=True
     )
 
 render_modes = ["human", "top_down", "free_cam", "rgb_array"]
@@ -169,6 +168,7 @@ debug_label = pyglet.text.Label(
 
 ep_return = 0.0
 prev_ep_return = "0.00"
+completed_episodes = 0
 
 def update(dt):
     """
@@ -238,9 +238,16 @@ def update(dt):
     else:
         action = manual_action
 
-    obs, reward, done, truncated, info = env.step(action)
+    obs, reward, terminated, truncated, info = env.step(action)
 
     ep_return += reward
+    if truncated and not terminated:
+        print("completed")
+    if terminated and not truncated: 
+        print("terminated")
+
+    done = truncated or terminated
+        
 
     if done: 
         total_r = info["episode"]["r"]

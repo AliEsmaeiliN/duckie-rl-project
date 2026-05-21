@@ -13,6 +13,30 @@ import matplotlib.pyplot as plt
 _eval_history = []
 _best_trajectory_payload = {}
 
+def get_speed_gradient_color(norm_speed):
+    """
+    Computes a sleek Neon Cyberpunk BGR color for a given normalized speed [0, 1].
+    Transitions from Cyan (slow) -> Hot Magenta (medium) -> Vibrant Orange-Red (fast).
+    """
+    # Clip just in case
+    norm_speed = np.clip(norm_speed, 0.0, 1.0)
+    
+    # 0.0: Neon Cyan (BGR: 255, 220, 0)
+    # 0.5: Hot Pink/Magenta (BGR: 180, 0, 240)
+    # 1.0: Bright Orange-Red (BGR: 0, 100, 255)
+    if norm_speed <= 0.5:
+        t = norm_speed / 0.5
+        b = int((1.0 - t) * 255 + t * 180)
+        g = int((1.0 - t) * 220 + t * 0)
+        r = int((1.0 - t) * 0 + t * 240)
+    else:
+        t = (norm_speed - 0.5) / 0.5
+        b = int((1.0 - t) * 180 + t * 0)
+        g = int((1.0 - t) * 0 + t * 100)
+        r = int((1.0 - t) * 240 + t * 255)
+        
+    return (b, g, r)
+
 def log_distribution_plot(history, global_step=0, extra_payload=None):
     """
     Renders the Reward Distribution and Risk-Adjusted trend plot from memory
@@ -220,12 +244,16 @@ def generate_trajectory(eval_env, actor, args, device, global_step, prefix="inte
                     
                     norm_speed = (current_speed - min_observed_speed) / speed_range if speed_range > 0 else 0.5
                     
-                    # Line thickness scales linearly from 2px (slow) to 8px (fast)
-                    thickness = int(2 + norm_speed * 6)
-                    cv2.line(overlay_img, p1, p2, color=(255, 30, 30), thickness=thickness, lineType=cv2.LINE_AA)
+                    color = get_speed_gradient_color(norm_speed)
+                    cv2.line(overlay_img, tuple(p1), tuple(p2), color=color, thickness=1, lineType=cv2.LINE_AA)
 
-                cv2.circle(overlay_img, pixel_points[0], 8, (0, 255, 0), -1, lineType=cv2.LINE_AA)
-                cv2.circle(overlay_img, pixel_points[-1], 8, (255, 255, 0), -1, lineType=cv2.LINE_AA)
+                # Glowing Start Marker (Green inner, white border)
+                cv2.circle(overlay_img, tuple(pixel_points[0]), 5, (0, 255, 0), -1, lineType=cv2.LINE_AA)
+                cv2.circle(overlay_img, tuple(pixel_points[0]), 7, (255, 255, 255), 1, lineType=cv2.LINE_AA)
+                
+                # Glowing End Marker (Red inner, white border)
+                cv2.circle(overlay_img, tuple(pixel_points[-1]), 5, (0, 0, 255), -1, lineType=cv2.LINE_AA)
+                cv2.circle(overlay_img, tuple(pixel_points[-1]), 7, (255, 255, 255), 1, lineType=cv2.LINE_AA)
             
             trajectory_image_logged = wandb.Image(overlay_img, caption=f"2D Trajectory Map ({direction_key}) - Step {global_step}")
         except Exception as e:

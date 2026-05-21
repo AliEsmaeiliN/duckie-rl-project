@@ -13,6 +13,7 @@ python rl/sac_continuous_action.py \
     --learning-starts 300 \
     --total-timesteps 2000 \
     --eval-interval 200 \
+    --start-evaluation 1000 \
     --domain-rand \
     --camera-rand \
     --dynamics-rand \
@@ -20,5 +21,4 @@ python rl/sac_continuous_action.py \
     --direction "cw" \
     --motion-blur \
     --ema \
-    --track \
-    --eval-interval 100
+    --track

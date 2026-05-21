@@ -5,8 +5,6 @@ from gym_duckietown.simulator import Simulator
 from utils.wrappers.wrappers import *
 from utils.wrappers.observation_wrappers import *
 from utils.wrappers.action_wrappers import *
-from utils.wrappers.reward_wrappers import PIDReward as RewardWrapper
-from utils.wrappers.pid_stabilizer import PIDStabilizerWrapper, StabilizerConfig
 from wrappers_debug import DebugRewardWrapper
 
 class DuckieOvalEnv(Simulator):
@@ -19,7 +17,7 @@ class DuckieOvalEnv(Simulator):
         kwargs.setdefault('camera_height', 480)
         kwargs.setdefault('accept_start_angle_deg', 20)
         kwargs.setdefault('full_transparency', True)
-        kwargs.setdefault('max_steps', 4000)
+        kwargs.setdefault('max_steps', 1000)
         kwargs.setdefault('frame_skip', 4)
         kwargs.setdefault('spawn_mode', 'curriculum')
         kwargs.setdefault('spawn_difficulty', 0.0) 
@@ -37,29 +35,12 @@ class DuckieOvalEnv(Simulator):
         """
         env = cls(**kwargs)
 
-        env = UndistortWrapper(env)
-
         if latency_rand:
             print('acivated')
             env = ActionLatencyWrapper(env, min_latency=1, max_latency=3)
 
         env = KinematicActionWrapper(env, wheel_dist=0.102, radius=0.0318, k=27.0)
         env = ActionWrapper(env)
-
-        if use_pid:
-            pid_cfg = StabilizerConfig(
-                ema_alpha_v=0.8,
-                ema_alpha_omega=0.65,
-                kp_v=0.8,
-                kp_omega=0.9,
-                ki_v=0.0,
-                ki_omega=0.0,
-                kd_v=0.0,
-                kd_omega=0.0,
-                v_min=-1.0, v_max=1.0,
-                omega_min=-1.0, omega_max=1.0,
-            )
-            env = PIDStabilizerWrapper(env, config=pid_cfg)
 
 
 
@@ -72,9 +53,9 @@ class DuckieOvalEnv(Simulator):
         env = CropResizeWrapper(env, shape=(84, 84))  # Crop sky, resize to 84x84
         
         if grayscale:
-            env = GrayScaleWrapper(env)
+            env = GrayscaleWrapper(env)
         
-        env = ImgWrapper(env) # Transpose to CHW
+        #env = ImgWrapper(env) # Transpose to CHW
 
         
         env = DebugRewardWrapper(env, reward_type=reward_type)

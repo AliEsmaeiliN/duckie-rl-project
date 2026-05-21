@@ -89,6 +89,7 @@ class TileDict(TypedDict):
 @dataclass
 class DoneRewardInfo:
     done: bool
+    truncated: bool
     done_why: str
     done_code: str
     reward: float
@@ -1677,7 +1678,7 @@ class Simulator(gym.Env):
         misc["Simulator"]["msg"] = d.done_why
         misc["Simulator"]["done_code"] = d.done_code
         
-        return obs, d.reward, d.done, False, misc
+        return obs, d.reward, d.done, d.truncated, misc
 
     def _compute_done_reward(self, action) -> DoneRewardInfo:
         # If the agent is not in a valid pose (on drivable tiles)
@@ -1687,19 +1688,22 @@ class Simulator(gym.Env):
             reward = REWARD_INVALID_POSE
             done_code = "invalid-pose"
             done = True
+            truncated = False
         # If the maximum time step count is reached
         elif self.step_count >= self.max_steps:
             msg = "Stopping the simulator because we reached max_steps = %s" % self.max_steps
             # logger.info(msg)
-            done = True
+            done = False
+            truncated = True
             reward = 0
             done_code = "max-steps-reached"
         else:
             done = False
+            truncated = False
             reward = self.compute_reward(self.cur_pos, self.cur_angle, self.speed, action)
             msg = ""
             done_code = "in-progress"
-        return DoneRewardInfo(done=done, done_why=msg, reward=reward, done_code=done_code)
+        return DoneRewardInfo(done=done, truncated=truncated, done_why=msg, reward=reward, done_code=done_code)
 
     def _render_img(
         self,

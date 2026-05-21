@@ -73,7 +73,7 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Oval-"
     """the environment id of the task"""
-    total_timesteps: int = 1000001
+    total_timesteps: int = 1000000
     """total timesteps of the experiments"""
     num_envs: int = 1
     """the number of parallel game environments"""
@@ -483,7 +483,7 @@ if __name__ == "__main__":
                 print("Curriculum Step 2: Activating Dynamics Randomization")
                 envs.call("set_randomization", dynamics_rand=args.dynamics_rand)
             
-            if global_step % args.eval_interval == 0 and global_step > args.start_evaluation:
+            if global_step % args.eval_interval == 0 and global_step >= args.start_evaluation:
                 score, avg_rew, std_rew, is_best = evaluate_policy(
                     eval_env=eval_env,
                     actor=actor,
