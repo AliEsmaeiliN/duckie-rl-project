@@ -34,7 +34,7 @@ class DuckieOvalEnv(Simulator):
     def create_wrapped(cls, run_name, capture_video=False, 
                         ema=False, motion_blur=False, grayscale=True, 
                         frame_stack=4, latency_rand=False, recovery_step=False,
-                        **kwargs
+                        jerk_penalty=False, **kwargs
                     ):
         """
         Static method to build the fully wrapped stack.
@@ -73,7 +73,8 @@ class DuckieOvalEnv(Simulator):
 
         
         env = RewardWrapper(env)
-        env = AdditiveJerkPenalty(env)
+        if jerk_penalty:
+            env = AdditiveJerkPenalty(env)
         
         if recovery_step:
             env = RecoveryTrainingWrapper(env, max_recovery_steps=10, ood_penalty=-10.0)
