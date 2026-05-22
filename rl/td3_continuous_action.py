@@ -67,7 +67,7 @@ class Args:
     """whether to convert the observation to grayscale"""
     version: int = 0
     """the version of the model, default zero is for the test"""
-    start_evaluation: int = 700000
+    start_evaluation: int = 1e5
     """timestamp to start the internal evaluation (usually after finalizing the randomizations)"""
 
 

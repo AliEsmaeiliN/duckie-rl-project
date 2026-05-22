@@ -77,7 +77,7 @@ class DuckieOvalEnv(Simulator):
             env = AdditiveJerkPenalty(env)
         
         if recovery_step:
-            env = RecoveryTrainingWrapper(env, max_recovery_steps=10, ood_penalty=-10.0)
+            env = RecoveryTrainingWrapper(env, max_recovery_steps=20, ood_penalty=-10.0)
 
         if frame_stack > 1:
             env = gym.wrappers.FrameStackObservation(env, stack_size=frame_stack)
