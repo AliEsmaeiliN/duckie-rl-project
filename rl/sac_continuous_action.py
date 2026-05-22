@@ -387,7 +387,9 @@ if __name__ == "__main__":
     for global_step in range(args.total_timesteps + 1):
         # ALGO LOGIC: put action logic here
         if global_step < args.learning_starts:
-            actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
+            raw_actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
+            raw_actions[:, 0] = np.abs(raw_actions[:, 0])
+            actions = raw_actions
         else:
             obs_tensor = torch.Tensor(obs).to(device)
             actions, _, _ = actor.get_action(obs_tensor)
