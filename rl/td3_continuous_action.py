@@ -47,7 +47,7 @@ class Args:
     """if toggled, cuda will be enabled by default"""
     track: bool = False
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "Duckie-RL"
+    wandb_project_name: str = "Duckie-RL-V2"
     """the wandb's project name"""
     wandb_group: str = "TD3"
     """The algorithm"""
@@ -90,7 +90,7 @@ class Args:
     """the batch size of sample from the reply memory"""
     policy_noise: float = 0.2
     """the scale of policy noise"""
-    exploration_noise: float = 0.05
+    exploration_noise: float = 0.1
     """the scale of exploration noise"""
     learning_starts: int = 25e3
     """timestep to start learning"""
@@ -202,12 +202,12 @@ class Actor(nn.Module):
         )
 
     def forward(self, x):
-        visual_features = F.relu(self.encoder(x))
+        visual_features = self.encoder(x)
         mu = self.fc_mu(visual_features)
-        v_raw = mu[:, 0:1]
-        omega_raw = mu[:, 1:2]
-        v = torch.tanh(v_raw).clamp(min=1e-3)
-        omega = torch.tanh(omega_raw)
+
+        v = torch.sigmoid(mu[:, 0:1]) 
+        omega = torch.tanh(mu[:, 1:2])
+
         x = torch.cat([v, omega], dim=-1)
         return x * self.action_scale + self.action_bias
 
@@ -326,7 +326,9 @@ if __name__ == "__main__":
     for global_step in range(args.total_timesteps + 1):
         # ALGO LOGIC: put action logic here
         if global_step < args.learning_starts:
-            actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
+            raw_actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
+            raw_actions[:, 0] = np.abs(raw_actions[:, 0])
+            actions = raw_actions
         else:
             with torch.no_grad():
                 actions = actor(torch.Tensor(obs).to(device))
@@ -444,7 +446,7 @@ if __name__ == "__main__":
                 )
                 
                 writer.add_scalar("charts/risk_adjusted_score_perfect", score1, global_step)
-                writer.add_scalar("charts/risk_adjusted_score_imperfect", score1, global_step)
+                writer.add_scalar("charts/risk_adjusted_score_imperfect", score2, global_step)
 
                 if is_best:
                     best_eval_reward = score1

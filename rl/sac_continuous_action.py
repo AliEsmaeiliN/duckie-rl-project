@@ -518,7 +518,7 @@ if __name__ == "__main__":
                 )
                 
                 writer.add_scalar("charts/risk_adjusted_score_perfect", score1, global_step)
-                writer.add_scalar("charts/risk_adjusted_score_imperfect", score1, global_step)
+                writer.add_scalar("charts/risk_adjusted_score_imperfect", score2, global_step)
 
                 if is_best:
                     best_eval_reward = score1

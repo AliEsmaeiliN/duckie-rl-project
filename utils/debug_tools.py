@@ -307,6 +307,7 @@ class DuckiebotEvaluator:
             if is_best:
                 print("Launching clean dual trajectory tracking...")
                 self.best_trajectory_payload = self.generate_trajectory(global_step=global_step)
+                wandb.log(self.best_trajectory_payload, step=global_step)
             if not is_interval:
                 self._log_distribution_plot(global_step=global_step, extra_payload=self.best_trajectory_payload)
             
