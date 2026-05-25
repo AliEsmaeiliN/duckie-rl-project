@@ -6,6 +6,8 @@ from utils.wrappers.wrappers import *
 from utils.wrappers.observation_wrappers import *
 from utils.wrappers.action_wrappers import *
 from wrappers_debug import DebugRewardWrapper
+from utils.wrappers.reward_wrappers import AdditiveJerkPenalty
+
 
 class DuckieOvalEnv(Simulator):
     """
@@ -17,10 +19,10 @@ class DuckieOvalEnv(Simulator):
         kwargs.setdefault('camera_height', 480)
         kwargs.setdefault('accept_start_angle_deg', 20)
         kwargs.setdefault('full_transparency', True)
-        kwargs.setdefault('max_steps', 5000)
+        kwargs.setdefault('max_steps', 4000)
         kwargs.setdefault('frame_skip', 4)
         kwargs.setdefault('spawn_mode', 'curriculum')
-        kwargs.setdefault('spawn_difficulty', 0.0) 
+        kwargs.setdefault('spawn_difficulty', 0.0)
         
         super().__init__(**kwargs)
         
@@ -29,37 +31,54 @@ class DuckieOvalEnv(Simulator):
         self.motor_k = 27.0
 
     @classmethod
-    def create_wrapped(cls, run_name, capture_video=False, use_pid=False, grayscale=True, frame_stack=4, latency_rand=False, reward_type="adp", **kwargs):
+    def create_wrapped(cls, run_name, capture_video=False, 
+                        ema=False, motion_blur=False, grayscale=True, 
+                        frame_stack=4, latency_rand=False, recovery_step=False,
+                        jerk_penalty=False, reward_type="adp",
+                        **kwargs
+                    ):
         """
         Static method to build the fully wrapped stack.
         """
         env = cls(**kwargs)
 
-        if latency_rand:
-            print('acivated')
-            env = ActionLatencyWrapper(env, min_latency=1, max_latency=3)
-
         env = KinematicActionWrapper(env, wheel_dist=0.102, radius=0.0318, k=27.0)
-        env = ActionWrapper(env)
 
+        if ema:
+            env = ActionSmoothingWrapper(env)
+
+        if latency_rand:
+            env = ActionLatencyWrapper(env)
 
 
         if capture_video:
             video_folder = f"videos/{run_name}"
             os.makedirs(video_folder, exist_ok=True)
             env = gym.wrappers.RecordVideo(env, video_folder, episode_trigger=lambda x: True)
+        
+        if motion_blur:
+            env = FastKinematicBlurWrapper(env)
 
-        env = ResizeWrapper(env, shape=(120, 160, 3)) # Ensure 120x160 base
-        env = CropResizeWrapper(env, shape=(84, 84))  # Crop sky, resize to 84x84
+        env = CLAHEWrapper(env)
+        
+        env = GaussianBlurWrapper(env)
+        
+        env = CropResizeWrapper(env, shape=(84, 84))
+
         
         if grayscale:
             env = GrayscaleWrapper(env)
-        
-        #env = ImgWrapper(env) # Transpose to CHW
+            env = ContrastStretchingWrapper(env)
+        else:
+            env = ImgWrapper(env) # Transpose to CHW
 
         
         env = DebugRewardWrapper(env, reward_type=reward_type)
-        env = RecoveryTrainingWrapper(env, max_recovery_steps=10, ood_penalty=-10.0)
+        if jerk_penalty:
+            env = AdditiveJerkPenalty(env)
+        
+        if recovery_step:
+            env = RecoveryTrainingWrapper(env, max_recovery_steps=20, ood_penalty=-10.0)
 
         if frame_stack > 1:
             env = gym.wrappers.FrameStackObservation(env, stack_size=frame_stack)
@@ -94,11 +113,6 @@ class DuckieOvalEnv(Simulator):
                 print(f"Simulator config updated: {key} = {value}")
             else:
                 print(f"Warning: Simulator has no attribute '{key}'")
-
-            if getattr(self, 'distortion', False) and self.camera_model is None:
-                from src.gym_duckietown.distortion import Distortion
-                print("Initializing Distortion Model...")
-                self.camera_model = Distortion(camera_rand=getattr(self, 'camera_rand', False))
     
     def set_spawn_config(self, mode: str = None, difficulty: float = None):
         """Dynamically update spawn strategy during training."""

@@ -320,11 +320,13 @@ class UnifiedReward(gym.RewardWrapper):
         reward_speed = 2.0 * v * lp.dot_dir
         
         
-        reward_distance = -15.0 * (lp.dist - self.target_offset)**2
+        normalized = np.clip(np.abs(lp.dist - self.target_offset) / np.abs(self.wrong_lane_limit), 0.0, 1.0)
+        reward_distance = -10 * normalized**2
         
         reward_survival = 1.0 if v > 0.05 else -1.0
         
-        return reward_speed + reward_distance + reward_survival    
+        return reward_speed + reward_distance + reward_survival
+        
 class AdditiveJerkPenalty(gym.RewardWrapper):
     """
     Penalizes large changes between consecutive actions.

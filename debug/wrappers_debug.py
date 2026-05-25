@@ -34,7 +34,8 @@ class RewardCompute():
             "simple": self.simple_reward,
             "adp": self.adp_reward,
             "dbg": self.dbg_reward,
-            "pid": self.pid_reward
+            "pid": self.pid_reward,
+            "ufd": self.unified_reward
         }
         if name not in funcs:
             raise ValueError(f"Reward type '{name}' not recognized.")
@@ -131,6 +132,18 @@ class RewardCompute():
         
         reward_survival = 1.0 if speed > 0.05 else -1.0
 
+        return reward_speed, reward_distance, reward_survival, 0, 0
+    
+    def unified_reward(self, speed, distance, heading, angle, danger_zone, current_action, previous_action):
+        
+        reward_speed = 2.0 * speed * heading
+        
+        normalized = np.clip(np.abs(distance + 0.02) / np.abs(self.WRONG_LANE_LIMIT), 0.0, 1.0)
+        reward_distance = -10 * normalized**2
+        #reward_distance = -40.0 * (distance + 0.02)**2
+        
+        reward_survival = 1.0 if speed > 0.05 else -1.0
+        
         return reward_speed, reward_distance, reward_survival, 0, 0
 
         
