@@ -18,6 +18,14 @@ export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
 export PYGLET_DEBUG_GL=False
 export PYGLET_HEADLESS=True
 
+export WANDB_DIR="/tmp/wandb_scratch_$SLURM_JOB_ID"
+export WANDB_CACHE_DIR="/tmp/wandb_cache_$SLURM_JOB_ID"
+export WANDB_CONFIG_DIR="/tmp/wandb_config_$SLURM_JOB_ID"
+
+mkdir -p "$WANDB_DIR"
+mkdir -p "$WANDB_CACHE_DIR"
+mkdir -p "$WANDB_CONFIG_DIR"
+
 if [ ! -f $CONDA_PREFIX/lib/libtiff.so.5 ]; then
     ln -s $CONDA_PREFIX/lib/libtiff.so.6 $CONDA_PREFIX/lib/libtiff.so.5
 fi
