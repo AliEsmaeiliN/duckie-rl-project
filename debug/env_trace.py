@@ -29,13 +29,14 @@ def debug_step():
         capture_video=False,
         grayscale=True,
         frame_stack=4,
-        domain_rand=True
+        domain_rand=True,
+        motion_blur=True
     )
 
     obs, info = env.reset(seed=42)
     
     constant_action = np.array([0.4, 0.2], dtype=np.float32)
-    freq  = 10
+    freq  = 20
 
     print(f"{'Step':<6} | {'Reward':<10} | {'Action [v, w]':<15}")
     print("-" * 40)

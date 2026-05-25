@@ -135,15 +135,9 @@ class DuckiebotEvaluator:
                     cte = lp.dist
                 except Exception:
                     heading_err, cte = 0.0, 0.0
-
-                # Mock Classical PD Controller
-                kp, kd = 3.5, 8.0 
-                classical_omega = -kp * heading_err - kd * cte
-                classical_omega = np.clip(classical_omega, -1.0, 1.0) 
                 
                 traj_heading_err.append(heading_err)
                 traj_cte.append(cte)
-                traj_classical_omega.append(classical_omega)
                 
                 with torch.no_grad():
                     obs_tensor = torch.Tensor(traj_obs).unsqueeze(0).to(self.device)
@@ -214,12 +208,11 @@ class DuckiebotEvaluator:
 
             ax1.plot(traj_steps, traj_v, label='Agent Throttle (v)', color='#1f77b4', linewidth=2)
             ax1.set_ylabel('Velocity')
-            ax1.set_title(f'Action Waveforms vs Classical Baseline ({direction_key}) - Step {global_step}', fontweight='bold')
+            ax1.set_title(f'Action Waveforms ({direction_key}) - Step {global_step}', fontweight='bold')
             ax1.legend(loc='upper right')
             ax1.grid(True, linestyle='--', alpha=0.5)
 
             ax2.plot(traj_steps, traj_omega, label='RL Agent Steering (\u03c9)', color='#ff7f0e', linewidth=2)
-            ax2.plot(traj_steps, traj_classical_omega, label='Classical PD Steering (\u03c9)', color='#2ca02c', linestyle='--', alpha=0.8)
             ax2.set_ylabel('Steering (\u03c9)')
             ax2.legend(loc='upper right')
             ax2.grid(True, linestyle='--', alpha=0.5)
