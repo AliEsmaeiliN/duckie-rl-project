@@ -7,7 +7,7 @@ export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 
 echo "Starting Duckie-RL smoke test..."
 python rl/sac_continuous_action.py \
-    --env-id "test_intervalEval_newObsPipline" \
+    --env-id "test_eval_reward" \
     --buffer-size 10000 \
     --batch-size 64 \
     --version 0 \

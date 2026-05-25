@@ -286,8 +286,8 @@ if __name__ == "__main__":
 
     eval_env_imperfect = make_env(seed=eval_env_seed, idx=0, run_name=f"{run_name}_eval", action_smoothing=True, motion_blur=True, latency_rand=True, jerk_penalty=args.jerk_penalty, **robust_cfg)()
     eval_env_perfect = make_env(seed=eval_env_seed, idx=0, run_name=f"{run_name}_eval2", jerk_penalty=args.jerk_penalty, **base_cfg)() 
-    eval_env_perfect.unwrapped.set_randomization(margin_factor=0.1)
-    eval_env_imperfect.unwrapped.set_randomization(margin_factor=0.1)
+    eval_env_perfect.unwrapped.set_curriculum(margin_factor=0.1)
+    eval_env_imperfect.unwrapped.set_curriculum(margin_factor=0.1)
     eval_env_imperfect.unwrapped.set_spawn_config(mode="curriculum", difficulty=1)
     
     envs = gym.vector.SyncVectorEnv(
