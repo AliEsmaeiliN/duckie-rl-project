@@ -2,8 +2,8 @@
 # manual
 
 """
-This script allows you to manually control the simulator or Duckiebot
-using the keyboard arrows.
+This script allows you to manually control the simulator or Duckiebot while trying the different configurations.
+Also you can capture two images , one is the simulator output and the other is what the agent sees.
 """
 from PIL import Image
 import argparse
