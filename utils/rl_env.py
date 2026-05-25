@@ -100,14 +100,16 @@ class DuckieOvalEnv(Simulator):
     def set_curriculum(self, max_recovery_steps=None, **rand_kwargs):
         """
         Unified method called during training milestones to update both
-        the recovery wrapper settings and internal simulation randomizations and the spawn difficulty.
+        the recovery wrapper settings and internal simulation randomizations.
         """
+        sim = self.unwrapped
         for key, value in rand_kwargs.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
+            if hasattr(sim, key):
+                setattr(sim, key, value)
                 print(f"Simulator config updated: {key} = {value}")
             else:
                 print(f"Warning: Simulator has no attribute '{key}'")
+
         if max_recovery_steps is not None:
             curr_env = self
             found = False
@@ -129,3 +131,31 @@ class DuckieOvalEnv(Simulator):
         if difficulty is not None:
             self.spawn_difficulty = np.clip(difficulty, 0.0, 1.0)
         print(f"Spawn Config Updated: Mode={self.spawn_mode}, Difficulty={self.spawn_difficulty}")
+
+def update_curriculum_stage(envs, global_step, args):
+    """
+    Unified switchboard function managed within the environment module 
+    to handle spatial margins, FSM recovery steps, and physical randomizations.
+    """
+    total_timesteps = args.total_timesteps
+
+    if global_step == 0 and args.recovery:
+        envs.env_method("set_curriculum", max_recovery_steps=20)        
+
+    elif global_step == 300000:
+        print(f"\n[Curriculum] Step {global_step}: Visual Domain Randomization ON.")
+        envs.env_method("set_curriculum", domain_rand=args.domain_rand)
+
+    elif global_step == 450000:
+        print(f"\n[Curriculum] Step {global_step}: Activating Camera & Dynamics Randomization.")
+        envs.env_method("set_curriculum", camera_rand=args.camera_rand, dynamics_rand=args.dynamics_rand)
+
+    elif global_step == 600000 and args.recovery: 
+        print(f"\n[Curriculum] Step {global_step}: Tightening recovery window to 10 steps.")
+        envs.env_method("set_curriculum", max_recovery_steps=10)
+
+    elif global_step == int(0.7 * total_timesteps):
+        if args.recovery:
+            print(f"\n[Curriculum] Step {global_step}: Safety Horizon closed (0 steps). Policy running under absolute constraints.")
+            envs.env_method("set_curriculum", max_recovery_steps=0)
+        

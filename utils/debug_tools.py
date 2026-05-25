@@ -25,6 +25,42 @@ class DuckiebotEvaluator:
         self.best_trajectory_payload = {}
         
     @staticmethod
+    def compute_unified_eval_reward(sim, return_components=False):
+        """
+        Unified Evaluation Reward Matrix for Duckietown Oval Layout.
+        Provides a normalized, objective metric between -1.0 and +1.0 per step.
+        Optionally returns individual components for granular trajectory debugging.
+        """
+        try:
+            lp = sim.get_lane_pos2(sim.cur_pos, sim.cur_angle)
+            distance = lp.dist       
+            dot_dir = lp.dot_dir    
+        except Exception:
+            if return_components:
+                return -1.0, -0.5, -0.3, -0.2
+            return -1.0
+
+        max_deviation = 0.2
+        
+        normalized_dev = np.clip(np.abs(distance) / max_deviation, 0.0, 1.0)
+        r_lane = -(normalized_dev ** 2) # Bounded between [-1.0, 0.0]
+
+        r_speed = np.clip(sim.speed, 0.0, 1.0)
+        if dot_dir < 0:
+            r_speed = -r_speed
+
+        r_heading = dot_dir 
+
+        w_speed, w_lane, w_heading = 0.5, 0.3, 0.2
+        total_step_reward = (w_speed * r_speed) + (w_lane * r_lane) + (w_heading * r_heading)
+        total_step_reward = np.clip(total_step_reward, -1.0, 1.0)
+        
+        if return_components:
+            return total_step_reward, w_speed * r_speed, w_lane * r_lane, w_heading * r_heading
+        
+        return total_step_reward
+    
+    @staticmethod
     def get_speed_gradient_color(norm_speed):
         """
         Computes a sleek Neon Cyberpunk BGR color for a given normalized speed [0, 1].
@@ -117,7 +153,8 @@ class DuckiebotEvaluator:
             
             traj_x, traj_z, traj_v, traj_omega = [], [], [], []
             traj_steps, traj_speed = [], []
-            traj_heading_err, traj_cte, traj_classical_omega = [], [], []
+            traj_heading_err, traj_cte = [], []
+            traj_r_total, traj_r_speed, traj_r_lane, traj_r_heading = [], [], [], []
             step_count = 0
             
             while not traj_done:
@@ -138,6 +175,12 @@ class DuckiebotEvaluator:
                 
                 traj_heading_err.append(heading_err)
                 traj_cte.append(cte)
+
+                r_tot, r_sp, r_ln, r_hd = self.compute_unified_eval_reward(sim, return_components=True)
+                traj_r_total.append(r_tot)
+                traj_r_speed.append(r_sp)
+                traj_r_lane.append(r_ln)
+                traj_r_heading.append(r_hd)
                 
                 with torch.no_grad():
                     obs_tensor = torch.Tensor(traj_obs).unsqueeze(0).to(self.device)
@@ -204,7 +247,7 @@ class DuckiebotEvaluator:
                 print(f"[debug_tools] Warning: Could not generate top-down map overlay for {direction_key}: {e}")
 
             # Generate Matplotlib Waveform Comparison
-            fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 10), sharex=True)
+            fig_act, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 10), sharex=True)
 
             ax1.plot(traj_steps, traj_v, label='Agent Throttle (v)', color='#1f77b4', linewidth=2)
             ax1.set_ylabel('Velocity')
@@ -226,9 +269,29 @@ class DuckiebotEvaluator:
 
             plt.tight_layout()
             log_payload[f"{self.prefix}/best_milestone_action_waveforms_{direction_key}"] = wandb.Image(
-                fig, caption=f"RL vs Classical Waveforms ({direction_key}) - Step {global_step}"
+                fig_act, caption=f"RL vs Classical Waveforms ({direction_key}) - Step {global_step}"
             )
-            plt.close(fig)
+            plt.close(fig_act)
+
+            fig_rew, ax_rew = plt.subplots(figsize=(10, 5))
+            
+            ax_rew.plot(traj_steps, traj_r_total, label='Weighted Total Reward', color='#2ca02c', linewidth=2.5)
+            ax_rew.plot(traj_steps, traj_r_speed, label='Progress Component (50%)', color='#bcbd22', linestyle='--', alpha=0.8)
+            ax_rew.plot(traj_steps, traj_r_lane, label='Lane Center Component (30%)', color='#e377c2', linestyle='--', alpha=0.8)
+            ax_rew.plot(traj_steps, traj_r_heading, label='Heading Component (20%)', color='#17becf', linestyle='--', alpha=0.8)
+            
+            ax_rew.set_title(f'Objective Evaluation Reward Matrix Analysis ({direction_key}) - Step {global_step}', fontweight='bold', pad=12)
+            ax_rew.set_ylabel('Component Score Contributions')
+            ax_rew.set_xlabel('Simulation Decision Steps')
+            ax_rew.set_ylim(-1.05, 0.75)
+            ax_rew.legend(loc='lower left', ncol=4, frameon=True)
+            ax_rew.grid(True, linestyle='--', alpha=0.5)
+            
+            plt.tight_layout()
+            log_payload[f"{self.prefix}/best_milestone_reward_decompositions_{direction_key}"] = wandb.Image(
+                fig_rew, caption=f"Evaluation Metric Breakdown Profiles ({direction_key}) - Step {global_step}"
+            )
+            plt.close(fig_rew)
 
         # Restore original environment state
         sim.direction = original_direction
@@ -250,6 +313,8 @@ class DuckiebotEvaluator:
         all_rewards = []
         completed_episodes = 0
         self.eval_env.reset(seed=self.seed)
+
+        raw_sim = self.eval_env.unwrapped
         
         for _ in range(num_episodes):
             obs, _ = self.eval_env.reset()
@@ -266,10 +331,11 @@ class DuckiebotEvaluator:
                 
                     action = action.cpu().numpy().reshape(-1)
 
-                next_obs, reward, terminated, truncated, _ = self.eval_env.step(action)
+                next_obs, _, terminated, truncated, _ = self.eval_env.step(action)
+                step_eval_reward = self.compute_unified_eval_reward(raw_sim, return_components=False)
                 
                 obs = next_obs
-                episodic_reward += reward            
+                episodic_reward += step_eval_reward            
                 done = terminated or truncated
 
             all_rewards.append(episodic_reward)

@@ -35,7 +35,8 @@ class RewardCompute():
             "adp": self.adp_reward,
             "dbg": self.dbg_reward,
             "pid": self.pid_reward,
-            "ufd": self.unified_reward
+            "ufd": self.unified_reward,
+            "eval": self.eval_reward
         }
         if name not in funcs:
             raise ValueError(f"Reward type '{name}' not recognized.")
@@ -145,6 +146,23 @@ class RewardCompute():
         reward_survival = 1.0 if speed > 0.05 else -1.0
         
         return reward_speed, reward_distance, reward_survival, 0, 0
+    
+    def eval_reward(self, speed, distance, heading, angle, danger_zone, current_action, previous_action):
+        target_offset = -0.02
+        max_deviation = 0.2
+        max_speed = 1.2
+
+        normalized_dev = np.clip(np.abs(distance - target_offset) / max_deviation, 0.0, 1.0)
+        r_lane = -normalized_dev ** 2
+
+        # Forward progress — penalize stopping or going too fast
+        r_speed = np.clip(speed / max_speed, 0.0, 1.0)
+
+        # Heading alignment — penalize large angles relative to lane direction
+        r_heading = np.cos(angle)  # 1.0 when aligned, -1.0 when perpendicular
+        
+
+        return 0.5 * r_speed , 0.3 * r_lane , 0.2 * r_heading , 0, 0
 
         
 

@@ -106,7 +106,7 @@ def on_key_press(symbol, modifiers):
         new_margin = min(1.0, env.unwrapped.margin_factor - 0.1)
         env.unwrapped.set_curriculum(margin_factor=new_margin)
         print(f"Manual Test: Margin decreased to {new_margin:.1f}")
-    elif symbol == key.R:
+    elif symbol == key.Q:
         target_env = env
         recovery_wrapper_found = False
         
@@ -130,6 +130,7 @@ def on_key_press(symbol, modifiers):
             print(f"Autonomous Mode: {auto_mode}")
         else:
             print("the RL Agent has not been initialized. Continue Manual Mode.")
+
     elif symbol== key.C:
         if args.model:
             model_path = args.model
@@ -139,6 +140,13 @@ def on_key_press(symbol, modifiers):
             visualizer.visualize_layers(input_stack=stack_obs)
         else:
             print("the RL Agent has not been initialized. Continue Manual Mode.")
+
+    elif symbol == key.D:
+        new_diff = min(1.0, env.unwrapped.spawn_difficulty + 0.1)
+        env.unwrapped.set_spawn_config(difficulty=new_diff)
+        print(f"Manual Test: Difficulty increased to {new_diff:.1f}")
+    elif symbol == key.R:
+        env.unwrapped.set_curriculum(domain_rand=True, camera_rand=True)
 
 
 

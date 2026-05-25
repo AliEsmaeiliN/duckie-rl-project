@@ -22,7 +22,7 @@ from cleanrl_utils.buffers import ReplayBuffer
 from rl.cnn_architectures import ImpalaCNN as cnn_encoder
 
 # Utilities
-from utils.rl_env import DuckieOvalEnv
+from utils.rl_env import DuckieOvalEnv, update_curriculum_stage
 from utils.debug_tools import save_models, DuckiebotEvaluator
 
 # Target the specific logger used in the simulator
@@ -420,15 +420,7 @@ if __name__ == "__main__":
                 )
                     
             if args.curriculum_randomization:
-                if global_step == 3e5:
-                    print("Curriculum Step 1: Activating Domain Randomization")
-                    envs.call("set_randomization", domain_rand=args.domain_rand)
-                elif global_step == 4.5e5:
-                    print("Curriculum Step 2: Activating Camera Randomization")
-                    envs.call("set_randomization", camera_rand=args.camera_rand)
-                elif global_step == 6e5:
-                    print("Curriculum Step 2: Activating Dynamics Randomization")
-                    envs.call("set_randomization", dynamics_rand=args.dynamics_rand)
+                update_curriculum_stage(envs=envs, global_step=global_step, args=args)
             
             if global_step % args.eval_interval == 0 and global_step >= args.start_evaluation:
                 score1, _, _, is_best = evaluator1.evaluate(
