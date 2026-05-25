@@ -140,22 +140,22 @@ def update_curriculum_stage(envs, global_step, args):
     total_timesteps = args.total_timesteps
 
     if global_step == 0 and args.recovery:
-        envs.env_method("set_curriculum", max_recovery_steps=20)        
+        envs.call("set_curriculum", max_recovery_steps=20)        
 
     elif global_step == 300000:
         print(f"\n[Curriculum] Step {global_step}: Visual Domain Randomization ON.")
-        envs.env_method("set_curriculum", domain_rand=args.domain_rand)
+        envs.call("set_curriculum", domain_rand=args.domain_rand)
 
     elif global_step == 450000:
         print(f"\n[Curriculum] Step {global_step}: Activating Camera & Dynamics Randomization.")
-        envs.env_method("set_curriculum", camera_rand=args.camera_rand, dynamics_rand=args.dynamics_rand)
+        envs.call("set_curriculum", camera_rand=args.camera_rand, dynamics_rand=args.dynamics_rand)
 
     elif global_step == 600000 and args.recovery: 
         print(f"\n[Curriculum] Step {global_step}: Tightening recovery window to 10 steps.")
-        envs.env_method("set_curriculum", max_recovery_steps=10)
+        envs.call("set_curriculum", max_recovery_steps=10)
 
     elif global_step == int(0.7 * total_timesteps):
         if args.recovery:
             print(f"\n[Curriculum] Step {global_step}: Safety Horizon closed (0 steps). Policy running under absolute constraints.")
-            envs.env_method("set_curriculum", max_recovery_steps=0)
+            envs.call("set_curriculum", max_recovery_steps=0)
         

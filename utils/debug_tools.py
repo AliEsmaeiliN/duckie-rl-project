@@ -284,7 +284,7 @@ class DuckiebotEvaluator:
             ax_rew.set_ylabel('Component Score Contributions')
             ax_rew.set_xlabel('Simulation Decision Steps')
             ax_rew.set_ylim(-1.05, 0.75)
-            ax_rew.legend(loc='lower left', ncol=4, frameon=True)
+            ax_rew.legend(loc='upper left', bbox_to_anchor=(1.02, 1.0), borderaxespad=0.0, frameon=True)
             ax_rew.grid(True, linestyle='--', alpha=0.5)
             
             plt.tight_layout()
