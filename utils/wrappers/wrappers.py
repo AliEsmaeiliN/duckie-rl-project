@@ -21,7 +21,7 @@ class RecoveryTrainingWrapper(gym.Wrapper):
         is_sim_ood = done and (sim_code == "invalid-pose")
         
         #is_ood = done and (reward <= -1000 or info.get("Simulator", {}).get("done_code") == "invalid-pose")
-        if is_sim_ood:
+        if is_sim_ood and self.max_recovery_steps > 0:
             self.in_recovery_mode  = True
 
         if self.in_recovery_mode:

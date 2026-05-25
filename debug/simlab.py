@@ -71,6 +71,7 @@ else:
         domain_rand=args.domain_rand,
         dynamics_rand=args.dynamics_rand,
         distortion=args.distortion,
+        recovery_step=True
     )
 
 render_modes = ["human", "top_down", "free_cam", "rgb_array"]
@@ -103,8 +104,26 @@ def on_key_press(symbol, modifiers):
         sys.exit(0)
     elif symbol == key.M:
         new_margin = min(1.0, env.unwrapped.margin_factor - 0.1)
-        env.unwrapped.set_randomization(margin_factor=new_margin)
+        env.unwrapped.set_curriculum(margin_factor=new_margin)
         print(f"Manual Test: Margin decreased to {new_margin:.1f}")
+    elif symbol == key.R:
+        target_env = env
+        recovery_wrapper_found = False
+        
+        while hasattr(target_env, 'env'):
+            if target_env.__class__.__name__ == "RecoveryTrainingWrapper":
+                current_steps = target_env.max_recovery_steps
+                new_steps = max(0, current_steps - 5)
+                
+                target_env.max_recovery_steps = new_steps
+                print(f"Manual Test: Max Recovery Steps decreased to {new_steps}")
+                recovery_wrapper_found = True
+                break
+            
+            target_env = target_env.env
+            
+        if not recovery_wrapper_found:
+            print("Warning: RecoveryTrainingWrapper was not detected in your current environment stack configuration.")
     elif symbol == key.A:
         if args.model:
             auto_mode = not auto_mode

@@ -97,21 +97,30 @@ class DuckieOvalEnv(Simulator):
 
         return gym.wrappers.RecordEpisodeStatistics(env)
 
-    def set_randomization(self, **kwargs):
+    def set_curriculum(self, max_recovery_steps=None, **rand_kwargs):
         """
-        Dynamically toggle randomization flags for Curriculum Learning.
-        
-        self.dynamics_rand    # Motor/Trim noise
-        self.domain_rand      # Visual/Light noise
-        self.distortion       # Fisheye effect
-        self.camera_rand      # Camera mounting noise
+        Unified method called during training milestones to update both
+        the recovery wrapper settings and internal simulation randomizations and the spawn difficulty.
         """
-        for key, value in kwargs.items():
+        for key, value in rand_kwargs.items():
             if hasattr(self, key):
                 setattr(self, key, value)
                 print(f"Simulator config updated: {key} = {value}")
             else:
                 print(f"Warning: Simulator has no attribute '{key}'")
+        if max_recovery_steps is not None:
+            curr_env = self
+            found = False
+            while hasattr(curr_env, 'env'):
+                if isinstance(curr_env, RecoveryTrainingWrapper):
+                    curr_env.max_recovery_steps = max_recovery_steps
+                    print(f"[{self.map_name}] Recovery Wrapper updated: max_recovery_steps = {max_recovery_steps}")
+                    found = True
+                    break
+                curr_env = curr_env.env
+            
+            if not found:
+                print("Warning: RecoveryTrainingWrapper was not found in the environment stack!")
     
     def set_spawn_config(self, mode: str = None, difficulty: float = None):
         """Dynamically update spawn strategy during training."""
