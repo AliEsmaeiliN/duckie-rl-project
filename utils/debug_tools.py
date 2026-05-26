@@ -363,7 +363,7 @@ class DuckiebotEvaluator:
                 self._log_distribution_plot(global_step=global_step, extra_payload=self.best_trajectory_payload)
             
         self.actor.train() 
-        return risk_adjusted_score, avg_reward, std_reward, is_best
+        return risk_adjusted_score, avg_reward, std_reward, is_best, success_rate
 
 def save_models(actor, qf1, qf2, step, run_name, args, env_params, suffix=""):
     

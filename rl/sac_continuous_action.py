@@ -498,13 +498,13 @@ if __name__ == "__main__":
                 update_curriculum_stage(envs=envs, global_step=global_step, args=args)
             
             if global_step % args.eval_interval == 0 and global_step >= args.start_evaluation:
-                score1, _, _, is_best_p = evaluator_p.evaluate(
+                score1, _, _, is_best_p, _ = evaluator_p.evaluate(
                     is_interval=True,
                     global_step=global_step,
                     best_reward=best_eval_reward,
                     num_episodes=10
                 )
-                score2, _, _, is_best_imp = evaluator2_imp.evaluate(
+                score2, _, _, is_best_imp, success_rate = evaluator2_imp.evaluate(
                     is_interval=True,
                     global_step=global_step,
                     best_reward=best_eval_reward,
@@ -514,7 +514,7 @@ if __name__ == "__main__":
                 writer.add_scalar("charts/risk_adjusted_score_perfect", score1, global_step)
                 writer.add_scalar("charts/risk_adjusted_score_imperfect", score2, global_step)
 
-                if is_best_imp:
+                if is_best_imp and (success_rate >= 80.0):
                     best_eval_reward = score2
                     print(f" New Peak Performance Milestone! Saving weights...")
                     save_models(
