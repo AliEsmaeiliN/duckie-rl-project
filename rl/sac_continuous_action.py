@@ -25,6 +25,7 @@ from rl.cnn_architectures import ImpalaCNN as cnn_encoder
 # Utilities
 from utils.rl_env import DuckieOvalEnv, update_curriculum_stage
 from utils.debug_tools import save_models, DuckiebotEvaluator
+from utils.shared_args import SharedDuckieArgs
 
 # Target the specific logger used in the simulator
 import logging
@@ -37,63 +38,15 @@ pyglet.options['debug_gl'] = False
 
 
 @dataclass
-class Args:
+class Args(SharedDuckieArgs):
     exp_name: str = os.path.basename(__file__)[: -len(".py")]
     """the name of this experiment"""
-    seed: int = 1
-    """seed of the experiment"""
-    torch_deterministic: bool = True
-    """if toggled, `torch.backends.cudnn.deterministic=False`"""
-    cuda: bool = True
-    """if toggled, cuda will be enabled by default"""
-    track: bool = False
-    """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "Duckie-RL-V2"
-    """the wandb's project name"""
-    wandb_entity: str = None
-    """the entity (team) of wandb's project"""
     wandb_group: str = "SAC"
     """The algorithm"""
-    run_notes: str = ""
-    """for wandb tracking notes"""
-    capture_video: bool = False
-    """whether to capture videos of the agent performances (check out `videos` folder)"""
-    eval_interval: int = 20000
-    """the interval to evaluate the Actor periodically"""
-    save_model: bool = True
-    """whether to save model into the `runs/{run_name}` folder"""
-    grayscale: bool = True
-    """whether to convert the observation to grayscale"""
-    eval_model: bool = True
-    """whether to evaluate the saved model at the end of training"""
-    version: int = 0
-    """the version of the model, default zero is for the test"""
-    start_evaluation: int = 1e5
-    """timestamp to start the internal evaluation (usually after finalizing the randomizations)"""
-
-    # Algorithm specific arguments
-    env_id: str = "Oval-"
-    """the environment id of the task"""
-    total_timesteps: int = 1000000
-    """total timesteps of the experiments"""
-    num_envs: int = 1
-    """the number of parallel game environments"""
-    buffer_size: int = int(5e4) # image input: we can not have too many 1e6 ... Currently the best performing speed wise is 5e4 (1 env , SyncVectorEnv)
-    """the replay memory buffer size"""
-    gamma: float = 0.99
-    """the discount factor gamma"""
-    tau: float = 0.005
-    """target smoothing coefficient (default: 0.005)"""
-    batch_size: int = 256    #256 before ... Currently the best performing speed wise is 256 (1 env , SyncVectorEnv)
-    """the batch size of sample from the reply memory"""
-    learning_starts: int = 5e3
-    """timestep to start learning"""
     policy_lr: float = 3e-4
     """the learning rate of the policy network optimizer"""
     q_lr: float = 3e-4 #1e-3
     """the learning rate of the Q network network optimizer"""
-    policy_frequency: int = 2
-    """the frequency of training policy (delayed)"""
     target_network_frequency: int = 1  # Denis Yarats' implementation delays this by 2.
     """the frequency of updates for the target nerworks"""
     alpha: float = 0.2
@@ -101,35 +54,6 @@ class Args:
     autotune: bool = True
     """automatic tuning of the entropy coefficient"""
 
-    #Duckietown specific arguments
-    domain_rand: bool = False
-    """texture/light randomization"""
-    distortion: bool = False 
-    """Simulates the fisheye lens"""
-    dynamics_rand: bool = False
-    """Simulates motor/trim imbalances"""
-    camera_rand: bool = False 
-    """Simulates mounting misalignments"""
-    direction: str = "mixed"
-    """Choosing the direction of the loop. CW, CCW or mixed"""
-    curriculum_randomization: bool = True
-    """Acivating the randomizations gradually based on curriculum learning"""
-
-    #Wrapper Configuration
-    motion_blur: bool = False
-    """Simulates the blur from the moving duckiebot"""
-    action_latency: bool = False
-    """Simulates the action latency from the duckiebot"""
-    ema: bool = False
-    """Use EMA action smoothing"""
-    recovery: bool = False
-    """Gives the robot 20 steps to recover"""
-    jerk_penalty: bool = False
-    """Adding the jerk penalty to the final reward"""
-    preprocessing: bool = False
-    """if toggled, applies the full sim-to-real visual enhancement stack (CLAHE, blur, contrast stretching)"""
-    preprocessing_eval: Optional[bool] = None
-    """Override preprocessing for evaluation. If None, inherits the training setting."""
 
 def make_env(seed, idx, run_name, capture_video=False, action_smoothing=False, motion_blur=False,
              latency_rand=False, jerk_penalty=False, recovery_step=False, preprocessing=False, **env_kwargs):
