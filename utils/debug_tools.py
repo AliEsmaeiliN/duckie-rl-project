@@ -25,7 +25,7 @@ class DuckiebotEvaluator:
         self.best_trajectory_payload = {}
         
     @staticmethod
-    def compute_unified_eval_reward(sim, return_components=False):
+    def compute_unified_eval_reward(sim, current_action, prev_action,return_components=False):
         """
         Unified Evaluation Reward Matrix for Duckietown Oval Layout.
         Provides a normalized, objective metric between -1.0 and +1.0 per step.
@@ -37,7 +37,7 @@ class DuckiebotEvaluator:
             dot_dir = lp.dot_dir    
         except Exception:
             if return_components:
-                return -1.0, -0.5, -0.3, -0.2
+                return -1.0, -0.4, -0.3, -0.2, -0.1
             return -1.0
 
         max_deviation = 0.2
@@ -49,14 +49,20 @@ class DuckiebotEvaluator:
         if dot_dir < 0:
             r_speed = -r_speed
 
-        r_heading = dot_dir 
+        r_heading = dot_dir
 
-        w_speed, w_lane, w_heading = 0.5, 0.3, 0.2
-        total_step_reward = (w_speed * r_speed) + (w_lane * r_lane) + (w_heading * r_heading)
-        total_step_reward = np.clip(total_step_reward, -1.0, 1.0)
+        jerk_diff = np.linalg.norm(current_action - prev_action)
+        r_jerk = -np.clip(jerk_diff / 2.0, 0.0, 1.0) 
+
+        w_speed, w_lane, w_heading, w_jerk = 0.4, 0.3, 0.2, 0.1
+        total_step_reward = ((w_speed * r_speed) + 
+                             (w_lane * r_lane) + 
+                             (w_heading * r_heading) + 
+                             (w_jerk * r_jerk))
+        total_step_reward = np.clip(total_step_reward, -1.0, 0.6)
         
         if return_components:
-            return total_step_reward, w_speed * r_speed, w_lane * r_lane, w_heading * r_heading
+            return total_step_reward, w_speed * r_speed, w_lane * r_lane, w_heading * r_heading, w_jerk * r_jerk
         
         return total_step_reward
     
@@ -145,58 +151,80 @@ class DuckiebotEvaluator:
         log_payload = {}
         
         for direction_key in ["CW", "CCW"]:
-            print(f"    Running dedicated {direction_key} trajectory tracking episode...")
-            sim.direction = direction_key
-            
-            traj_obs, _ = self.eval_env.reset()
-            traj_done = False
-            
-            traj_x, traj_z, traj_v, traj_omega = [], [], [], []
-            traj_steps, traj_speed = [], []
-            traj_heading_err, traj_cte = [], []
-            traj_r_total, traj_r_speed, traj_r_lane, traj_r_heading = [], [], [], []
-            step_count = 0
-            
-            while not traj_done:
-                pos = sim.cur_pos  
-                angle = sim.cur_angle
+            attempt_count = 0
+            max_attempts = 3
 
-                traj_x.append(float(pos[0]))
-                traj_z.append(float(pos[2]))
-                traj_speed.append(float(sim.speed))
-                traj_steps.append(step_count)
+            while True:
+                print(f"    Running dedicated {direction_key} trajectory > Attempt #{attempt_count + 1}...")
+                sim.direction = direction_key
+                current_seed = self.seed + attempt_count
+                traj_obs, _ = self.eval_env.reset(seed=current_seed)
+                traj_done = False
+                
+                traj_x, traj_z, traj_v, traj_omega = [], [], [], []
+                traj_steps, traj_speed = [], []
+                traj_heading_err, traj_cte = [], []
+                traj_r_total, traj_r_speed, traj_r_lane, traj_r_heading, traj_r_jerk = [], [], [], [], []
+                step_count = 0
 
-                try:
-                    lp = sim.get_lane_pos2(pos, angle)
-                    heading_err = lp.angle_rad
-                    cte = lp.dist
-                except Exception:
-                    heading_err, cte = 0.0, 0.0
+                prev_action = np.zeros(2, dtype=np.float32)
                 
-                traj_heading_err.append(heading_err)
-                traj_cte.append(cte)
+                while not traj_done:
+                    pos = sim.cur_pos  
+                    angle = sim.cur_angle
 
-                r_tot, r_sp, r_ln, r_hd = self.compute_unified_eval_reward(sim, return_components=True)
-                traj_r_total.append(r_tot)
-                traj_r_speed.append(r_sp)
-                traj_r_lane.append(r_ln)
-                traj_r_heading.append(r_hd)
+                    traj_x.append(float(pos[0]))
+                    traj_z.append(float(pos[2]))
+                    traj_speed.append(float(sim.speed))
+                    traj_steps.append(step_count)
+
+                    try:
+                        lp = sim.get_lane_pos2(pos, angle)
+                        heading_err = lp.angle_rad
+                        cte = lp.dist
+                    except Exception:
+                        heading_err, cte = 0.0, 0.0
+                    
+                    traj_heading_err.append(heading_err)
+                    traj_cte.append(cte)
+                    
+                    with torch.no_grad():
+                        obs_tensor = torch.Tensor(traj_obs).unsqueeze(0).to(self.device)
+                        if hasattr(self.actor, "get_action"):
+                            _, _, action = self.actor.get_action(obs_tensor)
+                        else:
+                            action = self.actor(obs_tensor)
+                        action = action.cpu().numpy().reshape(-1)
+                    
+                    r_tot, r_sp, r_ln, r_hd, r_jk = self.compute_unified_eval_reward(
+                        sim, current_action=action, prev_action=prev_action, return_components=True
+                    )
+                    traj_r_total.append(r_tot)
+                    traj_r_speed.append(r_sp)
+                    traj_r_lane.append(r_ln)
+                    traj_r_heading.append(r_hd)
+                    traj_r_jerk.append(r_jk)
+                    
+                    traj_v.append(float(action[0]))
+                    traj_omega.append(float(action[1]))
+                    
+                    next_obs, _, terminated, truncated, _ = self.eval_env.step(action)
+                    traj_obs = next_obs
+                    traj_done = terminated or truncated
+                    
+                    prev_action = action.copy()
+                    step_count += 1
                 
-                with torch.no_grad():
-                    obs_tensor = torch.Tensor(traj_obs).unsqueeze(0).to(self.device)
-                    if hasattr(self.actor, "get_action"):
-                        _, _, action = self.actor.get_action(obs_tensor)
-                    else:
-                        action = self.actor(obs_tensor)
-                    action = action.cpu().numpy().reshape(-1)
+                if truncated and not terminated:
+                    print(f"      [Success] Completed full trajectory window without boundaries failure.")
+                    break
+                else:
+                    attempt_count += 1
+                    if attempt_count >= max_attempts:
+                        print(f"      [Max Attempts Reached] Could not find a flawless completion in {max_attempts} attempts. Proceeding with latest trajectory data.")
+                        break
+                    print(f"      [Discarded] Agent crashed or exited lane boundaries. Retrying alternative path...")
                 
-                traj_v.append(float(action[0]))
-                traj_omega.append(float(action[1]))
-                
-                next_obs, _, terminated, truncated, _ = self.eval_env.step(action)
-                traj_obs = next_obs
-                traj_done = terminated or truncated
-                step_count += 1
 
             # Render 2D Top-Down Map
             try:
@@ -273,17 +301,18 @@ class DuckiebotEvaluator:
             )
             plt.close(fig_act)
 
-            fig_rew, ax_rew = plt.subplots(figsize=(10, 5))
+            fig_rew, ax_rew = plt.subplots(figsize=(11, 5))
             
             ax_rew.plot(traj_steps, traj_r_total, label='Weighted Total Reward', color='#2ca02c', linewidth=2.5)
-            ax_rew.plot(traj_steps, traj_r_speed, label='Progress Component (50%)', color='#bcbd22', linestyle='--', alpha=0.8)
+            ax_rew.plot(traj_steps, traj_r_speed, label='Progress Component (40%)', color='#bcbd22', linestyle='--', alpha=0.8)
             ax_rew.plot(traj_steps, traj_r_lane, label='Lane Center Component (30%)', color='#e377c2', linestyle='--', alpha=0.8)
             ax_rew.plot(traj_steps, traj_r_heading, label='Heading Component (20%)', color='#17becf', linestyle='--', alpha=0.8)
-            
+            ax_rew.plot(traj_steps, traj_r_jerk, label='Jerk Control Penalty (10%)', color='#7f7f7f', linestyle=':', alpha=0.9)            
+
             ax_rew.set_title(f'Objective Evaluation Reward Matrix Analysis ({direction_key}) - Step {global_step}', fontweight='bold', pad=12)
             ax_rew.set_ylabel('Component Score Contributions')
             ax_rew.set_xlabel('Simulation Decision Steps')
-            ax_rew.set_ylim(-1.05, 0.75)
+            ax_rew.set_ylim(-1.05, 0.65)
             ax_rew.legend(loc='upper left', bbox_to_anchor=(1.02, 1.0), borderaxespad=0.0, frameon=True)
             ax_rew.grid(True, linestyle='--', alpha=0.5)
             
@@ -320,6 +349,7 @@ class DuckiebotEvaluator:
             obs, _ = self.eval_env.reset()
             done = False
             episodic_reward = 0
+            prev_action = np.zeros(2, dtype=np.float32)
             
             while not done:
                 with torch.no_grad():
@@ -332,11 +362,14 @@ class DuckiebotEvaluator:
                     action = action.cpu().numpy().reshape(-1)
 
                 next_obs, _, terminated, truncated, _ = self.eval_env.step(action)
-                step_eval_reward = self.compute_unified_eval_reward(raw_sim, return_components=False)
+                step_eval_reward = self.compute_unified_eval_reward(
+                    raw_sim, current_action=action, prev_action=prev_action, return_components=False
+                )
                 
                 obs = next_obs
                 episodic_reward += step_eval_reward            
                 done = terminated or truncated
+                prev_action = action.copy()
 
             all_rewards.append(episodic_reward)
             if truncated and not terminated:
