@@ -7,6 +7,7 @@ import cv2
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from wrappers.reward_wrappers import compute_unified_eval_reward
 
 class DuckiebotEvaluator:
     """
@@ -23,54 +24,6 @@ class DuckiebotEvaluator:
         # State tracking encapsulated within the instance
         self.eval_history = []
         self.best_trajectory_payload = {}
-        
-    @staticmethod
-    def compute_unified_eval_reward(sim, current_action, prev_action, return_components=False):
-        """
-        Unified Evaluation Reward Matrix for Duckietown Oval Layout.
-        Provides a strictly monotonic, normalized objective metric for policy ranking.
-        """
-        # Return an unclipped, heavy penalty for failing to stay in the lane
-        # This ensures a model that survives longer always ranks higher.
-        CATASTROPHIC_PENALTY = -2.0 
-        
-        try:
-            lp = sim.get_lane_pos2(sim.cur_pos, sim.cur_angle)
-            distance = lp.dist       
-            dot_dir = lp.dot_dir    
-        except Exception:
-            if return_components:
-                return CATASTROPHIC_PENALTY, CATASTROPHIC_PENALTY, -1.0, -1.0, 0.0
-            return CATASTROPHIC_PENALTY
-
-        max_deviation = 0.2
-        normalized_dev = np.clip(np.abs(distance) / max_deviation, 0.0, 1.0)
-        r_lane = -(normalized_dev ** 2)
-
-        max_achievable_speed = sim.robot_speed * 0.8
-        normalized_speed = np.clip(sim.speed / max_achievable_speed, 0.0, 1.0)
-        
-        r_speed = normalized_speed if dot_dir >= 0 else -normalized_speed
-
-        r_heading = dot_dir
-
-        # Given v in [0, 1] and omega in [-1, 1], maximum action jump is sqrt(5) ~ 2.236
-        max_action_jump = np.sqrt(5.0)
-        jerk_diff = np.linalg.norm(current_action - prev_action)
-        r_jerk = -(np.clip(jerk_diff / max_action_jump, 0.0, 1.0))
-
-        w_speed, w_lane, w_heading, w_jerk = 0.4, 0.3, 0.2, 0.1
-        total_step_reward = ((w_speed * r_speed) + 
-                            (w_lane * r_lane) + 
-                            (w_heading * r_heading) + 
-                            (w_jerk * r_jerk))
-        
-        
-        total_step_reward = np.clip(total_step_reward, -2.0, 1.0)
-
-        if return_components:
-            return total_step_reward, r_speed, r_lane, r_heading, r_jerk
-        return total_step_reward
     
     @staticmethod
     def get_speed_gradient_color(norm_speed):
@@ -202,7 +155,7 @@ class DuckiebotEvaluator:
                             action = self.actor(obs_tensor)
                         action = action.cpu().numpy().reshape(-1)
                     
-                    r_tot, r_sp, r_ln, r_hd, r_jk = self.compute_unified_eval_reward(
+                    r_tot, r_sp, r_ln, r_hd, r_jk = compute_unified_eval_reward(
                         sim, current_action=action, prev_action=prev_action, return_components=True
                     )
                     traj_r_total.append(r_tot)
@@ -368,7 +321,7 @@ class DuckiebotEvaluator:
                     action = action.cpu().numpy().reshape(-1)
 
                 next_obs, _, terminated, truncated, _ = self.eval_env.step(action)
-                step_eval_reward = self.compute_unified_eval_reward(
+                step_eval_reward = compute_unified_eval_reward(
                     raw_sim, current_action=action, prev_action=prev_action, return_components=False
                 )
                 

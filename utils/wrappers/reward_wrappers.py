@@ -377,3 +377,47 @@ class AdditiveJerkPenalty(gym.RewardWrapper):
 
         return reward + jerk_penalty
         
+# utils/rewards.py
+import numpy as np
+
+def compute_unified_eval_reward(sim, current_action, prev_action, return_components=False):
+    """
+    Unified Evaluation Reward Matrix for Duckietown Oval Layout.
+    Provides a strictly monotonic, normalized objective metric for policy ranking.
+    """
+    CATASTROPHIC_PENALTY = -2.0 
+    
+    try:
+        lp = sim.get_lane_pos2(sim.cur_pos, sim.cur_angle)
+        distance = lp.dist       
+        dot_dir = lp.dot_dir    
+    except Exception:
+        if return_components:
+            return CATASTROPHIC_PENALTY, CATASTROPHIC_PENALTY, -1.0, -1.0, 0.0
+        return CATASTROPHIC_PENALTY
+
+    max_deviation = 0.2
+    normalized_dev = np.clip(np.abs(distance) / max_deviation, 0.0, 1.0)
+    r_lane = -(normalized_dev ** 2)
+
+    max_achievable_speed = sim.robot_speed * 0.8
+    normalized_speed = np.clip(sim.speed / max_achievable_speed, 0.0, 1.0)
+    
+    r_speed = normalized_speed if dot_dir >= 0 else -normalized_speed
+    r_heading = dot_dir
+
+    max_action_jump = np.sqrt(5.0)
+    jerk_diff = np.linalg.norm(current_action - prev_action)
+    r_jerk = -(np.clip(jerk_diff / max_action_jump, 0.0, 1.0))
+
+    w_speed, w_lane, w_heading, w_jerk = 0.4, 0.3, 0.2, 0.1
+    total_step_reward = ((w_speed * r_speed) + 
+                        (w_lane * r_lane) + 
+                        (w_heading * r_heading) + 
+                        (w_jerk * r_jerk))
+    
+    total_step_reward = np.clip(total_step_reward, -2.0, 1.0)
+
+    if return_components:
+        return total_step_reward, r_speed, r_lane, r_heading, r_jerk
+    return total_step_reward
