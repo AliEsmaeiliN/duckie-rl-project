@@ -108,21 +108,25 @@ class Args:
     """Simulates motor/trim imbalances"""
     camera_rand: bool = False 
     """Simulates mounting misalignments"""
+    direction: str = "mixed"
+    """Choosing the direction of the loop. CW, CCW or mixed"""
+    curriculum_randomization: bool = True
+    """Acivating the randomizations gradually based on curriculum learning"""
+
+    #Wrapper Configuration
     motion_blur: bool = False
     """Simulates the blur from the moving duckiebot"""
     action_latency: bool = False
     """Simulates the action latency from the duckiebot"""
     ema: bool = False
     """Use EMA action smoothing"""
-    direction: str = "mixed"
-    """Choosing the direction of the loop. CW, CCW or mixed"""
-    curriculum_randomization: bool = True
-    """Acivating the randomizations gradually based on curriculum learning"""
     recovery: bool = False
     """Gives the robot 20 steps to recover"""
     jerk_penalty: bool = False
     """Adding the jerk penalty to the final reward"""
-
+    preprocessing: bool = False
+    """if toggled, applies the full sim-to-real visual enhancement stack (CLAHE, blur, contrast stretching)"""
+    
 def make_env(seed, idx, run_name, capture_video=False, action_smoothing=False, motion_blur=False, latency_rand=False, jerk_penalty=False, **env_kwargs):
     def thunk():
         render_mode = "rgb_array" if (capture_video and idx == 0) else None

@@ -34,7 +34,7 @@ class DuckieOvalEnv(Simulator):
     def create_wrapped(cls, run_name, capture_video=False, 
                         ema=False, motion_blur=False, grayscale=True, 
                         frame_stack=4, latency_rand=False, recovery_step=False,
-                        jerk_penalty=False, **kwargs
+                        jerk_penalty=False, preprocessing=False, **kwargs
                     ):
         """
         Static method to build the fully wrapped stack.
@@ -58,16 +58,17 @@ class DuckieOvalEnv(Simulator):
         if motion_blur:
             env = FastKinematicBlurWrapper(env)
 
-        env = CLAHEWrapper(env)
-        
-        env = GaussianBlurWrapper(env)
+        if preprocessing:
+            env = CLAHEWrapper(env)
+            env = GaussianBlurWrapper(env)
         
         env = CropResizeWrapper(env, shape=(84, 84))
 
         
         if grayscale:
             env = GrayscaleWrapper(env)
-            env = ContrastStretchingWrapper(env)
+            if preprocessing:
+                env = ContrastStretchingWrapper(env)
         else:
             env = ImgWrapper(env) # Transpose to CHW
 
