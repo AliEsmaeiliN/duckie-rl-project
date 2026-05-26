@@ -327,6 +327,35 @@ class UnifiedReward(gym.RewardWrapper):
         
         return reward_speed + reward_distance + reward_survival
         
+class UnifiedRewardv1(gym.RewardWrapper):
+    def __init__(self, env, target_offset= -0.02):
+        super().__init__(env)
+        self.target_offset = target_offset 
+        self.wrong_lane_limit = -0.2
+        self.prev_action = np.zeros(2) 
+
+    def reward(self, reward):
+
+        if reward == -1000:
+            return -10
+        
+        sim = self.env.unwrapped
+        try:
+            lp = sim.get_lane_pos2(sim.cur_pos, sim.cur_angle)
+        except Exception:
+            return -10.0 
+
+        v = sim.speed
+        reward_speed = 2.0 * v * lp.dot_dir
+        
+        
+        normalized = np.clip(np.abs(lp.dist - self.target_offset) / np.abs(self.wrong_lane_limit), 0.0, 1.0)
+        reward_distance = -10 * normalized**2
+        
+        reward_survival = 1.0 if v > 0.05 else -1.0
+        
+        return reward_speed + reward_distance + reward_survival
+
 class AdditiveJerkPenalty(gym.RewardWrapper):
     """
     Penalizes large changes between consecutive actions.
