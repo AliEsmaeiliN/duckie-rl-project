@@ -4,6 +4,7 @@ os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 import random
 import time
+from typing import Optional
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -124,10 +125,11 @@ class Args:
     """Gives the robot 20 steps to recover"""
     jerk_penalty: bool = False
     """Adding the jerk penalty to the final reward"""
-    preprocessing: bool = False
-    """if toggled, applies the full sim-to-real visual enhancement stack (CLAHE, blur, contrast stretching)"""
-    
-def make_env(seed, idx, run_name, capture_video=False, action_smoothing=False, motion_blur=False, latency_rand=False, jerk_penalty=False, **env_kwargs):
+    preprocessing_eval: Optional[bool] = None
+    """Override preprocessing for evaluation. If None, inherits the training setting."""
+
+def make_env(seed, idx, run_name, capture_video=False, action_smoothing=False, motion_blur=False,
+             latency_rand=False, jerk_penalty=False, recovery_step=False, preprocessing=False, **env_kwargs):
     def thunk():
         render_mode = "rgb_array" if (capture_video and idx == 0) else None
         env = DuckieOvalEnv.create_wrapped(
@@ -138,6 +140,9 @@ def make_env(seed, idx, run_name, capture_video=False, action_smoothing=False, m
             motion_blur=motion_blur,
             seed=seed,
             jerk_penalty=jerk_penalty,
+            recovery_step=recovery_step,
+            preprocessing=preprocessing,
+            
             direction=args.direction,
             **env_kwargs
         )
@@ -284,19 +289,49 @@ if __name__ == "__main__":
         
     active_env_params = {} if args.curriculum_randomization else env_params.copy()
 
+    eval_preprocess = args.preprocessing if args.preprocessing_eval is None else args.preprocessing_eval
+
+
     # LIGHTWEIGHT UNIFIED EVALUATION ENVIRONMENTS
     best_eval_reward = -float('inf')
     eval_env_seed = args.seed + 100
 
-    eval_env_imperfect = make_env(seed=eval_env_seed, idx=0, run_name=f"{run_name}_eval", action_smoothing=True, motion_blur=True, latency_rand=True, **robust_cfg)()
-    eval_env_perfect = make_env(seed=eval_env_seed, idx=0, run_name=f"{run_name}_eval2", **base_cfg)() 
+    eval_env_imperfect = make_env(
+        seed=eval_env_seed, 
+        idx=0, 
+        run_name=f"{run_name}_eval", 
+        action_smoothing=True, 
+        motion_blur=True, 
+        latency_rand=True, 
+        preprocessing=eval_preprocess,
+        **robust_cfg
+    )()
+    
+    eval_env_perfect = make_env(
+        seed=eval_env_seed, 
+        idx=0, 
+        run_name=f"{run_name}_eval2", 
+        preprocessing=eval_preprocess,
+        **base_cfg
+    )()
+
     eval_env_perfect.unwrapped.set_curriculum(margin_factor=0.1)
     eval_env_imperfect.unwrapped.set_curriculum(margin_factor=0.1)
     eval_env_imperfect.unwrapped.set_spawn_config(mode="curriculum", difficulty=1)
     
-    envs = gym.vector.SyncVectorEnv(
-        [make_env(args.seed + i, i, run_name, recovery_step=args.recovery, action_smoothing=args.ema, motion_blur=args.motion_blur, latency_rand=args.action_latency, jerk_penalty=args.jerk_penalty, **active_env_params) for i in range(args.num_envs)]
-    )
+    envs = gym.vector.SyncVectorEnv([
+        make_env(
+            args.seed + i, i, run_name,
+            recovery_step=args.recovery, 
+            action_smoothing=args.ema, 
+            motion_blur=args.motion_blur, 
+            latency_rand=args.action_latency, 
+            jerk_penalty=args.jerk_penalty, 
+            preprocessing=args.preprocessing, 
+            **active_env_params
+        ) for i in range(args.num_envs)
+    ])
+
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
     actor = Actor(envs).to(device)
@@ -426,8 +461,8 @@ if __name__ == "__main__":
             if args.curriculum_randomization:
                 update_curriculum_stage(envs=envs, global_step=global_step, args=args)
             
-            if global_step % args.eval_interval. _ == 0 and global_step >= args.start_evaluation:
-                score1, _, _, is_best_p = evaluator_p.evaluate(
+            if global_step % args.eval_interval == 0 and global_step >= args.start_evaluation:
+                score1, _, _, is_best_p, _ = evaluator_p.evaluate(
                     is_interval=True,
                     global_step=global_step,
                     best_reward=best_eval_reward,
