@@ -59,6 +59,8 @@ class SharedDuckieArgs:
     """Simulates the action latency from the duckiebot"""
     ema: bool = False
     """Use EMA action smoothing"""
+    eval_ema: Optional[bool] = None
+    """Override EMA action smoothing for evaluation. If None, inherits the training setting."""
     recovery: bool = False
     """Gives the robot 20 steps to recover"""
     jerk_penalty: bool = False

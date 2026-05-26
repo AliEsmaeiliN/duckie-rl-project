@@ -264,6 +264,7 @@ if __name__ == "__main__":
     robust_cfg = {key: True for key in env_params}
 
     eval_preprocess = args.preprocessing if args.preprocessing_eval is None else args.preprocessing_eval
+    eval_ema = args.ema if args.eval_ema is None else args.eval_ema
 
     active_env_params = {} if args.curriculum_randomization else env_params.copy()
 
@@ -275,7 +276,7 @@ if __name__ == "__main__":
         seed=eval_env_seed, 
         idx=0, 
         run_name=f"{run_name}_eval", 
-        action_smoothing=True, 
+        action_smoothing=eval_ema, 
         motion_blur=True, 
         latency_rand=True, 
         preprocessing=eval_preprocess,
