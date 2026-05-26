@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=ali_sac
+#SBATCH --job-name=ali_td3
 #SBATCH --output=output/duckie_%j.out
 #SBATCH -e output/duckie_%j.err
 #SBATCH --time=20:00:00
@@ -31,14 +31,14 @@ srun --cpu-bind=none singularity exec --nv \
     $SIF_IMAGE \
     xvfb-run -a -s "-screen 0 1024x768x24 -ac +extension GLX +render" \
     bash -c "export PYTHONPATH=/app:/app/src:\$PYTHONPATH && \
-    python3 rl/sac_continuous_action.py \
+    python3 rl/td3_continuous_action.py \
     --seed 1 \
     --env-id unified1 \
     --total-timesteps 1500000 \
     --track \
     --version 0 \
     --buffer-size 300000 \
-    --learning-starts 10000 \
+    --learning-starts 40000 \
     --domain-rand \
     --camera-rand \
     --dynamics-rand \
