@@ -284,8 +284,8 @@ if __name__ == "__main__":
     best_eval_reward = -float('inf')
     eval_env_seed = args.seed + 100
 
-    eval_env_imperfect = make_env(seed=eval_env_seed, idx=0, run_name=f"{run_name}_eval", action_smoothing=True, motion_blur=True, latency_rand=True, jerk_penalty=args.jerk_penalty, **robust_cfg)()
-    eval_env_perfect = make_env(seed=eval_env_seed, idx=0, run_name=f"{run_name}_eval2", jerk_penalty=args.jerk_penalty, **base_cfg)() 
+    eval_env_imperfect = make_env(seed=eval_env_seed, idx=0, run_name=f"{run_name}_eval", action_smoothing=True, motion_blur=True, latency_rand=True, **robust_cfg)()
+    eval_env_perfect = make_env(seed=eval_env_seed, idx=0, run_name=f"{run_name}_eval2", **base_cfg)() 
     eval_env_perfect.unwrapped.set_curriculum(margin_factor=0.1)
     eval_env_imperfect.unwrapped.set_curriculum(margin_factor=0.1)
     eval_env_imperfect.unwrapped.set_spawn_config(mode="curriculum", difficulty=1)
@@ -307,8 +307,8 @@ if __name__ == "__main__":
     q_optimizer = optim.Adam(list(qf1.parameters()) + list(qf2.parameters()), lr=args.learning_rate)
     actor_optimizer = optim.Adam(list(actor.parameters()), lr=args.learning_rate)
 
-    evaluator1 = DuckiebotEvaluator(eval_env_perfect, eval_env_seed, actor, args, device, prefix="eval_perfect")
-    evaluator2 = DuckiebotEvaluator(eval_env_imperfect, eval_env_seed, actor, args, device, prefix="eval_imperfect")
+    evaluator_p = DuckiebotEvaluator(eval_env_perfect, eval_env_seed, actor, args, device, prefix="eval_perfect")
+    evaluator_imp = DuckiebotEvaluator(eval_env_imperfect, eval_env_seed, actor, args, device, prefix="eval_imperfect")
     
     envs.single_observation_space.dtype = np.uint8
     rb = ReplayBuffer(
@@ -423,13 +423,13 @@ if __name__ == "__main__":
                 update_curriculum_stage(envs=envs, global_step=global_step, args=args)
             
             if global_step % args.eval_interval == 0 and global_step >= args.start_evaluation:
-                score1, _, _, is_best = evaluator1.evaluate(
+                score1, _, _, is_best_p = evaluator_p.evaluate(
                     is_interval=True,
                     global_step=global_step,
                     best_reward=best_eval_reward,
                     num_episodes=10
                 )
-                score2, _, _, _ = evaluator2.evaluate(
+                score2, _, _, is_best_imp = evaluator_imp.evaluate(
                     is_interval=True,
                     global_step=global_step,
                     best_reward=best_eval_reward,
@@ -439,8 +439,8 @@ if __name__ == "__main__":
                 writer.add_scalar("charts/risk_adjusted_score_perfect", score1, global_step)
                 writer.add_scalar("charts/risk_adjusted_score_imperfect", score2, global_step)
 
-                if is_best:
-                    best_eval_reward = score1
+                if is_best_imp:
+                    best_eval_reward = score2
                     print(f" New Peak Performance Milestone! Saving weights...")
                     save_models(
                         actor=actor, qf1=qf1, qf2=qf2, 

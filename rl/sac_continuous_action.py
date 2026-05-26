@@ -358,8 +358,8 @@ if __name__ == "__main__":
     q_optimizer = optim.Adam(list(qf1.parameters()) + list(qf2.parameters()), lr=args.q_lr)
     actor_optimizer = optim.Adam(list(actor.parameters()), lr=args.policy_lr)
 
-    evaluator1 = DuckiebotEvaluator(eval_env_perfect, eval_env_seed, actor, args, device, prefix="eval_perfect")
-    evaluator2 = DuckiebotEvaluator(eval_env_imperfect, eval_env_seed, actor, args, device, prefix="eval_imperfect")
+    evaluator_p = DuckiebotEvaluator(eval_env_perfect, eval_env_seed, actor, args, device, prefix="eval_perfect")
+    evaluator2_imp = DuckiebotEvaluator(eval_env_imperfect, eval_env_seed, actor, args, device, prefix="eval_imperfect")
 
     # Automatic entropy tuning
     if args.autotune:
@@ -498,13 +498,13 @@ if __name__ == "__main__":
                 update_curriculum_stage(envs=envs, global_step=global_step, args=args)
             
             if global_step % args.eval_interval == 0 and global_step >= args.start_evaluation:
-                score1, _, _, is_best = evaluator1.evaluate(
+                score1, _, _, is_best_p = evaluator_p.evaluate(
                     is_interval=True,
                     global_step=global_step,
                     best_reward=best_eval_reward,
                     num_episodes=10
                 )
-                score2, _, _, _ = evaluator2.evaluate(
+                score2, _, _, is_best_imp = evaluator2_imp.evaluate(
                     is_interval=True,
                     global_step=global_step,
                     best_reward=best_eval_reward,
@@ -514,8 +514,8 @@ if __name__ == "__main__":
                 writer.add_scalar("charts/risk_adjusted_score_perfect", score1, global_step)
                 writer.add_scalar("charts/risk_adjusted_score_imperfect", score2, global_step)
 
-                if is_best:
-                    best_eval_reward = score1
+                if is_best_imp:
+                    best_eval_reward = score2
                     print(f" New Peak Performance Milestone! Saving weights...")
                     save_models(
                         actor=actor, qf1=qf1, qf2=qf2, 
