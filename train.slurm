@@ -1,37 +1,51 @@
 #!/bin/bash
-#SBATCH -J DuckieRL
-#SBATCH -o logs/output_%j.txt
-#SBATCH -e logs/errors_%j.txt
-#SBATCH -t 00:30:00
-#SBATCH -n 1
-#SBATCH -c 4
-#SBATCH -p allgroups
-#SBATCH --mem=16G
-#SBATCH --gres=gpu:rtx
+#SBATCH --job-name=ali_sac
+#SBATCH --output=output/duckie_%j.out
+#SBATCH -e output/duckie_%j.err
+#SBATCH --time=12:00:00
+#SBATCH --partition=pgpu_most
+#SBATCH --account=dei_most
+#SBATCH --gpus=1
+#SBATCH --mem=32G
+#SBATCH --cpus-per-task=4
+
 
 cd $HOME/duckie-rl-project
-mkdir -p logs
+mkdir -p output
 
 export DISPLAY=:$((SLURM_JOB_ID % 100 + 100))
-Xvfb $DISPLAY -screen 0 1024x768x24 -ac +extension GLX +render -noreset &> xvfb.log &
 
 SIF_IMAGE="$HOME/duckie_rl.sif"
 
-export LIBGL_ALWAYS_SOFTWARE=1
+export WANDB_DIR="/tmp"
+export WANDB_CACHE_DIR="/tmp"
+
 export PYGLET_HEADLESS=True
-export GALLIUM_DRIVER=llvmpipe
+export PYGLET_DEBUG_GL=False
 
 
 
-srun singularity exec --nv \
+srun --cpu-bind=none singularity exec --nv \
     -B .:/app \
     --pwd /app \
     $SIF_IMAGE \
-    bash -c "export PYTHONPATH=\$PYTHONPATH:/app:/app/src && \
+    xvfb-run -a -s "-screen 0 1024x768x24 -ac +extension GLX +render" \
+    bash -c "export PYTHONPATH=/app:/app/src:\$PYTHONPATH && \
     python3 rl/sac_continuous_action.py \
-    --env-id 'testforCL' \
+    --seed 1 \
+    --env-id singularity \
     --total-timesteps 2000 \
-    --buffer-size 5000 \
-    --batch-size 64 \
-    --learning-starts 500 \
-    --track"
+    --track \
+    --version 0 \
+    --buffer-size 300000 \
+    --learning-starts 1000 \
+    --domain-rand \
+    --camera-rand \
+    --dynamics-rand \
+    --action-latency \
+    --curriculum_randomization \
+    --jerk_penalty \
+    --recovery \
+    --eval-interval 200 \
+    --start-evaluation 1000 \
+    --run-notes 'Checking singularity'"
