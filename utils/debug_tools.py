@@ -25,45 +25,51 @@ class DuckiebotEvaluator:
         self.best_trajectory_payload = {}
         
     @staticmethod
-    def compute_unified_eval_reward(sim, current_action, prev_action,return_components=False):
+    def compute_unified_eval_reward(sim, current_action, prev_action, return_components=False):
         """
         Unified Evaluation Reward Matrix for Duckietown Oval Layout.
-        Provides a normalized, objective metric between -1.0 and +1.0 per step.
-        Optionally returns individual components for granular trajectory debugging.
+        Provides a strictly monotonic, normalized objective metric for policy ranking.
         """
+        # Return an unclipped, heavy penalty for failing to stay in the lane
+        # This ensures a model that survives longer always ranks higher.
+        CATASTROPHIC_PENALTY = -2.0 
+        
         try:
             lp = sim.get_lane_pos2(sim.cur_pos, sim.cur_angle)
             distance = lp.dist       
             dot_dir = lp.dot_dir    
         except Exception:
             if return_components:
-                return -1.0, -0.4, -0.3, -0.2, -0.1
-            return -1.0
+                return CATASTROPHIC_PENALTY, CATASTROPHIC_PENALTY, -1.0, -1.0, 0.0
+            return CATASTROPHIC_PENALTY
 
         max_deviation = 0.2
-        
         normalized_dev = np.clip(np.abs(distance) / max_deviation, 0.0, 1.0)
-        r_lane = -(normalized_dev ** 2) # Bounded between [-1.0, 0.0]
+        r_lane = -(normalized_dev ** 2)
 
-        r_speed = np.clip(sim.speed, 0.0, 1.0)
-        if dot_dir < 0:
-            r_speed = -r_speed
+        max_achievable_speed = sim.robot_speed * 0.8
+        normalized_speed = np.clip(sim.speed / max_achievable_speed, 0.0, 1.0)
+        
+        r_speed = normalized_speed if dot_dir >= 0 else -normalized_speed
 
         r_heading = dot_dir
 
+        # Given v in [0, 1] and omega in [-1, 1], maximum action jump is sqrt(5) ~ 2.236
+        max_action_jump = np.sqrt(5.0)
         jerk_diff = np.linalg.norm(current_action - prev_action)
-        r_jerk = -np.clip(jerk_diff / 2.0, 0.0, 1.0) 
+        r_jerk = -(np.clip(jerk_diff / max_action_jump, 0.0, 1.0))
 
         w_speed, w_lane, w_heading, w_jerk = 0.4, 0.3, 0.2, 0.1
         total_step_reward = ((w_speed * r_speed) + 
-                             (w_lane * r_lane) + 
-                             (w_heading * r_heading) + 
-                             (w_jerk * r_jerk))
-        total_step_reward = np.clip(total_step_reward, -1.0, 0.6)
+                            (w_lane * r_lane) + 
+                            (w_heading * r_heading) + 
+                            (w_jerk * r_jerk))
         
+        
+        total_step_reward = np.clip(total_step_reward, -2.0, 1.0)
+
         if return_components:
-            return total_step_reward, w_speed * r_speed, w_lane * r_lane, w_heading * r_heading, w_jerk * r_jerk
-        
+            return total_step_reward, r_speed, r_lane, r_heading, r_jerk
         return total_step_reward
     
     @staticmethod
