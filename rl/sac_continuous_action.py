@@ -72,6 +72,7 @@ def make_env(seed, idx, run_name, capture_video=False, action_smoothing=False, m
             is_eval=is_eval,
             
             direction=args.direction,
+            reward_type=args.reward_type,
             **env_kwargs
         )
         env.action_space.seed(seed)
