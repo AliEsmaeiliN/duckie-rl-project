@@ -355,6 +355,40 @@ class UnifiedRewardv1(gym.RewardWrapper):
         reward_survival = 1.0 if v > 0.05 else -1.0
         
         return reward_speed + reward_distance + reward_survival
+    
+class UnifiedRewardv2(gym.RewardWrapper):
+    def __init__(self, env, target_offset= -0.02):
+        super().__init__(env)
+        self.target_offset = target_offset 
+        self.wrong_lane_limit = -0.15
+        self.max_expected_angle = 30.0
+
+    def reward(self, reward):
+
+        if reward == -1000:
+            return -10
+        
+        sim = self.env.unwrapped
+        try:
+            lp = sim.get_lane_pos2(sim.cur_pos, sim.cur_angle)
+        except Exception:
+            return -10.0 
+
+        v = sim.speed
+        reward_speed = 3.0 * v * max(0.0, lp.dot_dir)
+        
+        dist_error = np.abs(lp.dist - self.target_offset)
+        normalized = np.clip( dist_error / np.abs(self.wrong_lane_limit), 0.0, 1.0)
+        reward_distance = -8 * normalized
+
+        normalized_angle = np.clip(np.abs(lp.angle_deg) / self.max_expected_angle, 0.0, 1.0)
+        reward_heading = -3.0 * normalized_angle
+        
+        lane_quality = (1.0 - np.clip(dist_error / np.abs(self.wrong_lane_limit), 0.0, 1.0))
+        alignment    = (1.0 - normalized_angle)
+        reward_lane  = 2.0 * lane_quality * alignment
+        
+        return reward_speed + reward_distance + reward_lane + reward_heading
 
 class AdditiveJerkPenalty(gym.RewardWrapper):
     """
@@ -389,35 +423,46 @@ def compute_unified_eval_reward(sim, current_action, prev_action, return_compone
     
     try:
         lp = sim.get_lane_pos2(sim.cur_pos, sim.cur_angle)
-        distance = lp.dist       
-        dot_dir = lp.dot_dir    
+        distance = lp.dist 
+        dot_dir = lp.dot_dir
+        angle_deg = lp.angle_deg
     except Exception:
         if return_components:
-            return CATASTROPHIC_PENALTY, CATASTROPHIC_PENALTY, -1.0, -1.0, 0.0
+            return CATASTROPHIC_PENALTY, 0.0, 0.0, 0.0, 0.0
         return CATASTROPHIC_PENALTY
 
-    max_deviation = 0.2
-    normalized_dev = np.clip(np.abs(distance) / max_deviation, 0.0, 1.0)
-    r_lane = -(normalized_dev ** 2)
+    max_deviation = 0.15
+    target_offset = -0.02
+    max_expected_angle = 30.0
+
+    dist_error = np.abs(distance - target_offset)
+    r_distance = -(dist_error / np.abs(max_deviation))
 
     max_achievable_speed = sim.robot_speed * 0.8
     normalized_speed = np.clip(sim.speed / max_achievable_speed, 0.0, 1.0)
     
-    r_speed = normalized_speed if dot_dir >= 0 else -normalized_speed
-    r_heading = dot_dir
+    r_progress = normalized_speed * max(0.0, dot_dir)
 
-    max_action_jump = np.sqrt(5.0)
-    jerk_diff = np.linalg.norm(current_action - prev_action)
-    r_jerk = -(np.clip(jerk_diff / max_action_jump, 0.0, 1.0))
+    r_heading = -(np.abs(angle_deg) / max_expected_angle)
 
-    w_speed, w_lane, w_heading, w_jerk = 0.4, 0.3, 0.2, 0.1
-    total_step_reward = ((w_speed * r_speed) + 
-                        (w_lane * r_lane) + 
+    lane_quality = max(0.0, 1.0 - (dist_error / np.abs(max_deviation)))
+    alignment    = max(0.0, 1.0 - (np.abs(angle_deg) / max_expected_angle))
+    r_lane_bonus = lane_quality * alignment
+
+
+    w_progress, w_distance, w_heading, w_lane = 0.3, 0.3, 0.2, 0.2
+    total_step_reward = ((w_progress * r_progress) + 
+                        (w_distance * r_distance) + 
                         (w_heading * r_heading) + 
-                        (w_jerk * r_jerk))
+                        (w_lane * r_lane_bonus))
     
     total_step_reward = np.clip(total_step_reward, -2.0, 1.0)
 
     if return_components:
-        return total_step_reward, r_speed, r_lane, r_heading, r_jerk
+        return (total_step_reward, 
+                w_progress * r_progress, 
+                w_distance * r_distance, 
+                w_heading * r_heading, 
+                w_lane * r_lane_bonus)
+    
     return total_step_reward

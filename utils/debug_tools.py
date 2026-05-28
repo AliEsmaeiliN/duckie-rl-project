@@ -263,10 +263,10 @@ class DuckiebotEvaluator:
             fig_rew, ax_rew = plt.subplots(figsize=(11, 5))
             
             ax_rew.plot(traj_steps, traj_r_total, label='Weighted Total Reward', color='#2ca02c', linewidth=2.5)
-            ax_rew.plot(traj_steps, traj_r_speed, label='Progress Component (40%)', color='#bcbd22', linestyle='--', alpha=0.8)
+            ax_rew.plot(traj_steps, traj_r_speed, label='Progress Component (30%)', color='#bcbd22', linestyle='--', alpha=0.8)
             ax_rew.plot(traj_steps, traj_r_lane, label='Lane Center Component (30%)', color='#e377c2', linestyle='--', alpha=0.8)
             ax_rew.plot(traj_steps, traj_r_heading, label='Heading Component (20%)', color='#17becf', linestyle='--', alpha=0.8)
-            ax_rew.plot(traj_steps, traj_r_jerk, label='Jerk Control Penalty (10%)', color='#7f7f7f', linestyle=':', alpha=0.9)            
+            ax_rew.plot(traj_steps, traj_r_jerk, label='Lane Reward (20%)', color='#7f7f7f', linestyle=':', alpha=0.9)            
 
             ax_rew.set_title(f'Objective Evaluation Reward Matrix Analysis ({direction_key}) - Step {global_step}', fontweight='bold', pad=12)
             ax_rew.set_ylabel('Component Score Contributions')

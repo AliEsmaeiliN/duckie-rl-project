@@ -5,7 +5,7 @@ from gym_duckietown.simulator import Simulator
 from utils.wrappers.wrappers import *
 from utils.wrappers.observation_wrappers import *
 from utils.wrappers.action_wrappers import *
-from utils.wrappers.reward_wrappers import UnifiedRewardv1 as RewardWrapper
+from utils.wrappers.reward_wrappers import UnifiedRewardv2 as RewardWrapper
 from utils.wrappers.reward_wrappers import AdditiveJerkPenalty
 
 
