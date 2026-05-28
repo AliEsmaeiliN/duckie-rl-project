@@ -34,3 +34,6 @@ runs/
 videos/
 screenshots/
 captures/
+
+# job files
+*.sh
