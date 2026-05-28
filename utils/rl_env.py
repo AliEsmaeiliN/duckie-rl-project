@@ -5,7 +5,7 @@ from gym_duckietown.simulator import Simulator
 from utils.wrappers.wrappers import *
 from utils.wrappers.observation_wrappers import *
 from utils.wrappers.action_wrappers import *
-from utils.wrappers.reward_wrappers import UnifiedRewardv2 as RewardWrapper
+from utils.wrappers.reward_wrappers import *
 from utils.wrappers.reward_wrappers import AdditiveJerkPenalty
 
 
@@ -31,7 +31,7 @@ class DuckieOvalEnv(Simulator):
         self.motor_k = 27.0
 
     @classmethod
-    def create_wrapped(cls, run_name, capture_video=False, 
+    def create_wrapped(cls, run_name, reward_type="unified_v1", capture_video=False, 
                         ema=False, motion_blur=False, grayscale=True, 
                         frame_stack=4, latency_rand=False, recovery_step=False,
                         jerk_penalty=False, preprocessing=False, is_eval=True, **kwargs
@@ -75,8 +75,24 @@ class DuckieOvalEnv(Simulator):
         else:
             env = ImgWrapper(env) # Transpose to CHW
 
-        
-        env = RewardWrapper(env)
+        reward_registry = {
+            "custom": CustomRewardWrapper,
+            "simple": SimpleRewardWrapper,
+            "adaptive": AdaptiveRewardWrapper,
+            "pid": PIDReward,
+            "unified_v1": UnifiedRewardv1,
+            "unified_v2": UnifiedRewardv2,
+            "unified": UnifiedReward,
+            "lane_pose": LanePositionReward,
+        }
+
+        if reward_type not in reward_registry:
+            raise ValueError(f"Unknown reward_type requested: {reward_type}. Choose from {list(reward_registry.keys())}")
+        else:
+            print(f"Using {reward_registry[reward_type].__name__} For the Reward Function")
+            
+        env = reward_registry[reward_type](env)
+
         if jerk_penalty:
             env = AdditiveJerkPenalty(env)
         

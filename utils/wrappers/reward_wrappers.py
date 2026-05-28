@@ -14,7 +14,6 @@ class DtRewardWrapper(gym.RewardWrapper):
 class CustomRewardWrapper(gym.RewardWrapper):
     def __init__(self, env):
         super().__init__(env)
-        self.prev_action = np.zeros(2)
         self.WRONG_LANE_LIMIT = - 0.12
 
     def reward(self, reward):
@@ -27,7 +26,6 @@ class CustomRewardWrapper(gym.RewardWrapper):
         pos = sim.cur_pos
         angle = sim.cur_angle
         speed = sim.speed
-        current_action = sim.last_action
         
         try:
             lp = sim.get_lane_pos2(pos, angle)
@@ -86,12 +84,9 @@ class CustomRewardWrapper(gym.RewardWrapper):
             
         reward_angle = -0.03 * np.abs(lp.angle_deg)
         
-        action_diff = np.linalg.norm(current_action - self.prev_action) 
-        reward_jerk = jerk_coeff * action_diff
         reward_survival = 2
 
-        self.prev_action = current_action.copy()
-        total_reward = reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk + reward_survival
+        total_reward = reward_speed + reward_alignment + reward_distance + reward_angle  + reward_survival
  
         return total_reward
     
@@ -99,7 +94,6 @@ class CustomRewardWrapper(gym.RewardWrapper):
 class SimpleRewardWrapper(gym.RewardWrapper):
     def __init__(self, env):
         super().__init__(env)
-        self.prev_action = np.zeros(2)
 
     def reward(self, reward):
         if reward == -1000:
@@ -110,7 +104,6 @@ class SimpleRewardWrapper(gym.RewardWrapper):
         pos = sim.cur_pos
         angle = sim.cur_angle
         speed = sim.speed
-        current_action = sim.last_action
         lane_width = 0.1
 
         try:
@@ -130,19 +123,13 @@ class SimpleRewardWrapper(gym.RewardWrapper):
         reward_distance = dist_coeff * np.abs(lp.dist)
         reward_angle = -0.03 * np.abs(lp.angle_deg)
         
-        action_diff = np.linalg.norm(current_action - self.prev_action) 
-        reward_jerk = jerk_coeff * action_diff
 
-        self.prev_action = current_action.copy()
-        print(f"{lp.dist}  distance \r", flush=True)
-
-        return reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
+        return reward_speed + reward_alignment + reward_distance + reward_angle
         
 
 class AdaptiveRewardWrapper(gym.RewardWrapper):
     def __init__(self, env):
         super().__init__(env)
-        self.prev_action = np.zeros(2)
 
     def reward(self, reward):
         # Get internal simulator state for custom math
@@ -195,12 +182,8 @@ class AdaptiveRewardWrapper(gym.RewardWrapper):
         reward_distance = dist_penalty_coeff * np.abs(lp.dist)
         reward_angle = -0.03 * np.abs(lp.angle_deg)
         
-        action_diff = np.linalg.norm(current_action - self.prev_action) 
-        reward_jerk = jerk_coeff * action_diff
 
-        self.prev_action = current_action.copy()
-
-        return reward_speed + reward_alignment + reward_distance + reward_angle + reward_jerk
+        return reward_speed + reward_alignment + reward_distance + reward_angle 
 
 class LanePositionReward(gym.RewardWrapper):
     def __init__(self, env, target_offset= -0.02):
@@ -230,11 +213,8 @@ class LanePositionReward(gym.RewardWrapper):
         
         reward_survival = 1.0 if v > 0.05 else -1.0
         
-        current_action = sim.last_action
-        reward_jerk = -2 * np.linalg.norm(current_action - self.prev_action)
-        self.prev_action = current_action.copy()
         
-        return reward_speed + reward_distance + reward_survival + reward_jerk
+        return reward_speed + reward_distance + reward_survival 
     
 class PIDReward(gym.RewardWrapper):
     def __init__(self, env, target_offset= -0.02):
@@ -271,7 +251,6 @@ class SingleDirectionReward(gym.RewardWrapper):
         super().__init__(env)
         self.target_offset = target_offset 
         self.wrong_lane_limit = -0.2
-        self.prev_action = np.zeros(2) 
 
     def reward(self, reward):
 
@@ -292,11 +271,8 @@ class SingleDirectionReward(gym.RewardWrapper):
         
         reward_survival = 1.0 if v > 0.05 else -1.0
         
-        current_action = sim.last_action
-        reward_jerk = -2 * np.linalg.norm(current_action - self.prev_action)
-        self.prev_action = current_action.copy()
         
-        return reward_speed + reward_distance + reward_survival + reward_jerk
+        return reward_speed + reward_distance + reward_survival 
     
 class UnifiedReward(gym.RewardWrapper):
     def __init__(self, env, target_offset= -0.02):
