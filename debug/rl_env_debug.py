@@ -5,7 +5,7 @@ from gym_duckietown.simulator import Simulator
 from utils.wrappers.wrappers import *
 from utils.wrappers.observation_wrappers import *
 from utils.wrappers.action_wrappers import *
-from wrappers_debug import DebugRewardWrapper
+from wrappers_debug import DebugRewardWrapper, TileTrackingWrapper
 from utils.wrappers.reward_wrappers import AdditiveJerkPenalty
 
 
@@ -41,6 +41,8 @@ class DuckieOvalEnv(Simulator):
         Static method to build the fully wrapped stack.
         """
         env = cls(**kwargs)
+
+        env = TileTrackingWrapper(env)
 
         env = KinematicActionWrapper(env, wheel_dist=0.102, radius=0.0318, k=27.0)
 

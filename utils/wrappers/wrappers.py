@@ -55,3 +55,50 @@ class RecoveryTrainingWrapper(gym.Wrapper):
         self.recovery_steps = 0
         self.in_recovery_mode = False
         return self.env.reset(**kwargs)
+    
+class TileTrackingWrapper(gym.Wrapper):
+    """
+    Tracks the number of tiles traversed and loops completed during an episode.
+    Injects these metrics into the `info` dictionary for evaluation logging.
+    """
+    def __init__(self, env):
+        super().__init__(env)
+        self.current_tile = None
+        self.start_tile = None
+        self.tiles_passed = 0
+        self.laps_completed = 0
+        self.visited_tiles = set()
+        self.track_lenght = 10
+
+    def reset(self, **kwargs):
+        obs, info = self.env.reset(**kwargs)
+        
+        sim = self.unwrapped
+        self.current_tile = sim.get_grid_coords(sim.cur_pos)
+        self.start_tile = self.current_tile
+        
+        self.tiles_passed = 0
+        self.laps_completed = 0
+        self.visited_tiles = {self.current_tile}
+        
+        return obs, info
+
+    def step(self, action):
+        obs, reward, done, truncated, info = self.env.step(action)
+        sim = self.unwrapped
+        
+        new_tile = sim.get_grid_coords(sim.cur_pos)
+        
+        if new_tile != self.current_tile:
+            self.current_tile = new_tile
+            self.tiles_passed += 1
+            self.visited_tiles.add(new_tile)
+            
+            if new_tile == self.start_tile and len(self.visited_tiles) > 7:
+                self.laps_completed += 1
+                self.visited_tiles = {self.start_tile}
+        
+        info['tiles_passed'] = self.tiles_passed
+        info['laps_completed'] = self.laps_completed
+        
+        return obs, reward, done, truncated, info
