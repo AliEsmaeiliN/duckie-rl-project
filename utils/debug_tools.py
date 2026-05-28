@@ -7,7 +7,7 @@ import cv2
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from wrappers.reward_wrappers import compute_unified_eval_reward
+from utils.wrappers.reward_wrappers import compute_unified_eval_reward
 
 class DuckiebotEvaluator:
     """
