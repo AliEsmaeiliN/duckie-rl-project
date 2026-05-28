@@ -276,9 +276,9 @@ class DuckiebotEvaluator:
             ax_rew.grid(True, linestyle='--', alpha=0.5)
             
             plt.tight_layout()
-            log_payload[f"{self.prefix}/best_milestone_reward_decompositions_{direction_key}"] = wandb.Image(
-                fig_rew, caption=f"Evaluation Metric Breakdown Profiles ({direction_key}) - Step {global_step}"
-            )
+            #log_payload[f"{self.prefix}/best_milestone_reward_decompositions_{direction_key}"] = wandb.Image(
+            #   fig_rew, caption=f"Evaluation Metric Breakdown Profiles ({direction_key}) - Step {global_step}"
+            #)
             plt.close(fig_rew)
 
         # Restore original environment state
