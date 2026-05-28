@@ -36,7 +36,8 @@ class RewardCompute():
             "dbg": self.dbg_reward,
             "pid": self.pid_reward,
             "ufd": self.unified_reward,
-            "eval": self.eval_reward
+            "eval": self.eval_reward,
+            "ufd2": self.unified2
         }
         if name not in funcs:
             raise ValueError(f"Reward type '{name}' not recognized.")
@@ -163,6 +164,29 @@ class RewardCompute():
         
 
         return 0.5 * r_speed , 0.3 * r_lane , 0.2 * r_heading , 0, 0
+    
+    def unified2(self, speed, distance, heading, angle, danger_zone, current_action, previous_action):
+        
+        
+        target_offset = -0.02 
+        wrong_lane_limit = -0.2
+        max_expected_angle = 30.0
+
+        v = speed
+        reward_speed = 3.0 * v * max(0.0, heading)
+        
+        dist_error = np.abs(distance - target_offset)
+        normalized = np.clip( dist_error / np.abs(wrong_lane_limit), 0.0, 1.0)
+        reward_distance = -5 * normalized
+
+        normalized_angle = np.clip(np.abs(angle) / max_expected_angle, 0.0, 1.0)
+        reward_heading = -3.0 * normalized_angle
+        
+        lane_quality = (1.0 - np.clip(dist_error / np.abs(wrong_lane_limit), 0.0, 1.0))
+        alignment    = (1.0 - normalized_angle)
+        reward_lane  = 2.0 * lane_quality * alignment
+
+        return reward_speed, reward_distance, reward_heading, reward_lane, 0
 
         
 
@@ -227,7 +251,6 @@ class DtRewardWrapper(gym.RewardWrapper):
         return reward
 
 
-# this is needed because at max speed the duckie can't turn anymore
 class ActionWrapper(gym.ActionWrapper):
     def __init__(self, env):
         super().__init__(env)

@@ -411,8 +411,6 @@ class AdditiveJerkPenalty(gym.RewardWrapper):
 
         return reward + jerk_penalty
         
-# utils/rewards.py
-import numpy as np
 
 def compute_unified_eval_reward(sim, current_action, prev_action, return_components=False):
     """
