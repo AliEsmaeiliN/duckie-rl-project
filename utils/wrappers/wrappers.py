@@ -98,6 +98,9 @@ class TileTrackingWrapper(gym.Wrapper):
                 self.laps_completed += 1
                 self.visited_tiles = {self.start_tile}
         
+        if self.laps_completed >= 2:
+            truncated = True
+            
         info['tiles_passed'] = self.tiles_passed
         info['laps_completed'] = self.laps_completed
         
