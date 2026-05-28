@@ -37,3 +37,4 @@ captures/
 
 # job files
 *.sh
+*.slurm
