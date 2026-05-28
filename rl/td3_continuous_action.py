@@ -53,7 +53,7 @@ class Args(SharedDuckieArgs):
     """noise clip parameter of the Target Policy Smoothing Regularization"""
 
 def make_env(seed, idx, run_name, capture_video=False, action_smoothing=False, motion_blur=False,
-             latency_rand=False, jerk_penalty=False, recovery_step=False, preprocessing=False, **env_kwargs):
+             latency_rand=False, jerk_penalty=False, recovery_step=False, preprocessing=False, is_eval=False, **env_kwargs):
     def thunk():
         render_mode = "rgb_array" if (capture_video and idx == 0) else None
         env = DuckieOvalEnv.create_wrapped(
@@ -66,6 +66,7 @@ def make_env(seed, idx, run_name, capture_video=False, action_smoothing=False, m
             jerk_penalty=jerk_penalty,
             recovery_step=recovery_step,
             preprocessing=preprocessing,
+            is_eval=is_eval,
             
             direction=args.direction,
             **env_kwargs
@@ -223,19 +224,21 @@ if __name__ == "__main__":
     eval_env_imperfect = make_env(
         seed=eval_env_seed, 
         idx=0, 
-        run_name=f"{run_name}_eval", 
+        run_name=f"{run_name}_eval_im", 
         action_smoothing=eval_ema, 
         motion_blur=True, 
         latency_rand=True, 
         preprocessing=eval_preprocess,
+        is_eval=True,
         **robust_cfg
     )()
     
     eval_env_perfect = make_env(
         seed=eval_env_seed, 
         idx=0, 
-        run_name=f"{run_name}_eval2", 
+        run_name=f"{run_name}_eval_p", 
         preprocessing=eval_preprocess,
+        is_eval=True,
         **base_cfg
     )()
 

@@ -34,12 +34,15 @@ class DuckieOvalEnv(Simulator):
     def create_wrapped(cls, run_name, capture_video=False, 
                         ema=False, motion_blur=False, grayscale=True, 
                         frame_stack=4, latency_rand=False, recovery_step=False,
-                        jerk_penalty=False, preprocessing=False, **kwargs
+                        jerk_penalty=False, preprocessing=False, is_eval=True, **kwargs
                     ):
         """
         Static method to build the fully wrapped stack.
         """
         env = cls(**kwargs)
+
+        if is_eval:
+            env = TileTrackingWrapper(env)
 
         env = KinematicActionWrapper(env, wheel_dist=0.102, radius=0.0318, k=27.0)
 
