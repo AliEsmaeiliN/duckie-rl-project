@@ -7,7 +7,7 @@ import cv2
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from utils.wrappers.reward_wrappers import compute_unified_eval_reward
+from utils.wrappers.reward_wrappers import compute_hybrid_eval_reward as evaluation_reward
 
 class DuckiebotEvaluator:
     """
@@ -155,7 +155,7 @@ class DuckiebotEvaluator:
                             action = self.actor(obs_tensor)
                         action = action.cpu().numpy().reshape(-1)
                     
-                    r_tot, r_sp, r_ln, r_hd, r_jk = compute_unified_eval_reward(
+                    r_tot, r_sp, r_ln, r_hd, r_jk = evaluation_reward(
                         sim, current_action=action, prev_action=prev_action, return_components=True
                     )
                     traj_r_total.append(r_tot)
@@ -266,7 +266,7 @@ class DuckiebotEvaluator:
             ax_rew.plot(traj_steps, traj_r_speed, label='Progress Component (30%)', color='#bcbd22', linestyle='--', alpha=0.8)
             ax_rew.plot(traj_steps, traj_r_lane, label='Lane Center Component (30%)', color='#e377c2', linestyle='--', alpha=0.8)
             ax_rew.plot(traj_steps, traj_r_heading, label='Heading Component (20%)', color='#17becf', linestyle='--', alpha=0.8)
-            ax_rew.plot(traj_steps, traj_r_jerk, label='Lane Reward (20%)', color='#7f7f7f', linestyle=':', alpha=0.9)            
+            ax_rew.plot(traj_steps, traj_r_jerk, label='Smoothness Reward (20%)', color='#7f7f7f', linestyle=':', alpha=0.9)            
 
             ax_rew.set_title(f'Objective Evaluation Reward Matrix Analysis ({direction_key}) - Step {global_step}', fontweight='bold', pad=12)
             ax_rew.set_ylabel('Component Score Contributions')
@@ -285,7 +285,7 @@ class DuckiebotEvaluator:
         sim.direction = original_direction
         return log_payload
 
-    def evaluate(self, is_interval=False, global_step=0, best_reward=-float('inf'), num_episodes=10):
+    def evaluate(self, is_interval=False, global_step=0, best_reward=-float('inf'), num_episodes=10, target_laps=2):
         """
         Unified policy evaluation method.
         Returns: (risk_adjusted_score, avg_reward, std_reward, is_best)
@@ -309,6 +309,7 @@ class DuckiebotEvaluator:
             done = False
             episodic_reward = 0
             prev_action = np.zeros(2, dtype=np.float32)
+            is_success = False
             
             while not done:
                 with torch.no_grad():
@@ -320,18 +321,25 @@ class DuckiebotEvaluator:
                 
                     action = action.cpu().numpy().reshape(-1)
 
-                next_obs, _, terminated, truncated, _ = self.eval_env.step(action)
-                step_eval_reward = compute_unified_eval_reward(
+                next_obs, _, terminated, truncated, info = self.eval_env.step(action)
+                step_eval_reward = evaluation_reward(
                     raw_sim, current_action=action, prev_action=prev_action, return_components=False
                 )
                 
                 obs = next_obs
                 episodic_reward += step_eval_reward            
-                done = terminated or truncated
                 prev_action = action.copy()
+                ep_tiles = info.get('tiles_passed', 0)
+                ep_laps = info.get('laps_completed', 0)
+
+                if ep_laps >= target_laps:
+                    is_success = True
+                    done = True  
+                else:
+                    done = terminated or truncated
 
             all_rewards.append(episodic_reward)
-            if truncated and not terminated:
+            if is_success:
                 completed_episodes += 1
 
         avg_reward = np.mean(all_rewards)
