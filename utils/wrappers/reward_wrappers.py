@@ -464,3 +464,100 @@ def compute_unified_eval_reward(sim, current_action, prev_action, return_compone
                 w_lane * r_lane_bonus)
     
     return total_step_reward
+
+
+def compute_stability_eval_reward(sim, current_action, prev_action, return_components=False):
+    """
+    Evaluation Metric.
+    """
+    CATASTROPHIC_PENALTY = -5.0
+
+    try:
+        lp = sim.get_lane_pos2(sim.cur_pos, sim.cur_angle)
+        dist         = lp.dist
+        heading_err = lp.angle_rad
+    except Exception:
+        if return_components:
+            return CATASTROPHIC_PENALTY, -1.0, -1.0, -1.0
+        return CATASTROPHIC_PENALTY
+
+    sigma_d   = 0.05   # 5cm lane center tolerance
+    sigma_h   = 0.30   # ~17° heading tolerance
+    cte = dist + 0.02
+    r_lane     = np.exp(-(cte / sigma_d)**2)
+    r_heading  = np.exp(-(heading_err / sigma_h)**2)
+    r_trajectory = 0.6 * r_lane + 0.4 * r_heading 
+
+    delta_omega     = current_action[1] - prev_action[1]
+    max_delta_omega = 2.0
+    
+    r_jerk   = -(delta_omega / max_delta_omega)**2
+    r_effort = -(current_action[1])**2
+    r_smoothness = 0.7 * r_jerk + 0.3 * r_effort
+
+    target_speed = 0.4
+    sigma_v      = 0.15
+    r_velocity   = np.exp(-((sim.speed - target_speed) / sigma_v)**2)
+
+    w_trajectory = 0.5
+    w_smoothness = 0.3
+    w_velocity   = 0.2
+
+    total_score = (
+        w_trajectory * r_trajectory +
+        w_smoothness * r_smoothness +
+        w_velocity   * r_velocity
+    )
+    total_score = np.clip(total_score, -2.0, 1.0)
+
+    if return_components:
+        return total_score, r_trajectory, r_smoothness, r_velocity
+    return total_score
+
+def compute_hybrid_eval_reward(sim, current_action, prev_action, return_components=False):
+    """
+    Hybrid Evaluation Matrix for Checkpoint Selection.
+    Prioritizes Task Success (Progress + Survival) with a linear penalty landscape,
+    using control smoothness strictly as a minor tie-breaker.
+    """
+    CATASTROPHIC_PENALTY = -2.0
+
+    try:
+        lp = sim.get_lane_pos2(sim.cur_pos, sim.cur_angle)
+        cte         = lp.dist
+        dot_dir     = lp.dot_dir
+        angle_deg   = lp.angle_deg
+    except Exception:
+        if return_components:
+            return CATASTROPHIC_PENALTY, 0.0, 0.0, 0.0, 0.0
+        return CATASTROPHIC_PENALTY
+
+    max_achievable_speed = sim.robot_speed * 0.8
+    normalized_speed = np.clip(sim.speed / max_achievable_speed, 0.0, 1.0)
+    r_progress = normalized_speed * max(0.0, dot_dir)
+
+    max_deviation = 0.20
+    r_lane = 1.0 - np.clip(np.abs(cte + 0.02) / max_deviation, 0.0, 1.0)
+
+    max_expected_angle = 45.0 
+    r_heading = 1.0 - np.clip(np.abs(angle_deg) / max_expected_angle, 0.0, 1.0)
+
+    delta_omega = current_action[1] - prev_action[1]
+    max_delta_omega = 2.0
+    r_smoothness = -(delta_omega / max_delta_omega) ** 2
+
+    w_progress   = 0.45
+    w_lane       = 0.30
+    w_heading    = 0.15
+    w_smoothness = 0.10
+
+    total_score = (
+        (w_progress * r_progress) +
+        (w_lane * r_lane) +
+        (w_heading * r_heading) +
+        (w_smoothness * r_smoothness)
+    )
+
+    if return_components:
+        return total_score, r_progress, r_lane, r_heading, r_smoothness
+    return total_score
