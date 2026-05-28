@@ -71,7 +71,8 @@ else:
         domain_rand=args.domain_rand,
         dynamics_rand=args.dynamics_rand,
         distortion=args.distortion,
-        recovery_step=True
+        recovery_step=True,
+        spawn_difficulty=1.0
     )
 
 render_modes = ["human", "top_down", "free_cam", "rgb_array"]

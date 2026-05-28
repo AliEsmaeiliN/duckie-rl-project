@@ -23,5 +23,4 @@ python rl/sac_continuous_action.py \
     --ema \
     --jerk-penalty \
     --recovery \
-    --curriculum_randomization \
-    --track
+    --curriculum_randomization
