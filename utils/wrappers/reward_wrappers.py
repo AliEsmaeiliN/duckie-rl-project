@@ -336,7 +336,7 @@ class UnifiedRewardv2(gym.RewardWrapper):
     def __init__(self, env, target_offset= -0.02):
         super().__init__(env)
         self.target_offset = target_offset 
-        self.wrong_lane_limit = -0.15
+        self.wrong_lane_limit = -0.2
         self.max_expected_angle = 30.0
 
     def reward(self, reward):

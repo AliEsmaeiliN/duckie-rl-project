@@ -285,7 +285,7 @@ class DuckiebotEvaluator:
         sim.direction = original_direction
         return log_payload
 
-    def evaluate(self, is_interval=False, global_step=0, best_reward=-float('inf'), num_episodes=10, target_laps=2):
+    def evaluate(self, is_interval=False, global_step=0, best_reward=-float('inf'), num_episodes=10):
         """
         Unified policy evaluation method.
         Returns: (risk_adjusted_score, avg_reward, std_reward, is_best)
@@ -299,6 +299,7 @@ class DuckiebotEvaluator:
         self.actor.eval()
 
         all_rewards = []
+        all_tiles = []
         completed_episodes = 0
         self.eval_env.reset(seed=self.seed)
 
@@ -309,7 +310,6 @@ class DuckiebotEvaluator:
             done = False
             episodic_reward = 0
             prev_action = np.zeros(2, dtype=np.float32)
-            is_success = False
             
             while not done:
                 with torch.no_grad():
@@ -330,21 +330,17 @@ class DuckiebotEvaluator:
                 episodic_reward += step_eval_reward            
                 prev_action = action.copy()
                 ep_tiles = info.get('tiles_passed', 0)
-                ep_laps = info.get('laps_completed', 0)
-
-                if ep_laps >= target_laps:
-                    is_success = True
-                    done = True  
-                else:
-                    done = terminated or truncated
+                done = terminated or truncated
 
             all_rewards.append(episodic_reward)
-            if is_success:
+            all_tiles.append(ep_tiles)
+            if truncated and not terminated:
                 completed_episodes += 1
 
         avg_reward = np.mean(all_rewards)
         std_reward = np.std(all_rewards)
         success_rate = (completed_episodes / num_episodes) * 100
+        loops_done = np.mean(all_tiles) / 10
         print(f"--- {eval_type} Evaluation Complete | Average Reward: {avg_reward:.2f} (Std: {std_reward:.2f}) | Success Rate: {success_rate:.2f} ---")
 
         beta = 0.5
@@ -360,13 +356,14 @@ class DuckiebotEvaluator:
                 "avg_reward": float(avg_reward),
                 "std_reward": float(std_reward),
                 "risk_adjusted_score": float(risk_adjusted_score),
-                "success_rate": int(success_rate)
+                "success_rate": int(success_rate),
+                "loops_done": float(loops_done)
             })
 
             if is_best:
                 print("Launching clean dual trajectory tracking...")
                 self.best_trajectory_payload = self.generate_trajectory(global_step=global_step)
-                wandb.log(self.best_trajectory_payload, step=global_step)
+                #wandb.log(self.best_trajectory_payload, step=global_step)
             if not is_interval:
                 self._log_distribution_plot(global_step=global_step, extra_payload=self.best_trajectory_payload)
             
