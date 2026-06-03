@@ -87,7 +87,7 @@ class DuckiebotEvaluator:
 
         table = wandb.Table(columns=["step", "avg_reward", "std_reward", "risk_adjusted_score", "success_rate"])
         for h in self.eval_history:
-            table.add_data(h["step"], h["avg_reward"], h["std_reward"], h["risk_adjusted_score"], h["success_rate"])
+            table.add_data(h["step"], h["avg_reward"], h["std_reward"], h["risk_adjusted_score"], h["success_rate"], h["loops_done"])
         log_dict[f"{self.prefix}/performance_data"] = table
 
         if extra_payload:
@@ -341,7 +341,7 @@ class DuckiebotEvaluator:
         std_reward = np.std(all_rewards)
         success_rate = (completed_episodes / num_episodes) * 100
         loops_done = np.mean(all_tiles) / 10
-        print(f"--- {eval_type} Evaluation Complete | Average Reward: {avg_reward:.2f} (Std: {std_reward:.2f}) | Success Rate: {success_rate:.2f} ---")
+        print(f"--- {eval_type} Evaluation Complete | Average Reward: {avg_reward:.2f} (Std: {std_reward:.2f}) | Success Rate: {success_rate:.2f} | Loops Done: {loops_done:.2f}---")
 
         beta = 0.5
         risk_adjusted_score = avg_reward - (beta * std_reward)
