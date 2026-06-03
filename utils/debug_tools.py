@@ -85,7 +85,7 @@ class DuckiebotEvaluator:
 
         log_dict = {f"{self.prefix}/performance_summary": wandb.Image(fig)}
 
-        table = wandb.Table(columns=["step", "avg_reward", "std_reward", "risk_adjusted_score", "success_rate"])
+        table = wandb.Table(columns=["step", "avg_reward", "std_reward", "risk_adjusted_score", "success_rate", "loops_done"])
         for h in self.eval_history:
             table.add_data(h["step"], h["avg_reward"], h["std_reward"], h["risk_adjusted_score"], h["success_rate"], h["loops_done"])
         log_dict[f"{self.prefix}/performance_data"] = table
