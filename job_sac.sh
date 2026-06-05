@@ -2,7 +2,7 @@
 #SBATCH --job-name=ali_sac
 #SBATCH --output=output/duckie_%j.out
 #SBATCH -e output/duckie_%j.err
-#SBATCH --time=20:00:00
+#SBATCH --time=24:00:00
 #SBATCH --partition=pgpu_most
 #SBATCH --account=dei_most
 #SBATCH --gpus=1
@@ -13,12 +13,11 @@
 cd $HOME/duckie-rl-project
 mkdir -p output
 
-export DISPLAY=:$((SLURM_JOB_ID % 100 + 100))
-
 SIF_IMAGE="$HOME/duckie_rl.sif"
 
-export WANDB_DIR="/tmp"
-export WANDB_CACHE_DIR="/tmp"
+export WANDB_DIR="${PROJECT_DIR}"
+export WANDB_CACHE_DIR="/tmp/${USER}_wandb_cache"
+
 
 export PYGLET_HEADLESS=True
 export PYGLET_DEBUG_GL=False
@@ -29,11 +28,12 @@ srun --cpu-bind=none singularity exec --nv \
     -B .:/app \
     --pwd /app \
     $SIF_IMAGE \
-    xvfb-run -a -s "-screen 0 1024x768x24 -ac +extension GLX +render" \
     bash -c "export PYTHONPATH=/app:/app/src:\$PYTHONPATH && \
+    export WANDB_API_KEY='$USER_WANDB_KEY' && \
     python3 rl/sac_continuous_action.py \
     --seed 1 \
-    --env-id unified1 \
+    --env-id Final_r2 \
+    --reward_type 'unified' \
     --total-timesteps 1500000 \
     --track \
     --version 0 \
@@ -43,7 +43,9 @@ srun --cpu-bind=none singularity exec --nv \
     --camera-rand \
     --dynamics-rand \
     --action-latency \
+    --ema \
     --curriculum-randomization \
     --jerk-penalty \
     --recovery \
-    --run-notes 'unified v1 with complete curriculum'"
+    --wandb_project_name: 'Duckie-RL-Final'
+    --run-notes 'unified v1 with complete configuration for final eval'"
