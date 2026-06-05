@@ -77,12 +77,12 @@ class DuckieOvalEnv(Simulator):
 
         reward_registry = {
             "custom": CustomRewardWrapper,
-            "simple": SimpleRewardWrapper,
+            "unified": UnifiedRewardv1,
             "adaptive": AdaptiveRewardWrapper,
             "pid": PIDReward,
-            "unified_v1": UnifiedRewardv1,
+            "simple": SimpleRewardWrapper,
             "unified_v2": UnifiedRewardv2,
-            "unified": UnifiedReward,
+            "unified_v0": UnifiedReward,
             "lane_pose": LanePositionReward,
         }
 
