@@ -334,7 +334,7 @@ class UnifiedRewardv1(gym.RewardWrapper):
 class UnifiedRewardv2(gym.RewardWrapper):
     def __init__(self, env, target_offset= -0.02):
         super().__init__(env)
-        self.target_offset = target_offset 
+        self.target_offset = 0 
         self.wrong_lane_limit = -0.2
         self.max_expected_angle = 30.0
 
@@ -350,20 +350,14 @@ class UnifiedRewardv2(gym.RewardWrapper):
             return -10.0 
 
         v = sim.speed
-        reward_speed = 3.0 * v * max(0.0, lp.dot_dir)
+        reward_speed = 2.0 * v * lp.dot_dir
         
-        dist_error = np.abs(lp.dist - self.target_offset)
-        normalized = np.clip( dist_error / np.abs(self.wrong_lane_limit), 0.0, 1.0)
-        reward_distance = -8 * normalized
-
-        normalized_angle = np.clip(np.abs(lp.angle_deg) / self.max_expected_angle, 0.0, 1.0)
-        reward_heading = -3.0 * normalized_angle
         
-        lane_quality = (1.0 - np.clip(dist_error / np.abs(self.wrong_lane_limit), 0.0, 1.0))
-        alignment    = (1.0 - normalized_angle)
-        reward_lane  = 2.0 * lane_quality * alignment
+        reward_distance = -15.0 * (lp.dist - self.target_offset)**2
         
-        return reward_speed + reward_distance + reward_lane + reward_heading
+        reward_survival = 1.0 if v > 0.05 else -1.0
+        
+        return reward_speed + reward_distance + reward_survival
 
 class AdditiveJerkPenalty(gym.RewardWrapper):
     """
