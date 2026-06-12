@@ -358,7 +358,7 @@ class UnifiedRewardv2(gym.RewardWrapper):
         
         return reward_speed + reward_distance + reward_survival
 
-class AdditiveJerkPenalty(gym.RewardWrapper):
+class AdditiveJerkPenalty(gym.Wrapper):
     """
     Penalizes large changes between consecutive actions.
     Can be stacked on top of any existing RewardWrapper.
@@ -368,16 +368,23 @@ class AdditiveJerkPenalty(gym.RewardWrapper):
         self.jerk_coeff = jerk_coeff
         self.prev_action = np.zeros(env.action_space.shape)
         
-    def reward(self, reward):
+    def step(self, action):
         
-        current_action = self.env.unwrapped.last_action 
-        
-        action_diff = np.linalg.norm(current_action - self.prev_action)
+        action_diff = np.linalg.norm(action - self.prev_action)
         jerk_penalty = self.jerk_coeff * action_diff
 
-        self.prev_action = current_action.copy()
+        self.prev_action = action.copy()
 
-        return reward + jerk_penalty
+        obs, reward, done, truncated, info = self.env.step(action)
+
+        total_reward = reward + jerk_penalty
+
+        return obs, total_reward, done, truncated, info
+    
+    def reset(self, **kwargs):
+
+        self.prev_action = np.zeros(self.env.action_space.shape)
+        return self.env.reset(**kwargs)
         
 
 def compute_unified_eval_reward(sim, current_action, prev_action, return_components=False):
