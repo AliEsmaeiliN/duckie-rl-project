@@ -11,7 +11,7 @@ class ActionWrapper(gym.ActionWrapper):
         return action_
     
 class KinematicActionWrapper(gym.ActionWrapper):
-    def __init__(self, env, gain=1.0, trim=0.0, wheel_dist=0.102, radius=0.0318, k=27.0, limit=1.0, v_scale=0.8):
+    def __init__(self, env, gain=1.0, trim=0.0, wheel_dist=0.102, radius=0.0318, k=27.0, limit=1.0, v_scale=0.8, omega_scale=8.0):
         super().__init__(env)
         self.gain = gain
         self.trim = trim
@@ -20,18 +20,19 @@ class KinematicActionWrapper(gym.ActionWrapper):
         self.limit = limit
         self.wheel_dist = wheel_dist
         self.v_scale = v_scale #adapted from dt action wrapper to scale the speed for turning
+        self.omega_scale = omega_scale
 
     def action(self, action):
         # Action is [v, omega] from the RL Agent
-        vel, angle = action[0] * self.v_scale,  action[1]
+        vel, omega = action[0] * self.v_scale,  action[1] * self.omega_scale
 
         # Adjust motor constants by gain and trim
         k_r_inv = (self.gain + self.trim) / self.k
         k_l_inv = (self.gain - self.trim) / self.k
 
         # Calculate angular velocities for wheels
-        omega_r = (vel + 0.5 * angle * self.wheel_dist) / self.radius
-        omega_l = (vel - 0.5 * angle * self.wheel_dist) / self.radius
+        omega_r = (vel + 0.5 * omega * self.wheel_dist) / self.radius
+        omega_l = (vel - 0.5 * omega * self.wheel_dist) / self.radius
 
         # Convert to duty cycle (PWM)
         u_r = omega_r * k_r_inv
