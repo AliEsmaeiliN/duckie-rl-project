@@ -363,15 +363,21 @@ class AdditiveJerkPenalty(gym.Wrapper):
     Penalizes large changes between consecutive actions.
     Can be stacked on top of any existing RewardWrapper.
     """
-    def __init__(self, env, jerk_coeff=-2):
+    def __init__(self, env, v_jerk_coeff=-0.5, omega_jerk_coeff=-2.5):
         super().__init__(env)
-        self.jerk_coeff = jerk_coeff
+        self.v_jerk_coeff = v_jerk_coeff
+        self.omega_jerk_coeff = omega_jerk_coeff
         self.prev_action = np.zeros(env.action_space.shape)
         
     def step(self, action):
         
-        action_diff = np.linalg.norm(action - self.prev_action)
-        jerk_penalty = self.jerk_coeff * action_diff
+        v_curr, omega_curr = action
+        v_prev, omega_prev = self.prev_action
+
+        v_diff = np.abs(v_curr - v_prev)
+        omega_diff = np.abs(omega_curr - omega_prev)
+
+        jerk_penalty = (self.v_jerk_coeff * v_diff) + (self.omega_jerk_coeff * omega_diff)
 
         self.prev_action = action.copy()
 
