@@ -317,7 +317,6 @@ if __name__ == "__main__":
             for i in range(envs.num_envs):
                 # Using the mask '_episode' to see which sub-env actually finished
                 if "_episode" in infos and infos["_episode"][i]:
-                    print(f"global_step={global_step}, episodic_return={infos['episode']['r'][i]}")
                     writer.add_scalar("charts/episodic_return", infos['episode']['r'][i], global_step)
                     writer.add_scalar("charts/episodic_length", infos['episode']['l'][i], global_step)  
 
