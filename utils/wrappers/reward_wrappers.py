@@ -296,7 +296,7 @@ class UnifiedReward(gym.RewardWrapper):
         reward_speed = 2.0 * v * lp.dot_dir
         
         
-        reward_distance = -15.0 * (lp.dist - self.target_offset)**2
+        reward_distance = -15.0 * (lp.dist)**2
         
         reward_survival = 1.0 if v > 0.05 else -1.0
         
@@ -305,9 +305,9 @@ class UnifiedReward(gym.RewardWrapper):
 class UnifiedRewardv1(gym.RewardWrapper):
     def __init__(self, env, target_offset= -0.02):
         super().__init__(env)
-        self.target_offset = target_offset 
+        self.target_offset = 0 
         self.wrong_lane_limit = -0.2
-        self.prev_action = np.zeros(2) 
+        self.max_expected_angle = 30.0
 
     def reward(self, reward):
 
@@ -325,11 +325,12 @@ class UnifiedRewardv1(gym.RewardWrapper):
         
         
         normalized = np.clip(np.abs(lp.dist - self.target_offset) / np.abs(self.wrong_lane_limit), 0.0, 1.0)
-        reward_distance = -10 * normalized**2
-        
+        reward_distance = -15 * normalized**2
+        normalized_angle = np.clip(np.abs(lp.angle_deg) / self.max_expected_angle, 0.0, 1.0)
+        reward_heading = -3.0 * normalized_angle
         reward_survival = 1.0 if v > 0.05 else -1.0
         
-        return reward_speed + reward_distance + reward_survival
+        return reward_speed + reward_distance + reward_survival + reward_heading
     
 class UnifiedRewardv2(gym.RewardWrapper):
     def __init__(self, env):
