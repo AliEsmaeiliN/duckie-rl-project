@@ -76,14 +76,10 @@ class DuckieOvalEnv(Simulator):
             env = ImgWrapper(env) # Transpose to CHW
 
         reward_registry = {
-            "custom": CustomRewardWrapper,
-            "unified": UnifiedRewardv1,
+            "unified": UnifiedReward,
             "adaptive": AdaptiveRewardWrapper,
-            "pid": PIDReward,
-            "simple": SimpleRewardWrapper,
             "unified_v2": UnifiedRewardv2,
-            "unified_v0": UnifiedReward,
-            "lane_pose": LanePositionReward,
+            "unified_v1": UnifiedRewardv1,
         }
 
         if reward_type not in reward_registry:
