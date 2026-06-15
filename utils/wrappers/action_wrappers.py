@@ -11,7 +11,7 @@ class ActionWrapper(gym.ActionWrapper):
         return action_
     
 class KinematicActionWrapper(gym.ActionWrapper):
-    def __init__(self, env, gain=1.0, trim=0.0, wheel_dist=0.102, radius=0.0318, k=27.0, limit=1.0, v_scale=0.8, omega_scale=8.0):
+    def __init__(self, env, gain=1.0, trim=0.0, wheel_dist=0.102, radius=0.0318, k=27.0, limit=1.0, v_scale=0.8, omega_scale=3.0):
         super().__init__(env)
         self.gain = gain
         self.trim = trim
