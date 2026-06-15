@@ -46,12 +46,14 @@ class DuckieOvalEnv(Simulator):
 
         env = KinematicActionWrapper(env, wheel_dist=0.102, radius=0.0318, k=27.0)
 
+
         if ema:
             env = ActionSmoothingWrapper(env)
 
         if latency_rand:
             env = ActionLatencyWrapper(env)
 
+        env = DirectionLockWrapper(env)
 
         if capture_video:
             video_folder = f"videos/{run_name}"

@@ -1,5 +1,6 @@
 import gymnasium as gym
 import numpy as np
+from gym_duckietown.simulator import get_driving_direction
 
 class RecoveryTrainingWrapper(gym.Wrapper):
     """
@@ -102,3 +103,33 @@ class TileTrackingWrapper(gym.Wrapper):
         info['laps_completed'] = self.laps_completed
         
         return obs, reward, done, truncated, info
+    
+
+class DirectionLockWrapper(gym.Wrapper):
+    """
+    Instantly terminates the episode if the agent executes a U-turn 
+    and begins driving opposite to its designated spawn direction mandate.
+    """
+    def __init__(self, env):
+        super().__init__(env)
+        
+    def step(self, action):
+        obs, reward, terminated, truncated, info = self.env.step(action)
+        
+        sim = self.unwrapped
+        
+        spawn_direction = getattr(sim, "episode_dir", "CCW")
+        current_coords = sim.get_grid_coords(sim.cur_pos)
+        current_tile = sim._get_tile(*current_coords)
+        
+        if current_tile is not None and current_tile["drivable"]:
+            current_direction = get_driving_direction(current_tile, sim.cur_angle)
+            
+            if spawn_direction in ["CW", "CCW"] and current_direction != spawn_direction and current_direction != "TRANSITION":
+                terminated = True
+                reward = -15.0
+                
+                info["Simulator"]["msg"] = f"Catastrophic Fail: Spawned {spawn_direction}, turned to {current_direction}."
+                info["Simulator"]["done_code"] = "wrong-direction-failure"
+            
+        return obs, reward, terminated, truncated, info

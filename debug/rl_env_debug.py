@@ -46,6 +46,8 @@ class DuckieOvalEnv(Simulator):
 
         env = KinematicActionWrapper(env, wheel_dist=0.102, radius=0.0318, k=27.0)
 
+        
+
         if ema:
             env = ActionSmoothingWrapper(env)
 
@@ -53,17 +55,12 @@ class DuckieOvalEnv(Simulator):
             env = ActionLatencyWrapper(env)
 
 
-        if capture_video:
-            video_folder = f"videos/{run_name}"
-            os.makedirs(video_folder, exist_ok=True)
-            env = gym.wrappers.RecordVideo(env, video_folder, episode_trigger=lambda x: True)
+        env = DirectionLockWrapper(env)
         
         if motion_blur:
             env = FastKinematicBlurWrapper(env)
 
-        env = CLAHEWrapper(env)
         
-        env = GaussianBlurWrapper(env)
         
         env = CropResizeWrapper(env, shape=(84, 84))
 
