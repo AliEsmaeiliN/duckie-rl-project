@@ -236,35 +236,25 @@ def update(dt):
     wheel_distance = 0.102
     min_rad = 0.08
 
-    manual_action = np.array([0.0, 0.0])
+    manual_v = 0.0      # Target linear velocity scaling [-1, 1]
+    manual_omega = 0.0  # Target angular velocity scaling [-1, 1]
 
     if key_handler[key.UP]:
-        manual_action += np.array([0.44, 0.0])
+        manual_v += 0.50     # Forward drive command
     if key_handler[key.DOWN]:
-        manual_action -= np.array([0.44, 0])
+        manual_v -= 0.50     # Reverse drive command
     if key_handler[key.LEFT]:
-        manual_action += np.array([0, 1])
+        manual_omega += 0.40  # Counter-clockwise rotation (turn left)
     if key_handler[key.RIGHT]:
-        manual_action -= np.array([0, 1])
+        manual_omega -= 0.40  # Clockwise rotation (turn right)
     if key_handler[key.SPACE]:
-        manual_action = np.array([0, 0])
+        manual_v = 0.0
+        manual_omega = 0.0
 
-    
-    v1 = manual_action[0]
-    v2 = manual_action[1]
-    # Limit radius of curvature
-    if v1 == 0 or abs(v2 / v1) > (min_rad + wheel_distance / 2.0) / (min_rad - wheel_distance / 2.0):
-        # adjust velocities evenly such that condition is fulfilled
-        delta_v = (v2 - v1) / 2 - wheel_distance / (4 * min_rad) * (v1 + v2)
-        v1 += delta_v
-        v2 -= delta_v
-
-    manual_action[0] = v1
-    manual_action[1] = v2
-
-    # Speed boost
     if key_handler[key.LSHIFT]:
-        manual_action *= 1.5
+        manual_v = np.clip(manual_v * 1.8, -1.0, 1.0)
+
+    manual_action = np.array([manual_v, manual_omega], dtype=np.float32)
 
     if auto_mode:
         action = sim_action 
