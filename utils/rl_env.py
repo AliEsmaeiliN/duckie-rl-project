@@ -53,7 +53,7 @@ class DuckieOvalEnv(Simulator):
         if latency_rand:
             env = ActionLatencyWrapper(env)
 
-        env = DirectionLockWrapper(env)
+        #env = DirectionLockWrapper(env)
 
         if capture_video:
             video_folder = f"videos/{run_name}"
