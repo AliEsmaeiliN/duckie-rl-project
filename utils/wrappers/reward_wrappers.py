@@ -220,7 +220,7 @@ class UnifiedRewardV3(gym.RewardWrapper):
         norm_err = np.clip(eff_err / self.max_dev, 0.0, 1.0)
         r_dist   = -self.k_dist * (1.0 - np.exp(-4.0 * norm_err ** 2))
 
-        norm_angle = np.clip(abs(lp.angle) / 0.5, 0.0, 1.0)
+        norm_angle = np.clip(abs(lp.angle_deg) / 0.5, 0.0, 1.0)
         r_heading  = -self.k_heading * norm_angle ** 2
 
         return r_speed + r_dist + r_heading
