@@ -21,28 +21,33 @@ class KinematicActionWrapper(gym.ActionWrapper):
         self.wheel_dist = wheel_dist
         self.v_scale = v_scale #adapted from dt action wrapper to scale the speed for turning
         self.omega_scale = omega_scale
+        self.k_r_inv = (gain + trim) / self.k
+        self.k_l_inv = (gain - trim) / self.k
 
     def action(self, action):
         # Action is [v, omega] from the RL Agent
         vel, omega = action[0] * self.v_scale,  action[1] * self.omega_scale
 
-        # Adjust motor constants by gain and trim
-        k_r_inv = (self.gain + self.trim) / self.k
-        k_l_inv = (self.gain - self.trim) / self.k
 
         # Calculate angular velocities for wheels
         omega_r = (vel + 0.5 * omega * self.wheel_dist) / self.radius
         omega_l = (vel - 0.5 * omega * self.wheel_dist) / self.radius
 
         # Convert to duty cycle (PWM)
-        u_r = omega_r * k_r_inv
-        u_l = omega_l * k_l_inv
+        u_r = omega_r * self.k_r_inv
+        u_l = omega_l * self.k_l_inv
 
         # Apply physical limits (max motor power)
-        u_r_limited = np.clip(u_r, -self.limit, self.limit)
-        u_l_limited = np.clip(u_l, -self.limit, self.limit)
+        #u_r_limited = np.clip(u_r, -self.limit, self.limit)
+        #u_l_limited = np.clip(u_l, -self.limit, self.limit)
 
-        return np.array([u_l_limited, u_r_limited], dtype=np.float32)
+        if np.abs(u_r) > self.limit or np.abs(u_l) > self.limit:
+            excess = max(np.abs(u_r), np.abs(u_l))
+            scale  = self.limit / excess          # uniform scale preserves steering ratio
+            u_r   *= scale
+            u_l   *= scale
+
+        return np.array([u_l, u_r], dtype=np.float32)
     
 class ActionLatencyWrapper(gym.Wrapper):
     def __init__(self, env, min_latency=0, max_latency=1, jitter_prob=0.05):
