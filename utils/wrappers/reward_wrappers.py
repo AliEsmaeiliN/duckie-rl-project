@@ -185,6 +185,46 @@ class UnifiedRewardv2(gym.RewardWrapper):
         
         return reward_progress + reward_distance + reward_survival + reward_heading
 
+class UnifiedRewardV3(gym.RewardWrapper):
+    """
+    Handles: progress, cross-track, and heading.
+    """
+    def __init__(self, env,
+                 k_speed=1.5,
+                 k_dist=8.0,
+                 k_heading=3.0,
+                 deadzone=0.01,
+                 max_dev=0.18):
+        super().__init__(env)
+        self.k_speed   = k_speed
+        self.k_dist    = k_dist
+        self.k_heading = k_heading
+        self.deadzone  = deadzone
+        self.max_dev   = max_dev
+
+    def reward(self, reward):
+        if reward == -1000:
+            return -10.0
+
+        sim = self.env.unwrapped
+        try:
+            lp = sim.get_lane_pos2(sim.cur_pos, sim.cur_angle)
+        except Exception:
+            return -10.0
+
+        v = sim.speed
+
+        r_speed = self.k_speed * v * lp.dot_dir if v > 0.05 else -0.5
+
+        eff_err  = max(abs(lp.dist) - self.deadzone, 0.0)
+        norm_err = np.clip(eff_err / self.max_dev, 0.0, 1.0)
+        r_dist   = -self.k_dist * (1.0 - np.exp(-4.0 * norm_err ** 2))
+
+        norm_angle = np.clip(abs(lp.angle) / 0.5, 0.0, 1.0)
+        r_heading  = -self.k_heading * norm_angle ** 2
+
+        return r_speed + r_dist + r_heading
+
 class AdditiveJerkPenalty(gym.Wrapper):
     """
     Penalizes large changes between consecutive actions.
