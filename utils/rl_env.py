@@ -34,7 +34,8 @@ class DuckieOvalEnv(Simulator):
     def create_wrapped(cls, run_name, reward_type="unified_v1", capture_video=False, 
                         ema=False, motion_blur=False, grayscale=True, 
                         frame_stack=4, latency_rand=False, recovery_step=False,
-                        jerk_penalty=False, preprocessing=False, is_eval=True, **kwargs
+                        jerk_penalty=False, preprocessing=False, is_eval=True,
+                        direction_lock=False, **kwargs
                     ):
         """
         Static method to build the fully wrapped stack.
@@ -53,7 +54,8 @@ class DuckieOvalEnv(Simulator):
         if latency_rand:
             env = ActionLatencyWrapper(env)
 
-        #env = DirectionLockWrapper(env)
+        if direction_lock:
+            env = DirectionLockWrapper(env)
 
         if capture_video:
             video_folder = f"videos/{run_name}"

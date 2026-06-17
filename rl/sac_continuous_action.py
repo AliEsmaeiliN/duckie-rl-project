@@ -55,7 +55,7 @@ class Args(SharedDuckieArgs):
     """automatic tuning of the entropy coefficient"""
 
 
-def make_env(seed, idx, run_name, capture_video=False, action_smoothing=False, motion_blur=False,
+def make_env(seed, idx, run_name, capture_video=False, action_smoothing=False, motion_blur=False, direction_lock=False,
              latency_rand=False, jerk_penalty=False, recovery_step=False, preprocessing=False, is_eval=False, **env_kwargs):
     def thunk():
         render_mode = "rgb_array" if (capture_video and idx == 0) else None
@@ -70,6 +70,7 @@ def make_env(seed, idx, run_name, capture_video=False, action_smoothing=False, m
             recovery_step=recovery_step,
             preprocessing=preprocessing,
             is_eval=is_eval,
+            direction_lock=direction_lock,
             
             direction=args.direction,
             reward_type=args.reward_type,
@@ -283,6 +284,7 @@ if __name__ == "__main__":
         latency_rand=True, 
         preprocessing=eval_preprocess,
         is_eval=True,
+        direction_lock=True,
         **robust_cfg
     )()
     
@@ -292,6 +294,7 @@ if __name__ == "__main__":
         run_name=f"{run_name}_eval2", 
         preprocessing=eval_preprocess,
         is_eval=True,
+        direction_lock=True,
         **base_cfg
     )()
 
