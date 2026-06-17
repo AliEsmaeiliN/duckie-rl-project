@@ -32,7 +32,7 @@ class DuckieOvalEnv(Simulator):
 
     @classmethod
     def create_wrapped(cls, run_name, capture_video=False, 
-                        ema=False, motion_blur=False, grayscale=True, 
+                        ema=False, motion_blur=True, grayscale=True, 
                         frame_stack=4, latency_rand=False, recovery_step=False,
                         jerk_penalty=True, reward_type="adp",
                         **kwargs
