@@ -33,7 +33,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--env-name", default= "Custom")
 parser.add_argument("--map-name", default="oval_loop")
 parser.add_argument("--distortion", default=False, action="store_true")
-parser.add_argument("--camera_rand", default=False, action="store_true")
+parser.add_argument("--camera-rand", default=False, action="store_true")
 parser.add_argument("--draw-curve", action="store_true", help="draw the lane following curve")
 parser.add_argument("--draw-bbox", action="store_true", help="draw collision detection bounding boxes")
 parser.add_argument("--domain-rand", action="store_true", help="enable domain randomization")
@@ -71,13 +71,14 @@ else:
         reward_type=args.reward,
         domain_rand=args.domain_rand,
         dynamics_rand=args.dynamics_rand,
+        camera_rand=args.camera_rand,
         distortion=args.distortion,
         recovery_step=True,
         spawn_difficulty=1.0
     )
 
 render_modes = ["human", "top_down", "free_cam", "rgb_array"]
-view = render_modes[0]
+view = render_modes[1]
 auto_mode = False
 
 obs, info = env.reset(seed=args.seed)
@@ -331,7 +332,7 @@ def update(dt):
 
         cnn_img = Image.fromarray(cnn_view_final, mode=mode).convert('RGB')
         #cnn_img = cnn_img.resize((160, 120), Image.NEAREST)
-        raw_img = Image.fromarray(raw_view).resize((160, 120), Image.NEAREST)
+        raw_img = Image.fromarray(raw_view).resize((640, 480), Image.NEAREST)
 
         # Combine into one image
         combined = Image.new('RGB', (320, 120))
@@ -339,8 +340,10 @@ def update(dt):
         combined.paste(raw_img, (160, 0))
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        file_path = f"screenshots/debug_{suffix}_{timestamp}.png"
-        combined.save(file_path)
+        file_path_input = f"screenshots/debug_cnn_{timestamp}.png"
+        file_path = f"screenshots/debug_raw_{timestamp}.png"
+        raw_img.save(file_path_input)
+        cnn_img.save(file_path)
         print(f"Comparison saved! Mode: {'Grayscale' if args.grayscale else 'RGB'}")
         print(f"CNN Input Shape: {obs.shape} | Visualized Shape: {cnn_view_final.shape}")
 

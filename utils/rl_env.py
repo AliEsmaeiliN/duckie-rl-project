@@ -31,7 +31,7 @@ class DuckieOvalEnv(Simulator):
         self.motor_k = 27.0
 
     @classmethod
-    def create_wrapped(cls, run_name, reward_type="unified_v1", capture_video=False, 
+    def create_wrapped(cls, run_name, reward_type="unf", capture_video=False, 
                         ema=False, motion_blur=False, grayscale=True, 
                         frame_stack=4, latency_rand=False, recovery_step=False,
                         jerk_penalty=False, preprocessing=False, is_eval=True,
