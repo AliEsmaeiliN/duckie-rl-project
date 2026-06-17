@@ -122,7 +122,7 @@ class UnifiedRewardv1(gym.RewardWrapper):
     def __init__(self, env, target_offset= -0.02):
         super().__init__(env)
         self.target_offset = 0 
-        self.wrong_lane_limit = -0.2
+        self.wrong_lane_limit = 0.2
         self.max_expected_angle = 30.0
 
     def reward(self, reward):
@@ -141,7 +141,7 @@ class UnifiedRewardv1(gym.RewardWrapper):
         
         
         normalized = np.clip(np.abs(lp.dist - self.target_offset) / np.abs(self.wrong_lane_limit), 0.0, 1.0)
-        reward_distance = -10 * normalized**2
+        reward_distance = -4 * normalized**2
         
         reward_survival = 1.0 if v > 0.05 else -1.0
         
@@ -150,7 +150,7 @@ class UnifiedRewardv1(gym.RewardWrapper):
 class UnifiedRewardv2(gym.RewardWrapper):
     def __init__(self, env):
         super().__init__(env)
-        self.deadzone = 0.015
+        self.deadzone = 0.02
         self.max_lane_deviation = 0.2
 
     def reward(self, reward):
@@ -177,7 +177,7 @@ class UnifiedRewardv2(gym.RewardWrapper):
             effective_error = cross_track_error - self.deadzone
             normalized_error = np.clip(effective_error / self.max_lane_deviation, 0.0, 1.0)
             
-            reward_distance = -12.0 * (1.0 - np.exp(-5.0 * (normalized_error ** 2)))
+            reward_distance = -10.0 * (1.0 - np.exp(-5.0 * (normalized_error ** 2)))
 
         reward_heading = -2.0 * (1.0 - lp.dot_dir)
 
@@ -190,7 +190,7 @@ class AdditiveJerkPenalty(gym.Wrapper):
     Penalizes large changes between consecutive actions.
     Can be stacked on top of any existing RewardWrapper.
     """
-    def __init__(self, env, v_jerk_coeff=-0.5, omega_jerk_coeff=-2.5):
+    def __init__(self, env, v_jerk_coeff=-0.5, omega_jerk_coeff=-5):
         super().__init__(env)
         self.v_jerk_coeff = v_jerk_coeff
         self.omega_jerk_coeff = omega_jerk_coeff
@@ -204,7 +204,7 @@ class AdditiveJerkPenalty(gym.Wrapper):
         v_diff = np.abs(v_curr - v_prev)
         omega_diff = np.abs(omega_curr - omega_prev)
 
-        jerk_penalty = (self.v_jerk_coeff * v_diff) + (self.omega_jerk_coeff * omega_diff)
+        jerk_penalty = (self.v_jerk_coeff * v_diff**2) + (self.omega_jerk_coeff * omega_diff**2)
 
         self.prev_action = action.copy()
 
