@@ -245,9 +245,9 @@ def update(dt):
     if key_handler[key.DOWN]:
         manual_v -= 0.50     # Reverse drive command
     if key_handler[key.LEFT]:
-        manual_omega += 0.40  # Counter-clockwise rotation (turn left)
+        manual_omega += 0.80  # Counter-clockwise rotation (turn left)
     if key_handler[key.RIGHT]:
-        manual_omega -= 0.40  # Clockwise rotation (turn right)
+        manual_omega -= 0.80  # Clockwise rotation (turn right)
     if key_handler[key.SPACE]:
         manual_v = 0.0
         manual_omega = 0.0

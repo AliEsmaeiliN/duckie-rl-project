@@ -26,7 +26,7 @@ class KinematicActionWrapper(gym.ActionWrapper):
 
     def action(self, action):
         # Action is [v, omega] from the RL Agent
-        vel, omega = action[0] * self.v_scale,  action[1] * self.omega_scale
+        vel, omega = action[0] * self.v_scale,  (action[1] **3) * self.omega_scale
 
 
         # Calculate angular velocities for wheels
