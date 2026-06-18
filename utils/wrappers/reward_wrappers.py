@@ -177,7 +177,7 @@ class UnifiedRewardv2(gym.RewardWrapper):
             effective_error = cross_track_error - self.deadzone
             normalized_error = np.clip(effective_error / self.max_lane_deviation, 0.0, 1.0)
             
-            reward_distance = -10.0 * (1.0 - np.exp(-5.0 * (normalized_error ** 2)))
+            reward_distance = -5.0 * (1.0 - np.exp(-5.0 * (normalized_error ** 2)))
 
         reward_heading = -2.0 * (1.0 - lp.dot_dir)
 
@@ -191,7 +191,7 @@ class UnifiedRewardV3(gym.RewardWrapper):
     """
     def __init__(self, env,
                  k_speed=1.5,
-                 k_dist=8.0,
+                 k_dist=3.0,
                  k_heading=3.0,
                  deadzone=0.01,
                  max_dev=0.18,
