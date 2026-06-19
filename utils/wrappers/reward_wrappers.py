@@ -297,9 +297,9 @@ def compute_hybrid_eval_reward(sim, current_action, prev_action, return_componen
     r_smoothness = -(delta_omega / max_delta_omega) ** 2
 
     w_progress   = 0.45
-    w_lane       = 0.20
-    w_heading    = 0.20
-    w_smoothness = 0.15
+    w_lane       = 0.30
+    w_heading    = 0.15
+    w_smoothness = 0.10
 
     total_score = (
         (w_progress * r_progress) +
