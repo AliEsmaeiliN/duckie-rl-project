@@ -191,11 +191,11 @@ class UnifiedRewardV3(gym.RewardWrapper):
     """
     def __init__(self, env,
                  k_speed=1.5,
-                 k_dist=3.0,
+                 k_dist=2.0,
                  k_heading=3.0,
                  deadzone=0.01,
                  max_dev=0.18,
-                 max_expected_angle=30.0):
+                 max_expected_angle=40.0):
         super().__init__(env)
         self.k_speed   = k_speed
         self.k_dist    = k_dist
@@ -224,6 +224,8 @@ class UnifiedRewardV3(gym.RewardWrapper):
 
         norm_angle = np.clip(abs(lp.angle_deg) / self.max_expected_angle, 0.0, 1.0)
         r_heading  = -self.k_heading * norm_angle ** 2
+
+        r_survival = 1.0 if v > 0.05 else 0.0
 
         return r_speed + r_dist + r_heading
 
