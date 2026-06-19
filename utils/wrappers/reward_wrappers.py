@@ -287,7 +287,7 @@ def compute_hybrid_eval_reward(sim, current_action, prev_action, return_componen
     r_progress = normalized_speed * max(0.0, dot_dir)
 
     max_deviation = 0.20
-    r_lane = 1.0 - np.clip(np.abs(cte + 0.02) / max_deviation, 0.0, 1.0)
+    r_lane = 1.0 - np.clip(np.abs(cte) / max_deviation, 0.0, 1.0)
 
     max_expected_angle = 45.0 
     r_heading = 1.0 - np.clip(np.abs(angle_deg) / max_expected_angle, 0.0, 1.0)
@@ -297,9 +297,9 @@ def compute_hybrid_eval_reward(sim, current_action, prev_action, return_componen
     r_smoothness = -(delta_omega / max_delta_omega) ** 2
 
     w_progress   = 0.45
-    w_lane       = 0.30
-    w_heading    = 0.15
-    w_smoothness = 0.10
+    w_lane       = 0.20
+    w_heading    = 0.20
+    w_smoothness = 0.15
 
     total_score = (
         (w_progress * r_progress) +
