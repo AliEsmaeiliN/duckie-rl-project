@@ -193,7 +193,7 @@ class UnifiedRewardV3(gym.RewardWrapper):
                  k_speed=1.5,
                  k_dist=2.0,
                  k_heading=3.0,
-                 deadzone=0.01,
+                 deadzone=0.02,
                  max_dev=0.18,
                  max_expected_angle=40.0):
         super().__init__(env)
@@ -234,7 +234,7 @@ class AdditiveJerkPenalty(gym.Wrapper):
     Penalizes large changes between consecutive actions.
     Can be stacked on top of any existing RewardWrapper.
     """
-    def __init__(self, env, v_jerk_coeff=-0.5, omega_jerk_coeff=-5):
+    def __init__(self, env, v_jerk_coeff=-0.5, omega_jerk_coeff=-8):
         super().__init__(env)
         self.v_jerk_coeff = v_jerk_coeff
         self.omega_jerk_coeff = omega_jerk_coeff
