@@ -190,9 +190,27 @@ class RewardCompute():
 
         
 
+class CropWrapper(gym.ObservationWrapper):
+    def __init__(self, env, shape=(84, 84)):
+        super().__init__(env)
+        self.shape = shape 
+        self.observation_space = spaces.Box(
+            low=0, 
+            high=255, 
+            shape=(self.shape[0], self.shape[1], 3), 
+            dtype=np.uint8
+        )
 
+    def observation(self, obs):
+        
+        h, w = obs.shape[:2]
+        top_boundary = int(h / 3)
+        cropped = obs[top_boundary:h, 0:w]
+        
+        return cropped
+    
 class ResizeWrapper(gym.ObservationWrapper):
-    def __init__(self, env=None, shape=(120, 160, 3)):
+    def __init__(self, env=None, shape=(84, 84, 3)):
         super().__init__(env)
         self.observation_space = spaces.Box(
             low=0, 

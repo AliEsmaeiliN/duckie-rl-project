@@ -5,7 +5,7 @@ from gym_duckietown.simulator import Simulator
 from utils.wrappers.wrappers import *
 from utils.wrappers.observation_wrappers import *
 from utils.wrappers.action_wrappers import *
-from wrappers_debug import DebugRewardWrapper, TileTrackingWrapper
+from wrappers_debug import DebugRewardWrapper, TileTrackingWrapper, ResizeWrapper, CropWrapper
 from utils.wrappers.reward_wrappers import AdditiveJerkPenalty
 
 
@@ -32,7 +32,7 @@ class DuckieOvalEnv(Simulator):
 
     @classmethod
     def create_wrapped(cls, run_name, capture_video=False, 
-                        ema=False, motion_blur=True, grayscale=True, 
+                        ema=False, motion_blur=False, grayscale=True, 
                         frame_stack=4, latency_rand=False, recovery_step=False,
                         jerk_penalty=True, reward_type="adp",
                         **kwargs
@@ -60,14 +60,15 @@ class DuckieOvalEnv(Simulator):
         if motion_blur:
             env = FastKinematicBlurWrapper(env)
 
+        env = CropWrapper(env)
+        env = ResizeWrapper(env)
         
-        
-        env = CropResizeWrapper(env, shape=(84, 84))
+        #env = CropResizeWrapper(env, shape=(84, 84))
 
         
         if grayscale:
             env = GrayscaleWrapper(env)
-            env = ContrastStretchingWrapper(env)
+            #env = ContrastStretchingWrapper(env)
         else:
             env = ImgWrapper(env) # Transpose to CHW
 

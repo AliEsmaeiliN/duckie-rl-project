@@ -78,7 +78,7 @@ else:
     )
 
 render_modes = ["human", "top_down", "free_cam", "rgb_array"]
-view = render_modes[1]
+view = render_modes[0]
 auto_mode = False
 
 obs, info = env.reset(seed=args.seed)
@@ -195,7 +195,7 @@ debug_label = pyglet.text.Label(
     font_size=10,
     x=5, y=WINDOW_HEIGHT - 60, 
     anchor_x='left', anchor_y='top',
-    color=(255, 0, 0, 255),
+    color=(255, 255, 255, 255),
     multiline=True,
     width=WINDOW_WIDTH - 10
 )

@@ -2,7 +2,7 @@ import os
 import torch
 import numpy as np
 from PIL import Image
-from utils.rl_env import DuckieOvalEnv
+from rl_env_debug import DuckieOvalEnv
 
 def save_image(arr, name, folder="captures/observation_pipeline"):
     """Helper to save various array formats as images."""
@@ -29,14 +29,14 @@ def debug_step():
         capture_video=False,
         grayscale=True,
         frame_stack=4,
-        domain_rand=True,
-        motion_blur=True
+        domain_rand=False,
+        motion_blur=False
     )
 
     obs, info = env.reset(seed=42)
     
-    constant_action = np.array([0.4, 0.2], dtype=np.float32)
-    freq  = 20
+    constant_action = np.array([0.8, 0.0], dtype=np.float32)
+    freq  = 5
 
     print(f"{'Step':<6} | {'Reward':<10} | {'Action [v, w]':<15}")
     print("-" * 40)
