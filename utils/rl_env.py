@@ -81,8 +81,8 @@ class DuckieOvalEnv(Simulator):
 
         reward_registry = {
             "unf": UnifiedReward,
-            "adp": AdaptiveRewardWrapper,
-            "unf2": UnifiedRewardv2,
+            "r1": AdaptiveRewardWrapper,
+            "r2": UnifiedRewardv2,
             "unf1": UnifiedRewardv1,
             "unf3": UnifiedRewardV3,
         }
