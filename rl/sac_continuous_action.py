@@ -332,6 +332,9 @@ if __name__ == "__main__":
     evaluator_p = DuckiebotEvaluator(eval_env_perfect, eval_env_seed, actor, args, device, prefix="eval_perfect")
     evaluator2_imp = DuckiebotEvaluator(eval_env_imperfect, eval_env_seed, actor, args, device, prefix="eval_imperfect")
 
+    randomization_unlocked = False
+
+
     # Automatic entropy tuning
     if args.autotune:
         target_entropy = -torch.prod(torch.Tensor(envs.single_action_space.shape).to(device)).item()
@@ -481,6 +484,16 @@ if __name__ == "__main__":
                     best_reward=best_eval_reward,
                     num_episodes=10
                 )
+                if not randomization_unlocked and score1 >= 450.0 and args.curriculum_randomization: 
+                    print(f"\n[Performance Gate] Peak Mastery Detected (Score: {score1:.2f}/500)!")
+                    print("Unlocking all Visual, Camera, and Dynamics Randomizations simultaneously.")
+                    
+                    envs.call("set_curriculum", 
+                            domain_rand=args.domain_rand, 
+                            camera_rand=args.camera_rand, 
+                            dynamics_rand=args.dynamics_rand)
+                    
+                    randomization_unlocked = True
                 
                 writer.add_scalar("charts/risk_adjusted_score_perfect", score1, global_step)
                 writer.add_scalar("charts/risk_adjusted_score_imperfect", score2, global_step)
