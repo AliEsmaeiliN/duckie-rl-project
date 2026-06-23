@@ -23,7 +23,7 @@ class SharedDuckieArgs:
     
     # --- Evaluation & Saving ---
     eval_interval: int = 20000
-    start_evaluation: int = 1e5
+    start_evaluation: int = 3e4
     eval_model: bool = True
     save_model: bool = True
     save_interval: int = 50000
