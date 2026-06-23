@@ -423,12 +423,12 @@ if __name__ == "__main__":
                         actor=actor, qf1=qf1, qf2=qf2, 
                         step=global_step, run_name=run_name, 
                         args=args, env_params=env_params, 
-                        suffix=f"v{args.version}_BEST"
+                        suffix=f"vr{args.reward_type}s{args.seed}_BEST"
                     )
 
 
     if args.save_model:
-        save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix=f"v{args.version}_Final")
+        save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix=f"vr{args.reward_type}s{args.seed}_Final")
 
     eval_env_perfect.close()
     eval_env_imperfect.close()
