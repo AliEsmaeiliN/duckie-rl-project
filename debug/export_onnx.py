@@ -1,49 +1,91 @@
+#!/usr/bin/env python3
 import os
-import torch
-import numpy as np
-
-# Ensure your python path can find the local packages
 import sys
-sys.path.append(os.path.abspath("packages/rl_package/src"))
+import torch
 
-from models import SACActor
+from models import SACActor, TD3Actor
 
-def export_sac_to_onnx(checkpoint_path, output_onnx_path, grayscale=True, frame_stack=4):
-    device = torch.device("cpu") # Exporting on CPU is safer and cleaner
-    channels = 1 if grayscale else 3
+def main():
+    base_dir = os.path.expanduser("~/workspace/rl_models/")
+
+    if len(sys.argv) > 1:
+        model_input = sys.argv[1]
+    else:
+        print("\n=== Duckiebot RL-to-ONNX Exporter ===")
+        model_input = input("Input model filename (e.g., sac_v10.cleanrl_model): ").strip()
+
+    if not model_input:
+        print("Error: No model file name specified. Exiting.")
+        return
     
-    print(f"Instantiating SACActor (Grayscale={grayscale}, Stack={frame_stack})...")
-    actor = SACActor(grayscale=grayscale).to(device)
+    if model_input.endswith(".cleanrl_model"):
+        model_filename = model_input
+    else:
+        model_filename = model_input + ".cleanrl_model"
+
+    checkpoint_path = os.path.join(base_dir, model_filename)
     
-    print(f"Loading weights from checkpoint: {checkpoint_path}")
+    if model_filename.endswith(".cleanrl_model"):
+        onnx_filename = model_filename.replace(".cleanrl_model", ".onnx")
+    else:
+        base_name = os.path.splitext(model_filename)[0]
+        model_filename = base_name + ".cleanrl_model"
+        checkpoint_path = os.path.join(base_dir, model_filename)
+        onnx_filename = base_name + ".onnx"
+
+    output_onnx_path = os.path.join(base_dir, onnx_filename)
+
+    if not os.path.exists(checkpoint_path):
+        print(f"Error: Could not find checkpoint file at {checkpoint_path}")
+        return
+
+    prefix = model_filename[:3].lower()
+    if prefix == "sac":
+        algo_type = "sac"
+    elif prefix == "td3":
+        algo_type = "td3"
+    else:
+        print(f"Error: Unknown algorithm prefix '{model_filename[:3]}'. Filename must start with 'sac' or 'td3'.")
+        return
+
+    grayscale = True
+    frame_stack = 4
+    channels = 4 if grayscale else 12
+    device = torch.device("cpu") # CPU trace keeps the file clean of runtime device flags
+
+    print("\n" + "-"*50)
+    print(f"Detected Algorithm : {algo_type.upper()}")
+    print(f"Reading Weights    : {checkpoint_path}")
+    print(f"Target Output      : {output_onnx_path}")
+    print("-"*50)
+
+    print("Instantiating Model Architecture...")
+    if algo_type == "sac":
+        actor = SACActor(grayscale=grayscale).to(device)
+    else:
+        actor = TD3Actor(grayscale=grayscale).to(device)
+
     checkpoint = torch.load(checkpoint_path, map_location=device)
     actor.load_state_dict(checkpoint['actor_state_dict'])
     actor.eval()
-    
-    # Define the precise input dimensions that the model expects: (Batch, Channels * Stack, Height, Width)
-    dummy_input = torch.zeros(1, channels * frame_stack, 84, 84, dtype=torch.float32)
-    
-    # We name the input and output nodes so we can target them exactly in TensorRT later
+
+    dummy_input = torch.zeros(1, channels, 84, 84, dtype=torch.float32)
     input_names = ["input_observations"]
     output_names = ["actions"]
-    
-    print(f"Exporting computational graph to ONNX at {output_onnx_path}...")
+
+    print("Tracing computational network graph and exporting...")
     torch.onnx.export(
         actor,
         dummy_input,
         output_onnx_path,
-        export_params=True,        # Store the trained parameter weights inside the file
-        opset_version=11,          # Standard, highly compatible ONNX operator set version
-        do_constant_folding=True,  # Optimizes constants by pre-computing them
+        export_params=True,        # Embed the loaded parameter weights straight inside the graph binary
+        opset_version=11,          # Highly stable ONNX runtime configuration
+        do_constant_folding=True,  # Optimizes network parameters by collapsing constants
         input_names=input_names,
         output_names=output_names,
-        dynamic_axes=None          # We hardlock batch size to 1 for minimum latency inference
+        dynamic_axes=None          # Hardlocks batch size to 1 for the absolute lowest inference latency
     )
-    print("ONNX Export completed successfully!")
+    print(f"Success! Model successfully exported to: {output_onnx_path}\n")
 
 if __name__ == "__main__":
-    # Update these paths to match your local repository setup
-    CHECKPOINT_PATH = "~/workspace/rl_models/sac_vu2b.cleanrl_model"
-    OUTPUT_ONNX_PATH = "~/workspace/rl_models/sac_vu2b.onnx"
-    
-    export_sac_to_onnx(CHECKPOINT_PATH, OUTPUT_ONNX_PATH)
+    main()
