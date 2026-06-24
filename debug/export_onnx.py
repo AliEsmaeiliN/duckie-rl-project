@@ -69,7 +69,13 @@ def main():
     actor.load_state_dict(checkpoint['actor_state_dict'])
     actor.eval()
 
-    dummy_input = torch.zeros(1, channels, 84, 84, dtype=torch.float32)
+    dummy_input = torch.randint(
+        low=0, 
+        high=255, 
+        size=(1, channels, 84, 84), 
+        dtype=torch.uint8
+    ).to(device)
+    
     input_names = ["input_observations"]
     output_names = ["actions"]
 
