@@ -162,11 +162,11 @@ def update_curriculum_stage(envs, global_step, args):
 
     if args.recovery:
         if global_step == 0:
-            envs.call("set_curriculum", max_recovery_steps=10)        
+            envs.call("set_curriculum", max_recovery_steps=20)        
 
         elif global_step == int(0.35 * total_timesteps): 
             print(f"\n[Curriculum] Step {global_step}: Tightening recovery window to 5 steps.")
-            envs.call("set_curriculum", max_recovery_steps=5)
+            envs.call("set_curriculum", max_recovery_steps=10)
 
         elif global_step == int(0.7 * total_timesteps):
             print(f"\n[Curriculum] Step {global_step}: Safety Horizon closed (0 steps). Policy running under absolute constraints.")
