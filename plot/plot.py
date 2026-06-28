@@ -1,3 +1,4 @@
+#By Matteo Cederle
 import os
 import glob
 import argparse
@@ -247,21 +248,21 @@ def parse_args():
     parser.add_argument(
     "--eval_frequency",
     type=int,
-    default=10_000,
+    default=20_000,
     help="Number of environment steps between evaluations (no eval at step 0).",
     )
 
     parser.add_argument(
     "--x_tick_base",
     type=int,
-    default=1,
+    default=2,
     help="Base tick spacing before scaling (default: 1).",
     )
 
     parser.add_argument(
         "--x_tick_power",
         type=int,
-        default=6,
+        default=5,
         help="Power of 10 for x-axis scaling (default: 5 → x10^5).",
     )
 
