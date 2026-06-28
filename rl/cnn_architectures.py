@@ -79,7 +79,7 @@ class ImpalaCNN(nn.Module):
         self.main = nn.Sequential(
             init_(nn.Conv2d(in_channels, 16, 8, stride=4)), nn.LeakyReLU(),
             init_(nn.Conv2d(16, 32, 4, stride=2)), nn.LeakyReLU(), nn.Flatten(),
-            init_(nn.Linear(32 * 81, feature_dim)))
+            init_(nn.Linear(32 * 9, feature_dim)))
         
         num_params = sum(p.numel() for p in self.parameters())
         print(f"Num params of encoder: {num_params}")

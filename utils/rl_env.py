@@ -69,7 +69,7 @@ class DuckieOvalEnv(Simulator):
             env = CLAHEWrapper(env)
             env = GaussianBlurWrapper(env)
         
-        env = CropResizeWrapper(env, shape=(84, 84))
+        env = CropResizeWrapper(env, shape=(42, 42))
 
         
         if grayscale:
@@ -107,12 +107,12 @@ class DuckieOvalEnv(Simulator):
             new_obs_space = gym.spaces.Box(
                 low=0, 
                 high=255, 
-                shape=(final_channels , 84, 84), 
+                shape=(final_channels , 42, 42), 
                 dtype=np.uint8
             )   
             env = gym.wrappers.TransformObservation(
                 env, 
-                lambda obs: np.array(obs).reshape(final_channels, 84, 84),
+                lambda obs: np.array(obs).reshape(final_channels, 42, 42),
                 observation_space=new_obs_space
             )
 
