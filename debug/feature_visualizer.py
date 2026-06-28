@@ -6,7 +6,7 @@ import argparse
 import yaml
 import os
 
-from models import SACActor as Actor
+from models import SACActor, TD3Actor
 from utils.rl_env import DuckieOvalEnv 
 
 class Sim2RealComparator:
@@ -16,16 +16,24 @@ class Sim2RealComparator:
         self.tilt_strength = 0.0006
 
         self.save_dir = os.path.expanduser("~/workspace/rl_models")
+        self.save_folder = 'img/feature_extraction'
+        if not os.path.exists(self.save_folder):
+            os.makedirs(self.save_folder, exist_ok=True)
+            
         self.model_name = model_name
         self.model_path = os.path.join(self.save_dir, f"{model_name}.cleanrl_model")
         
-        # 1. Initialize Actor
         dummy_env = DuckieOvalEnv.create_wrapped("dummy", grayscale=self.grayscale)
-        self.actor = Actor(dummy_env).to(self.device)
         
-        # 2. Load Weights
+        if "td3" in model_name.lower():
+            print(f"Detected TD3 model sequence. Instantiating TD3Actor for: {model_name}")
+            self.actor = TD3Actor(dummy_env).to(self.device)
+        else:
+            print(f"Detected SAC model sequence. Instantiating SACActor for: {model_name}")
+            self.actor = SACActor(dummy_env).to(self.device)
+        
         print(f"Loading model: {self.model_path}")
-        checkpoint = torch.load(self.model_path, map_location=self.device, weights_only=True)
+        checkpoint = torch.load(os.path.expanduser(self.model_path), map_location=self.device, weights_only=True)
         self.actor.load_state_dict(checkpoint['actor_state_dict'])
         self.actor.eval()
 
@@ -140,46 +148,60 @@ class Sim2RealComparator:
         tensor = torch.Tensor(stacked_img).unsqueeze(0).to(self.device)
         return tensor, pre_crop_img
 
-    def compare(self, sim_img_path, real_img_path):
-        print("\nProcessing Simulation Image...")
-        sim_tensor, sim_pre_crop = self.preprocess_image(sim_img_path, is_real_world=False)
-        with torch.no_grad():
-            _ = self.actor(sim_tensor)
-        sim_conv1 = self.outputs['Conv1'][0].cpu().numpy()
-        sim_latent = self.outputs['Latent'][0].cpu().numpy()
+    def compare_multiple(self, sim_folder, real_folder):
+        """
+        Iterates through matching images, plots Conv1 for each pair, 
+        and aggregates the latent shift.
+        """
+        latent_diffs = []
+        
+        # Iterating through your pairs 1, 2, and 3
+        for i in range(1, 4):
+            sim_path = os.path.join(sim_folder, f"sim{i}.png")
+            real_path = os.path.join(real_folder, f"real{i}.png")
+            
+            print(f"\n--- Processing Pair {i}: {sim_path} vs {real_path} ---")
+            
+            # Forward Pass: Simulation
+            sim_tensor, sim_pre_crop = self.preprocess_image(sim_path, is_real_world=False)
+            with torch.no_grad():
+                _ = self.actor(sim_tensor)
+            sim_conv1 = self.outputs['Conv1'][0].cpu().numpy()
+            sim_latent = self.outputs['Latent'][0].cpu().numpy()
 
-        print("Processing Real-World Image...")
-        real_tensor, real_pre_crop = self.preprocess_image(real_img_path, is_real_world=True)
-        with torch.no_grad():
-            _ = self.actor(real_tensor)
-        real_conv1 = self.outputs['Conv1'][0].cpu().numpy()
-        real_latent = self.outputs['Latent'][0].cpu().numpy()
+            # Forward Pass: Real World
+            real_tensor, real_pre_crop = self.preprocess_image(real_path, is_real_world=True)
+            with torch.no_grad():
+                _ = self.actor(real_tensor)
+            real_conv1 = self.outputs['Conv1'][0].cpu().numpy()
+            real_latent = self.outputs['Latent'][0].cpu().numpy()
 
-        self._plot_pre_crop_views(sim_pre_crop, real_pre_crop)
-        self._plot_conv_comparison(sim_conv1, real_conv1)
-        self._plot_latent_difference(sim_latent, real_latent)
+            # Store the latent absolute difference for the aggregate chart
+            latent_diffs.append(np.abs(sim_latent - real_latent))
 
-    def _plot_pre_crop_views(self, sim_img, real_img):
+            # Optional: Visualize pre-crop alignment for context
+            # self._plot_pre_crop_views(sim_pre_crop, real_pre_crop, idx=i)
+
+            # Save individual Conv1 comparisons
+            self._plot_conv_comparison(sim_conv1, real_conv1, idx=i)
+
+        # Plot and save Aggregated Latent Results across all 3 pairs
+        self._plot_aggregated_latent_differences(latent_diffs)
+
+    def _plot_pre_crop_views(self, sim_img, real_img, idx):
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-        fig.suptitle("Pre-Crop View Alignment: Simulation vs. Real Bot", fontsize=14, fontweight='bold')
-        
-        ax1.imshow(sim_img)
-        ax1.set_title("Simulation (Raw View)")
-        ax1.axis('off')
-        
-        ax2.imshow(real_img)
-        ax2.set_title("Real Bot (Undistort + Tilt Applied)")
-        ax2.axis('off')
-        
+        fig.suptitle(f"Pre-Crop View Alignment - Pair {idx}", fontsize=14, fontweight='bold')
+        ax1.imshow(sim_img); ax1.set_title("Simulation (Raw View)"); ax1.axis('off')
+        ax2.imshow(real_img); ax2.set_title("Real Bot (Undistort + Tilt Applied)"); ax2.axis('off')
         plt.tight_layout()
         plt.show()
 
-    def _plot_conv_comparison(self, sim_fm, real_fm):
+    def _plot_conv_comparison(self, sim_fm, real_fm, idx):
         """Plots the first 16 filters of Conv1 in two side-by-side 4x4 grids."""
         num_filters = min(16, sim_fm.shape[0])
         
         fig = plt.figure(figsize=(14, 7))
-        fig.suptitle("Layer 1 (Conv1) Activations", fontsize=16, fontweight='bold')
+        fig.suptitle(f"Layer 1 (Conv1) Activations [{self.model_name}] - Pair {idx}", fontsize=16, fontweight='bold')
         
         subfigs = fig.subfigures(1, 2, wspace=0.05)
         
@@ -191,10 +213,8 @@ class Sim2RealComparator:
         
         for i in range(num_filters):
             row, col = divmod(i, 4)
-            
             axs_sim[row, col].imshow(sim_fm[i], cmap='viridis')
             axs_sim[row, col].axis('off')
-            
             axs_real[row, col].imshow(real_fm[i], cmap='viridis')
             axs_real[row, col].axis('off')
 
@@ -203,41 +223,47 @@ class Sim2RealComparator:
             axs_sim[row, col].axis('off')
             axs_real[row, col].axis('off')
 
-        plt.show()
+        # Save individual Conv layer visualizations
+        save_path = os.path.join(self.save_folder, f"{self.model_name}_conv_pair{idx}.png")
+        plt.savefig(save_path, bbox_inches='tight', dpi=150)
+        print(f"--> Saved Conv comparison to: {save_path}")
+        plt.close(fig) # Use plt.close to prevent stacking interactive windows if running in bulk
 
-    def _plot_latent_difference(self, sim_latent, real_latent):
-        latent_diff = np.abs(sim_latent - real_latent)
+    def _plot_aggregated_latent_differences(self, diff_list):
+        """Plots mean latent difference across all 3 seeds with STD error bars."""
+        diffs = np.array(diff_list) # Shape: (3, latent_dim)
+        mean_diff = np.mean(diffs, axis=0)
+        std_diff = np.std(diffs, axis=0)
         
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 6), gridspec_kw={'height_ratios': [1, 2]})
+        fig, ax = plt.subplots(figsize=(12, 5))
+        x = range(len(mean_diff))
         
-        im_data = np.vstack([sim_latent, real_latent])
-        im = ax1.imshow(im_data, aspect='auto', cmap='magma')
-        ax1.set_yticks([0, 1])
-        ax1.set_yticklabels(["Sim Latent", "Real Latent"])
-        ax1.set_title(f"Final Latent Representation (Size: {sim_latent.shape[0]})")
-        fig.colorbar(im, ax=ax1, fraction=0.02, pad=0.04)
-
-        ax2.bar(range(len(latent_diff)), latent_diff, color='teal', edgecolor='black', alpha=0.8)
-        ax2.set_xlabel("Latent Feature Index")
-        ax2.set_ylabel("Absolute Difference")
-        ax2.set_title("Distribution Shift: | Sim_Latent - Real_Latent |")
+        ax.bar(x, mean_diff, yerr=std_diff, 
+               color='teal', alpha=0.7, ecolor='black', capsize=2, label='Mean Difference')
         
-        mean_diff = np.mean(latent_diff)
-        ax2.axhline(mean_diff, color='red', linestyle='--', label=f'Mean Diff ({mean_diff:.2f})')
-        ax2.legend()
+        ax.set_title(f"Aggregated Sim-to-Real Shift [{self.model_name}] (N=3)", fontsize=14, fontweight='bold')
+        ax.set_xlabel("Latent Feature Index")
+        ax.set_ylabel("Absolute Latent Difference")
         
-        plt.tight_layout()
+        # Add a baseline for context
+        overall_mean = np.mean(mean_diff)
+        ax.axhline(overall_mean, color='red', linestyle='--', label=f'Overall Mean Diff ({overall_mean:.2f})')
+        ax.legend()
+        
+        save_path = os.path.join(self.save_folder, f"{self.model_name}_latent_agg.png")
+        plt.savefig(save_path, bbox_inches='tight', dpi=150)
+        print(f"--> Saved Aggregated Latent comparison to: {save_path}")
         plt.show()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Sim-to-Real Feature Comparator")
+    parser = argparse.ArgumentParser(description="Statistical Sim-to-Real Feature Comparator")
     parser.add_argument("--model", type=str, required=True, help="Model name (e.g., sac_vr2)")
     parser.add_argument("--device", type=str, default="cuda", help="Device to run inference (cuda/cpu)")
     args = parser.parse_args()
 
     CALIB_PATH = "artifacts/duckie_calib_data.txt"
-    SIM_IMAGE_PATH = "screenshots/sim/sim1.png"
-    REAL_IMAGE_PATH = "screenshots/realbot/real1.png"
+    SIM_FOLDER = "screenshots/sim"
+    REAL_FOLDER = "screenshots/realbot"
 
     comparator = Sim2RealComparator(
         model_name=args.model, 
@@ -246,4 +272,4 @@ if __name__ == "__main__":
         grayscale=True     
     )
     
-    comparator.compare(sim_img_path=SIM_IMAGE_PATH, real_img_path=REAL_IMAGE_PATH)
+    comparator.compare_multiple(sim_folder=SIM_FOLDER, real_folder=REAL_FOLDER)
