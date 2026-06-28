@@ -10,15 +10,22 @@ from models import SACActor as Actor
 from utils.rl_env import DuckieOvalEnv 
 
 class Sim2RealComparator:
-    def __init__(self, model_path, calib_path, device="cpu", grayscale=True):
+    def __init__(self, model_name, calib_path, device="cpu", grayscale=True):
         self.device = torch.device(device)
         self.grayscale = grayscale
         self.tilt_strength = 0.0006
+
+        self.save_dir = os.path.expanduser("~/workspace/rl_models")
+        self.model_name = model_name
+        self.model_path = os.path.join(self.save_dir, f"{model_name}.cleanrl_model")
         
+        # 1. Initialize Actor
         dummy_env = DuckieOvalEnv.create_wrapped("dummy", grayscale=self.grayscale)
         self.actor = Actor(dummy_env).to(self.device)
         
-        checkpoint = torch.load(os.path.expanduser(model_path), map_location=self.device, weights_only=True)
+        # 2. Load Weights
+        print(f"Loading model: {self.model_path}")
+        checkpoint = torch.load(self.model_path, map_location=self.device, weights_only=True)
         self.actor.load_state_dict(checkpoint['actor_state_dict'])
         self.actor.eval()
 
@@ -223,15 +230,19 @@ class Sim2RealComparator:
         plt.show()
 
 if __name__ == "__main__":
-    MODEL_PATH = "~/workspace/rl_models/sac_vr2.cleanrl_model"
+    parser = argparse.ArgumentParser(description="Sim-to-Real Feature Comparator")
+    parser.add_argument("--model", type=str, required=True, help="Model name (e.g., sac_vr2)")
+    parser.add_argument("--device", type=str, default="cuda", help="Device to run inference (cuda/cpu)")
+    args = parser.parse_args()
+
     CALIB_PATH = "artifacts/duckie_calib_data.txt"
     SIM_IMAGE_PATH = "screenshots/sim/sim1.png"
     REAL_IMAGE_PATH = "screenshots/realbot/real1.png"
 
     comparator = Sim2RealComparator(
-        model_path=MODEL_PATH, 
+        model_name=args.model, 
         calib_path=CALIB_PATH,
-        device="cuda",     
+        device=args.device,     
         grayscale=True     
     )
     
