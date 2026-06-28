@@ -166,7 +166,7 @@ class Sim2RealComparator:
             real_conv1 = self.outputs['Conv1'][0].cpu().numpy()
             real_latent = self.outputs['Latent'][0].cpu().numpy()
 
-            # --- CORRECTION: Scale-Invariant Relative Error calculation ---
+            # Scale-Invariant Relative Error calculation
             epsilon = 1e-5
             rel_diff = np.abs(sim_latent - real_latent) / (np.abs(sim_latent) + epsilon)
             normalized_latent_diffs.append(rel_diff)
@@ -208,7 +208,7 @@ class Sim2RealComparator:
         plt.close(fig) 
 
     def _plot_aggregated_latent_differences(self, diff_list):
-        """Plots scale-normalized relative latent difference with standard deviation limits."""
+        """Plots scale-normalized relative latent difference with automatic percentile capping."""
         diffs = np.array(diff_list) 
         mean_diff = np.mean(diffs, axis=0)
         std_diff = np.std(diffs, axis=0)
@@ -216,10 +216,27 @@ class Sim2RealComparator:
         fig, ax = plt.subplots(figsize=(12, 5))
         x = range(len(mean_diff))
         
+        # --- FIX: SMART OUTLIER CAPPING LOGIC ---
+        # Calculate a reasonable Y-axis ceiling based on the 95th percentile of all features
+        # This prevents 1 or 2 extreme spikes from crushing the rest of the chart
+        y_max_ceiling = float(np.percentile(mean_diff, 95) * 2.0)
+        # Fallback safety layer: if max is very small, don't clip tightly
+        if y_max_ceiling < 1.0:
+            y_max_ceiling = float(np.max(mean_diff) * 1.1)
+            
         ax.bar(x, mean_diff, yerr=std_diff, 
                color='teal', alpha=0.7, ecolor='black', capsize=2, label='Mean Relative Shift')
         
-        ax.set_title(f"Normalized Sim-to-Real Domain Shift [{self.model_name}] (N=3)", fontsize=14, fontweight='bold')
+        # Annotate features that shoot past the visual ceiling textually at the top border
+        for idx, val in enumerate(mean_diff):
+            if val > y_max_ceiling:
+                # Place text slightly below the ceiling edge
+                ax.text(idx, y_max_ceiling * 0.92, f"{val:.1f}", 
+                        ha='center', va='top', color='crimson', 
+                        fontsize=8, fontweight='bold', rotation=90)
+        
+        ax.set_ylim(0, y_max_ceiling)
+        ax.set_title(f"Normalized Sim-to-Real Domain Shift [{self.model_name}] (Outliers Capped at {y_max_ceiling:.2f})", fontsize=14, fontweight='bold')
         ax.set_xlabel("Latent Feature Index")
         ax.set_ylabel("Relative Error Magnitude |Sim - Real| / |Sim|")
         
