@@ -8,8 +8,8 @@ def plot_curriculum_evaluation(metric='avg_reward', ema_span=3):
     Loads separate evaluation files for Curriculum and Non-Curriculum runs,
     applies subtle smoothing, and plots metrics along with standard deviation ribbons.
     """
-    file_cr = "artifacts/sac_r2_s1_p.csv"
-    file_nocr = "artifacts/sac_r2_s1_nocr.csv"
+    file_cr = "artifacts/sac_r2_s2_imp.csv"
+    file_nocr = "artifacts/sac_r2_s1_nocr_imp.csv"
     
     if not os.path.exists(file_cr) or not os.path.exists(file_nocr):
         print(f"Error: Missing evaluation data logs.\nExpected in workspace:\n - {file_cr}\n - {file_nocr}")
@@ -37,7 +37,7 @@ def plot_curriculum_evaluation(metric='avg_reward', ema_span=3):
         "risk_adjusted_score": "Risk-Adjusted Score"
     }
     y_axis_label = metric_title_map.get(metric, metric.replace('_', ' ').title())
-    plot_title = f"SAC with Unified Reward (seed: 1): Impact of Curriculum Randomization"
+    plot_title = f"SAC with Unified Reward: Impact of Curriculum Randomization"
 
     ax.plot(df_cr['step'], df_cr[metric], color='#2ca02c', alpha=0.15, linestyle='--')
     ax.plot(

@@ -34,4 +34,4 @@ runs/
 videos/
 screenshots/
 captures/
-*.png
+img/
