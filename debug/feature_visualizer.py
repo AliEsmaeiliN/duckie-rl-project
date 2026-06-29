@@ -19,21 +19,21 @@ class Sim2RealComparator:
         self.model_name = model_name
         self.save_folder = save_dir
         
-        # 1. Detect if this is a downscaled run based on the model name
+        # Detect if this is a downscaled run based on the model name
         self.is_downscaled = "ds" in model_name.lower()
         self.target_size = (42, 42) if self.is_downscaled else (84, 84)
         print(f"[{self.model_name}] Downscaled Mode: {self.is_downscaled} | Target Image Size: {self.target_size}")
             
         self.model_path = os.path.join(os.path.dirname(os.path.dirname(self.save_folder)), f"{model_name}.cleanrl_model")
         
-        # 2. Pass the downscaled flag to your environment builder
+        # Pass the downscaled flag to the environment builder
         dummy_env = DuckieOvalEnv.create_wrapped(
             "dummy", 
             grayscale=self.grayscale, 
             downscaled=self.is_downscaled
         )
         
-        # 3. Pass the downscaled flag to your Actor constructors
+        # Pass the downscaled flag to the Actor constructors
         if "td3" in model_name.lower():
             print(f"Instantiating TD3Actor for: {model_name}")
             self.actor = TD3Actor(dummy_env, downscaled=self.is_downscaled).to(self.device)
@@ -133,7 +133,7 @@ class Sim2RealComparator:
             top_boundary = int(h / 3)
             img = img[top_boundary:h, 0:w]
 
-        # 4. Use self.target_size dynamically based on initialization
+        # Use self.target_size dynamically based on initialization
         img = cv2.resize(img, self.target_size, interpolation=cv2.INTER_LINEAR) 
 
         if self.grayscale:
@@ -153,6 +153,11 @@ class Sim2RealComparator:
         scenario_names = ['Right Curve', 'Left Curve', 'Short Straight', 'Long Straight']
         model_data = []
 
+        def min_max_normalize(vec):
+            """Normalizes a vector strictly to the [0, 1] range based on its own bounds."""
+            v_min, v_max = vec.min(), vec.max()
+            return (vec - v_min) / (v_max - v_min + 1e-8)
+
         for i in range(4):
             sim_path = os.path.join(sim_folder, f"sim_{images_suffix[i]}.png")
             real_path = os.path.join(real_folder, f"real_{images_suffix[i]}.png")
@@ -161,23 +166,29 @@ class Sim2RealComparator:
             with torch.no_grad():
                 _ = self.actor(sim_tensor)
             sim_conv1 = self.outputs['Conv1'][0].cpu().numpy()
-            sim_latent = self.outputs['Latent'][0].cpu().numpy()
+            raw_sim_latent = self.outputs['Latent'][0].cpu().numpy()
 
             real_tensor, real_pre_crop = self.preprocess_image(real_path, is_real_world=True)
             with torch.no_grad():
                 _ = self.actor(real_tensor)
             real_conv1 = self.outputs['Conv1'][0].cpu().numpy()
-            real_latent = self.outputs['Latent'][0].cpu().numpy()
+            raw_real_latent = self.outputs['Latent'][0].cpu().numpy()
 
-            epsilon = 1e-5
-            rel_diff = np.abs(sim_latent - real_latent) / (np.abs(sim_latent) + epsilon)
+            # --- NORMALIZATION ---
+            # Normalize each latent vector independently based on its own range
+            sim_latent_norm = min_max_normalize(raw_sim_latent)
+            real_latent_norm = min_max_normalize(raw_real_latent)
+
+            # Since both vectors are now bounded [0, 1], their absolute difference 
+            # is a perfectly scaled domain shift metric (Max theoretical shift = 1.0)
+            norm_diff = np.abs(sim_latent_norm - real_latent_norm)
             
-            for feature_idx, shift_val in enumerate(rel_diff):
+            for feature_idx, shift_val in enumerate(norm_diff):
                 model_data.append({
                     "Model": self.model_name,
                     "Scenario": scenario_names[i],
                     "Latent Dimension": feature_idx,
-                    "Relative Shift": float(shift_val)
+                    "Normalized Shift": float(shift_val) # Renamed for clarity
                 })
 
             # Save visual artifacts ONLY for the "Long Straight" scenario
@@ -187,8 +198,10 @@ class Sim2RealComparator:
                 self._save_prepp_image(real_pre_crop, "real", images_suffix[i])
                 self._save_conv1_grid(sim_conv1, "sim", images_suffix[i])
                 self._save_conv1_grid(real_conv1, "real", images_suffix[i])
-                self._save_latent_heatmap(sim_latent, "sim", images_suffix[i])
-                self._save_latent_heatmap(real_latent, "real", images_suffix[i])
+                
+                # Plot the normalized heatmaps so visual color scales are 1:1 comparable
+                self._save_latent_heatmap(sim_latent_norm, "sim", images_suffix[i])
+                self._save_latent_heatmap(real_latent_norm, "real", images_suffix[i])
 
         return model_data
 
@@ -218,10 +231,11 @@ class Sim2RealComparator:
         fig, ax = plt.subplots(figsize=(15, 1.5))
         grid = latent_vec.reshape((1, len(latent_vec)))
         
-        cax = ax.imshow(grid, cmap='magma', aspect='auto')
+        # Enforce vmin=0 and vmax=1 so the color map is absolute across all models
+        cax = ax.imshow(grid, cmap='magma', aspect='auto', vmin=0.0, vmax=1.0)
         fig.colorbar(cax, ax=ax, fraction=0.015, pad=0.02)
         
-        ax.set_title(f"Latent Activation: {prefix.upper()} ({label})", weight='bold', pad=10)
+        ax.set_title(f"Normalized Latent Activation: {prefix.upper()} ({label})", weight='bold', pad=10)
         ax.get_yaxis().set_visible(False)
         ax.set_xlabel("Latent Feature Index")
         
@@ -248,20 +262,20 @@ def plot_faceted_violin(df, save_folder):
     df['Scenario'] = pd.Categorical(df['Scenario'], categories=scenario_order, ordered=True)
 
     g = sns.FacetGrid(data=df, col='Model', col_wrap=2, height=4.2, aspect=1.2, sharey=True)
-    g.map_dataframe(sns.boxplot, x='Scenario', y='Relative Shift', hue='Scenario', showfliers=False, linewidth=1.2, width=0.5, palette='muted', legend=False)
-    g.map_dataframe(sns.stripplot, x='Scenario', y='Relative Shift', color='black', alpha=0.12, size=2.0, jitter=0.20, dodge=False)
+    g.map_dataframe(sns.boxplot, x='Scenario', y='Normalized Shift', hue='Scenario', showfliers=False, linewidth=1.2, width=0.5, palette='muted', legend=False)
+    g.map_dataframe(sns.stripplot, x='Scenario', y='Normalized Shift', color='black', alpha=0.12, size=2.0, jitter=0.20, dodge=False)
 
-    g.set_axis_labels("", r"Relative Shift Scale $\left( \frac{|z_{sim} - z_{real}|}{|z_{sim}|} \right)$")
+    g.set_axis_labels("", r"Absolute Normalized Shift $|z_{sim_{norm}} - z_{real_{norm}}|$")
     g.set_titles(col_template="{col_name}", weight='bold')
 
     for ax in g.axes.flat:
-        ax.set_ylim(-0.1, 5.5)
+        # Since bounded by [0, 1], we adjust the ylim safely
+        ax.set_ylim(-0.05, 1.05)
         for label in ax.get_xticklabels():
             label.set_rotation(20)
-        ax.text(0.03, 0.93, "*Outliers (>5.5) omitted for scale visualization clarity", transform=ax.transAxes, fontsize=8, color='gray', style='italic')
 
     g.fig.subplots_adjust(top=0.88, hspace=0.35)
-    g.fig.suptitle("Sim-to-Real Latent Domain Shift Quantile Distributions by Architecture", fontsize=14, weight='bold')
+    g.fig.suptitle("Sim-to-Real Normalized Latent Domain Shift Distributions by Architecture", fontsize=14, weight='bold')
 
     save_path = os.path.join(save_folder, "publication_box_grid.pdf")
     plt.savefig(save_path, bbox_inches='tight', dpi=300)
@@ -284,7 +298,7 @@ def plot_overlaid_sparsity(df, save_folder):
 
     for idx, model in enumerate(models):
         model_df = df[df['Model'] == model]
-        mean_shifts = model_df.groupby('Latent Dimension')['Relative Shift'].mean()
+        mean_shifts = model_df.groupby('Latent Dimension')['Normalized Shift'].mean()
         sorted_shifts = mean_shifts.sort_values(ascending=False).values
         
         ax.plot(range(len(sorted_shifts)), sorted_shifts, label=model, color=colors[idx], linewidth=2.0, alpha=0.9)
@@ -294,9 +308,9 @@ def plot_overlaid_sparsity(df, save_folder):
     ax.axvline(x=sparsity_threshold_idx, color='gray', linestyle=':', linewidth=1.2, alpha=0.8)
     ax.text(sparsity_threshold_idx + 2, ax.get_ylim()[1] * 0.2, f"Top 10% Volatile Zone\n(Features 0-{sparsity_threshold_idx})", fontsize=9, color='dimgray', weight='semibold')
 
-    ax.set_title("Latent Representation Sparsity Profile (Log-Scale Error Rank)", weight='bold', pad=15)
+    ax.set_title("Normalized Latent Representation Sparsity Profile (Log-Scale Error Rank)", weight='bold', pad=15)
     ax.set_xlabel("Latent Feature Rank (Descending Order by Mean Shift Discrepancy)")
-    ax.set_ylabel("Mean Relative Shift (Log Scale)")
+    ax.set_ylabel("Mean Normalized Shift (Log Scale)")
     ax.set_xlim(0, 255)
     
     ax.legend(title="Agent Architecture", loc='upper right', frameon=True, facecolor='white', framealpha=0.9)
