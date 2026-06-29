@@ -168,7 +168,7 @@ class Sim2RealComparator:
                     "Relative Shift": float(shift_val)
                 })
 
-            if self.model_name == "sac_vr1":
+            if self.model_name == "sac_vr2":
                 self._save_prepp_image(sim_pre_crop, "sim", images_suffix[i])
                 self._save_prepp_image(real_pre_crop, "real", images_suffix[i])
                 self._save_conv1_grid(sim_conv1, "sim", images_suffix[i])
