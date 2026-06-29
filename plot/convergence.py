@@ -81,12 +81,12 @@ def plot_smoothed_eval_curves(model_base_input, ema_span=3):
 
     ax.axhline(0, color='#2ca02c', linestyle=':', alpha=0.7, label="Zero Robustness Baseline")
 
-    ax.set_title(plot_title, fontsize=12, fontweight='bold', pad=15)
-    ax.set_xlabel("Global Policy Training Steps", fontsize=11, labelpad=8)
-    ax.set_ylabel("Risk-Adjusted Score Delta ($\Delta$)", fontsize=11, labelpad=8)
+    ax.set_title(plot_title, fontsize=18, fontweight='bold', pad=15)
+    ax.set_xlabel("Global Policy Training Steps", fontsize=16, labelpad=8)
+    ax.set_ylabel("Risk-Adjusted Score Delta ($\Delta$)", fontsize=16, labelpad=8)
     
     ax.get_xaxis().set_major_formatter(plt.FuncFormatter(lambda x, loc: "{:,}".format(int(x))))
-    ax.legend(loc="upper right", frameon=True, facecolor='white', edgecolor='#e2e2e2', framealpha=0.95, fontsize=10)
+    ax.legend(loc="upper right", frameon=True, facecolor='white', edgecolor='#e2e2e2', framealpha=0.95, fontsize=14)
     ax.grid(True, linestyle='--', alpha=0.5)
     plt.tight_layout()
     ax.set_ylim(-20, 500)

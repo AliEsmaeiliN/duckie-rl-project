@@ -22,8 +22,8 @@ from gym_duckietown.envs import DuckietownEnv
 from rl_env_debug import DuckieOvalEnv
 from agent import DuckiebotAgent
 from wrappers_debug import DebugRewardWrapper, ActionWrapper, KinematicActionWrapper
-from rl.sac_continuous_action import Actor as sac_sim_actor
-from rl.td3_continuous_action import Actor as td3_sim_actor
+from models import SACActor as sac_sim_actor
+from models import TD3Actor as td3_sim_actor
 from encoder_capture import FeatureVisualizer
 
 
@@ -74,11 +74,11 @@ else:
         camera_rand=args.camera_rand,
         distortion=args.distortion,
         recovery_step=True,
-        spawn_difficulty=1.0
+        spawn_difficulty=0
     )
 
 render_modes = ["human", "top_down", "free_cam", "rgb_array"]
-view = render_modes[0]
+view = render_modes[1]
 auto_mode = False
 
 obs, info = env.reset(seed=args.seed)

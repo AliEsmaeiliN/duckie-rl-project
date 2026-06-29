@@ -112,21 +112,23 @@ if __name__ == "__main__":
             # Row 0: Linear Velocity (v)
             axes[0, col_idx].plot(steps, d_data["v"], label=f"{d.upper()} Loop", color=color, linestyle=style, linewidth=2)
             axes[0, col_idx].set_ylim(0.0, 1.0)
-            axes[0, col_idx].set_ylabel("Velocity ($v$)")
-            axes[0, col_idx].set_title(f"Velocity Space - {model_label}")
+            if model_label == "With Jerk Penalty":
+                axes[0, col_idx].set_ylabel("Velocity ($v$)", fontsize=16)
+            axes[0, col_idx].set_title(f"{model_label}", fontsize=16)
             axes[0, col_idx].grid(True, linestyle='--', alpha=0.4)
             
             # Row 1: Angular Velocity (omega)
             axes[1, col_idx].plot(steps, d_data["omega"], label=f"{d.upper()} Loop", color=color, linestyle=style, linewidth=2)
             axes[1, col_idx].set_ylim(-1.0, 1.0)
-            axes[1, col_idx].set_ylabel("Steering ($\omega$)")
-            axes[1, col_idx].set_xlabel("Simulation Decision Steps")
-            axes[1, col_idx].set_title(f"Steering Control - {model_label}")
+            if model_label == "With Jerk Penalty":
+                axes[1, col_idx].set_ylabel("Steering ($\omega$)", fontsize=16)
+            axes[1, col_idx].set_xlabel("Simulation Decision Steps", fontsize=12)
+            #axes[1, col_idx].set_title(f"{model_label}")
             axes[1, col_idx].grid(True, linestyle='--', alpha=0.4)
             
         axes[0, col_idx].legend(loc="upper right")
         
-    plt.suptitle(f"Directional Overlay Ablation Matrix (Full Loop Completion Cutoff) | Map: {MAP_NAME}", fontsize=14, fontweight='bold')
+    plt.suptitle(f"Action Comparison (Full Loop Completion Cutoff) | Map: {MAP_NAME}", fontsize=14, fontweight='bold')
     plt.tight_layout()
     
     output_filename = "directional_overlay_comparison.png"

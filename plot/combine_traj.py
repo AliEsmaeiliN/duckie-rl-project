@@ -10,8 +10,8 @@ if model_name == 's':
 elif model_name == 't':
     model_name = 'td3'
 
-cw_filename = f"{model_name}_r{run_number}_cw.png"
-ccw_filename = f"{model_name}_r{run_number}_ccw.png"
+cw_filename = f"img/{model_name}_r{run_number}_cw.png"
+ccw_filename = f"img/{model_name}_r{run_number}_ccw.png"
 output_filename = f"{model_name}_r{run_number}_combined.png"
 
 if not os.path.exists(cw_filename) or not os.path.exists(ccw_filename):

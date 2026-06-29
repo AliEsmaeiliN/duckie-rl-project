@@ -9,7 +9,7 @@ def plot_curriculum_evaluation(metric='avg_reward', ema_span=3):
     applies subtle smoothing, and plots metrics along with standard deviation ribbons.
     """
     file_cr = "artifacts/sac_r2_s2_imp.csv"
-    file_nocr = "artifacts/sac_r2_s1_nocr_imp.csv"
+    file_nocr = "artifacts/sac_r2_s2_nocr_imp.csv"
     
     if not os.path.exists(file_cr) or not os.path.exists(file_nocr):
         print(f"Error: Missing evaluation data logs.\nExpected in workspace:\n - {file_cr}\n - {file_nocr}")
