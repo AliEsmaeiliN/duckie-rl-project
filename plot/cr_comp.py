@@ -77,9 +77,9 @@ def plot_curriculum_evaluation(metric='avg_reward', ema_span=3):
             alpha=0.10
         )
 
-    ax.set_title(plot_title, fontsize=12, fontweight='bold', pad=15)
-    ax.set_xlabel("Global Policy Training Steps", fontsize=11, labelpad=8)
-    ax.set_ylabel(y_axis_label, fontsize=11, labelpad=8)
+    ax.set_title(plot_title, fontsize=20, fontweight='bold', pad=15)
+    ax.set_xlabel("Global Policy Training Steps", fontsize=18, labelpad=8)
+    ax.set_ylabel(y_axis_label, fontsize=18, labelpad=8)
     
     
     ax.get_xaxis().set_major_formatter(plt.FuncFormatter(lambda x, loc: "{:,}".format(int(x))))
