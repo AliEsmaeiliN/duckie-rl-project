@@ -18,17 +18,28 @@ class Sim2RealComparator:
         self.tilt_strength = 0.0006
         self.model_name = model_name
         self.save_folder = save_dir
+        
+        # 1. Detect if this is a downscaled run based on the model name
+        self.is_downscaled = "ds" in model_name.lower()
+        self.target_size = (42, 42) if self.is_downscaled else (84, 84)
+        print(f"[{self.model_name}] Downscaled Mode: {self.is_downscaled} | Target Image Size: {self.target_size}")
             
         self.model_path = os.path.join(os.path.dirname(os.path.dirname(self.save_folder)), f"{model_name}.cleanrl_model")
         
-        dummy_env = DuckieOvalEnv.create_wrapped("dummy", grayscale=self.grayscale)
+        # 2. Pass the downscaled flag to your environment builder
+        dummy_env = DuckieOvalEnv.create_wrapped(
+            "dummy", 
+            grayscale=self.grayscale, 
+            downscaled=self.is_downscaled
+        )
         
+        # 3. Pass the downscaled flag to your Actor constructors
         if "td3" in model_name.lower():
             print(f"Instantiating TD3Actor for: {model_name}")
-            self.actor = TD3Actor(dummy_env).to(self.device)
+            self.actor = TD3Actor(dummy_env, downscaled=self.is_downscaled).to(self.device)
         else:
             print(f"Instantiating SACActor for: {model_name}")
-            self.actor = SACActor(dummy_env).to(self.device)
+            self.actor = SACActor(dummy_env, downscaled=self.is_downscaled).to(self.device)
         
         print(f"Loading model weights: {self.model_path}")
         checkpoint = torch.load(os.path.expanduser(self.model_path), map_location=self.device, weights_only=True)
@@ -122,7 +133,8 @@ class Sim2RealComparator:
             top_boundary = int(h / 3)
             img = img[top_boundary:h, 0:w]
 
-        img = cv2.resize(img, (42, 42), interpolation=cv2.INTER_LINEAR) 
+        # 4. Use self.target_size dynamically based on initialization
+        img = cv2.resize(img, self.target_size, interpolation=cv2.INTER_LINEAR) 
 
         if self.grayscale:
             img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
@@ -168,7 +180,9 @@ class Sim2RealComparator:
                     "Relative Shift": float(shift_val)
                 })
 
-            if self.model_name == "sac_vr2":
+            # Save visual artifacts ONLY for the "Long Straight" scenario
+            if scenario_names[i] == "Long Straight":
+                print(f"      -> Extracting and exporting visual feature layers for: {scenario_names[i]}")
                 self._save_prepp_image(sim_pre_crop, "sim", images_suffix[i])
                 self._save_prepp_image(real_pre_crop, "real", images_suffix[i])
                 self._save_conv1_grid(sim_conv1, "sim", images_suffix[i])
@@ -200,18 +214,14 @@ class Sim2RealComparator:
         plt.close(fig)
 
     def _save_latent_heatmap(self, latent_vec, prefix, label):
-        """Saves the latent vector as a 1x256 color-coded horizontal strip."""
-        # Made the figure wide and short to accommodate the 1D strip nicely
+        """Saves the latent vector as a 1xN color-coded horizontal strip."""
         fig, ax = plt.subplots(figsize=(15, 1.5))
-        
-        # Reshape to exactly 1 row by N columns
         grid = latent_vec.reshape((1, len(latent_vec)))
         
         cax = ax.imshow(grid, cmap='magma', aspect='auto')
         fig.colorbar(cax, ax=ax, fraction=0.015, pad=0.02)
         
         ax.set_title(f"Latent Activation: {prefix.upper()} ({label})", weight='bold', pad=10)
-        # We leave the X-axis visible so you know which feature index is which, but hide Y
         ax.get_yaxis().set_visible(False)
         ax.set_xlabel("Latent Feature Index")
         
@@ -222,11 +232,7 @@ class Sim2RealComparator:
 # --- Global Plotting Functions ---
 
 def plot_faceted_violin(df, save_folder):
-    """
-    Generates a publication-quality 2x2 faceted boxplot grid with a faint 
-    underlying sample distribution layer. Outliers are cropped for scale clarity.
-    """
-    # 1. Establish strict publication formatting
+    """Generates a publication-quality 2x2 faceted boxplot grid."""
     sns.set_theme(style="whitegrid", context="paper")
     plt.rcParams.update({
         'font.family': 'serif',
@@ -237,61 +243,25 @@ def plot_faceted_violin(df, save_folder):
         'ytick.labelsize': 10
     })
 
-    # 2. Reorder scenarios logically (Straights grouped, Curves grouped)
     scenario_order = ['Long Straight', 'Short Straight', 'Left Curve', 'Right Curve']
     df = df.copy()
     df['Scenario'] = pd.Categorical(df['Scenario'], categories=scenario_order, ordered=True)
 
-    # 3. Initialize the core FacetGrid
-    g = sns.FacetGrid(
-        data=df,
-        col='Model',
-        col_wrap=2,
-        height=4.2,
-        aspect=1.2,
-        sharey=True
-    )
+    g = sns.FacetGrid(data=df, col='Model', col_wrap=2, height=4.2, aspect=1.2, sharey=True)
+    g.map_dataframe(sns.boxplot, x='Scenario', y='Relative Shift', hue='Scenario', showfliers=False, linewidth=1.2, width=0.5, palette='muted', legend=False)
+    g.map_dataframe(sns.stripplot, x='Scenario', y='Relative Shift', color='black', alpha=0.12, size=2.0, jitter=0.20, dodge=False)
 
-    # 4. Map clean, non-decorative boxplots
-    g.map_dataframe(
-        sns.boxplot,
-        x='Scenario',
-        y='Relative Shift',
-        hue='Scenario',
-        showfliers=False,      # Hides the default ugly black outlier diamonds
-        linewidth=1.2,
-        width=0.5,             # Makes boxes slightly narrower and sharper
-        palette='muted',
-        legend=False
-    )
-
-    # 5. Overlay the actual sample density using a faint, tiny strip layer
-    g.map_dataframe(
-        sns.stripplot,
-        x='Scenario',
-        y='Relative Shift',
-        color='black',
-        alpha=0.12,            # Highly transparent to prevent visual noise
-        size=2.0,
-        jitter=0.20,
-        dodge=False
-    )
-
-    # 6. Final axis polishing
     g.set_axis_labels("", r"Relative Shift Scale $\left( \frac{|z_{sim} - z_{real}|}{|z_{sim}|} \right)$")
     g.set_titles(col_template="{col_name}", weight='bold')
 
     for ax in g.axes.flat:
-        ax.set_ylim(-0.1, 5.5) # Hard cap to keep structural features clearly visible
+        ax.set_ylim(-0.1, 5.5)
         for label in ax.get_xticklabels():
             label.set_rotation(20)
-            
-        ax.text(0.03, 0.93, "*Outliers (>5.5) omitted for scale visualization clarity", 
-                transform=ax.transAxes, fontsize=8, color='gray', style='italic')
+        ax.text(0.03, 0.93, "*Outliers (>5.5) omitted for scale visualization clarity", transform=ax.transAxes, fontsize=8, color='gray', style='italic')
 
     g.fig.subplots_adjust(top=0.88, hspace=0.35)
-    g.fig.suptitle("Sim-to-Real Latent Domain Shift Quantile Distributions by Architecture", 
-                   fontsize=14, weight='bold')
+    g.fig.suptitle("Sim-to-Real Latent Domain Shift Quantile Distributions by Architecture", fontsize=14, weight='bold')
 
     save_path = os.path.join(save_folder, "publication_box_grid.pdf")
     plt.savefig(save_path, bbox_inches='tight', dpi=300)
@@ -299,79 +269,8 @@ def plot_faceted_violin(df, save_folder):
     plt.close()
 
 
-def plot_thesis_sparsity_curves(df, save_folder):
-    """
-    Generates a sleek, line-only latent sparsity curve using a logarithmic scale 
-    and clear semantic demarcation lines.
-    """
-    sns.set_theme(style="whitegrid", context="paper")
-    plt.rcParams.update({
-        'font.family': 'serif',
-        'axes.labelsize': 11,
-        'axes.titlesize': 13,
-    })
-
-    fig, ax = plt.subplots(figsize=(9, 5.5))
-    
-    models = df['Model'].unique()
-    colors = sns.color_palette("tab10", len(models))
-
-    for idx, model in enumerate(models):
-        model_df = df[df['Model'] == model]
-        
-        # Aggregate across dimensional spaces
-        mean_shifts = model_df.groupby('Latent Dimension')['Relative Shift'].mean()
-        sorted_shifts = mean_shifts.sort_values(ascending=False).values
-        
-        # Sleek, clean line strokes without shaded regions
-        ax.plot(
-            range(len(sorted_shifts)), 
-            sorted_shifts, 
-            label=model, 
-            color=colors[idx], 
-            linewidth=2.0, 
-            alpha=0.9
-        )
-
-    # Apply logarithmic Y transform to evaluate tail convergence accurately
-    ax.set_yscale("log")
-    
-    # Add vertical reference line indicating structural feature compression (Top 10%)
-    sparsity_threshold_idx = 25 
-    ax.axvline(
-        x=sparsity_threshold_idx, 
-        color='gray', 
-        linestyle=':', 
-        linewidth=1.2, 
-        alpha=0.8
-    )
-    ax.text(
-        sparsity_threshold_idx + 2, 
-        ax.get_ylim()[1] * 0.2, 
-        f"Top 10% Volatile Zone\n(Features 0-{sparsity_threshold_idx})", 
-        fontsize=9, 
-        color='dimgray', 
-        weight='semibold'
-    )
-
-    ax.set_title("Latent Representation Sparsity Profile (Log-Scale Error Rank)", weight='bold', pad=15)
-    ax.set_xlabel("Latent Feature Rank (Descending Order by Mean Shift Discrepancy)")
-    ax.set_ylabel("Mean Relative Shift (Log Scale)")
-    ax.set_xlim(0, 255)
-    
-    ax.legend(title="Agent Architecture", loc='upper right', frameon=True, facecolor='white', framealpha=0.9)
-    plt.tight_layout()
-    
-    save_path = os.path.join(save_folder, "publication_sparsity_curves.pdf")
-    plt.savefig(save_path, bbox_inches='tight', dpi=300)
-    print(f"[Success] Saved log-scale sparsity visualization to: {save_path}")
-    plt.close()
-
 def plot_overlaid_sparsity(df, save_folder):
-    """
-    Generates a sleek, high-contrast line metric analyzing latent compression space.
-    Implements a logarithmic y-scale, thinner clean strokes, and explicit sparsity boundaries.
-    """
+    """Generates a sleek, high-contrast line metric analyzing latent compression space."""
     sns.set_theme(style="whitegrid", context="paper")
     plt.rcParams.update({
         'font.family': 'serif',
@@ -380,47 +279,20 @@ def plot_overlaid_sparsity(df, save_folder):
     })
 
     fig, ax = plt.subplots(figsize=(9, 5.5))
-    
     models = df['Model'].unique()
     colors = sns.color_palette("tab10", len(models))
 
     for idx, model in enumerate(models):
         model_df = df[df['Model'] == model]
-        
-        # Aggregate across dimensional spaces
         mean_shifts = model_df.groupby('Latent Dimension')['Relative Shift'].mean()
         sorted_shifts = mean_shifts.sort_values(ascending=False).values
         
-        # Replaced thick fills with a clean, thin line-only presentation
-        ax.plot(
-            range(len(sorted_shifts)), 
-            sorted_shifts, 
-            label=model, 
-            color=colors[idx], 
-            linewidth=2.0, 
-            alpha=0.9
-        )
+        ax.plot(range(len(sorted_shifts)), sorted_shifts, label=model, color=colors[idx], linewidth=2.0, alpha=0.9)
 
-    # (a) Logarithmic transform to accurately trace tracking errors without blowing out graphs
     ax.set_yscale("log")
-    
-    # (b) Add vertical reference line indicating structural feature compression
-    sparsity_threshold_idx = 25 # Top ~10% of features
-    ax.axvline(
-        x=sparsity_threshold_idx, 
-        color='gray', 
-        linestyle=':', 
-        linewidth=1.2, 
-        alpha=0.8
-    )
-    ax.text(
-        sparsity_threshold_idx + 2, 
-        ax.get_ylim()[1] * 0.2, 
-        f"Top 10% Volatile Zone\n(Features 0-{sparsity_threshold_idx})", 
-        fontsize=9, 
-        color='dimgray', 
-        weight='semibold'
-    )
+    sparsity_threshold_idx = 25 
+    ax.axvline(x=sparsity_threshold_idx, color='gray', linestyle=':', linewidth=1.2, alpha=0.8)
+    ax.text(sparsity_threshold_idx + 2, ax.get_ylim()[1] * 0.2, f"Top 10% Volatile Zone\n(Features 0-{sparsity_threshold_idx})", fontsize=9, color='dimgray', weight='semibold')
 
     ax.set_title("Latent Representation Sparsity Profile (Log-Scale Error Rank)", weight='bold', pad=15)
     ax.set_xlabel("Latent Feature Rank (Descending Order by Mean Shift Discrepancy)")
@@ -438,8 +310,7 @@ def plot_overlaid_sparsity(df, save_folder):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Scale-Agnostic Sim-to-Real Feature Evaluator")
-    parser.add_argument("--models", type=str, nargs='+', required=True, 
-                        help="List of models to evaluate (e.g., --models sac_v1 sac_v2 td3_v1 td3_v2)")
+    parser.add_argument("--models", type=str, nargs='+', required=True, help="List of models to evaluate")
     parser.add_argument("--device", type=str, default="cuda", help="Execution context device (cuda/cpu)")
     args = parser.parse_args()
 

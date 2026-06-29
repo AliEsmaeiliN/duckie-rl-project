@@ -4,13 +4,14 @@ import torch.nn.functional as F
 import numpy as np
 
 class ImpalaCNN(nn.Module):
-    def __init__(self, in_channels=12, feature_dim=256):
+    def __init__(self, in_channels=12, feature_dim=256, downscaled=False):
         super().__init__()
+        self.out_res = 81 if not downscaled else 9
         self.main = nn.Sequential(
             nn.Conv2d(in_channels, 16, 8, stride=4), nn.LeakyReLU(),
             nn.Conv2d(16, 32, 4, stride=2), nn.LeakyReLU(), 
             nn.Flatten(),
-            nn.Linear(32 * 9, feature_dim)
+            nn.Linear(32 * self.out_res, feature_dim)
         )
         
     def forward(self, obs):
@@ -19,11 +20,11 @@ class ImpalaCNN(nn.Module):
         return F.layer_norm(h, (h.size(-1),))
     
 class SACActor(nn.Module):
-    def __init__(self, grayscale=True, action_dim=2):
+    def __init__(self, grayscale=True, action_dim=2, downscaled=False):
         super().__init__()
 
         self.channels = 4 if grayscale else 12
-        self.encoder = ImpalaCNN(in_channels=self.channels, feature_dim=256)
+        self.encoder = ImpalaCNN(in_channels=self.channels, feature_dim=256, downscaled=downscaled)
         
         self.fc_mean = nn.Linear(256, action_dim)
         self.fc_logstd = nn.Linear(256, action_dim)
@@ -40,11 +41,11 @@ class SACActor(nn.Module):
         return action * self.action_scale + self.action_bias
     
 class TD3Actor(nn.Module):
-    def __init__(self, grayscale=True, action_dim=2):
+    def __init__(self, grayscale=True, action_dim=2, downscaled=False):
         super().__init__()
         self.channels = 4 if grayscale else 12
 
-        self.encoder = ImpalaCNN(in_channels=self.channels, feature_dim=256)
+        self.encoder = ImpalaCNN(in_channels=self.channels, feature_dim=256, downscaled=downscaled)
         
         self.fc_mu = nn.Linear(256, action_dim)
         

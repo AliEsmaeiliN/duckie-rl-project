@@ -35,12 +35,17 @@ class DuckieOvalEnv(Simulator):
                         ema=False, motion_blur=False, grayscale=True, 
                         frame_stack=4, latency_rand=False, recovery_step=False,
                         jerk_penalty=False, preprocessing=False, is_eval=True,
-                        direction_lock=False, **kwargs
+                        direction_lock=False, downscaled=False, **kwargs
                     ):
         """
         Static method to build the fully wrapped stack.
         """
         env = cls(**kwargs)
+
+        if downscaled: 
+            res = 42
+        else:
+            res = 84
 
         if is_eval:
             env = TileTrackingWrapper(env)
@@ -69,7 +74,7 @@ class DuckieOvalEnv(Simulator):
             env = CLAHEWrapper(env)
             env = GaussianBlurWrapper(env)
         
-        env = CropResizeWrapper(env, shape=(42, 42))
+        env = CropResizeWrapper(env, shape=(res, res))
 
         
         if grayscale:
@@ -107,12 +112,12 @@ class DuckieOvalEnv(Simulator):
             new_obs_space = gym.spaces.Box(
                 low=0, 
                 high=255, 
-                shape=(final_channels , 42, 42), 
+                shape=(final_channels , res, res), 
                 dtype=np.uint8
             )   
             env = gym.wrappers.TransformObservation(
                 env, 
-                lambda obs: np.array(obs).reshape(final_channels, 42, 42),
+                lambda obs: np.array(obs).reshape(final_channels, res, res),
                 observation_space=new_obs_space
             )
 
