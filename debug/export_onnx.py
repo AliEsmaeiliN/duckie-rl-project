@@ -57,7 +57,7 @@ def export_model_file(base_dir, model_filename):
         dummy_input = torch.randint(
             low=0, 
             high=255, 
-            size=(1, channels, 84, 84), 
+            size=(1, channels, 42, 42), 
             dtype=torch.uint8
         ).to(device)
         

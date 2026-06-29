@@ -122,7 +122,7 @@ class Sim2RealComparator:
             top_boundary = int(h / 3)
             img = img[top_boundary:h, 0:w]
 
-        img = cv2.resize(img, (84, 84), interpolation=cv2.INTER_LINEAR) 
+        img = cv2.resize(img, (42, 42), interpolation=cv2.INTER_LINEAR) 
 
         if self.grayscale:
             img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
