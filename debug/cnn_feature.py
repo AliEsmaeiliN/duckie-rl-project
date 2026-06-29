@@ -245,14 +245,13 @@ def plot_cosine_comparison(df: pd.DataFrame, save_folder: str):
     # Upper bound alignment indicator line
     ax.axhline(1.0, color='black', linewidth=1.0, linestyle='--', alpha=0.5, label='Perfect Alignment (1.0)')
     
-    ax.set_title("Sim-to-Real Latent Geometry Alignment (Cosine Similarity)", weight='bold', pad=15)
-    ax.set_xlabel("Track Evaluation Scenario")
-    ax.set_ylabel("Cosine Similarity Value ($\cos(\\theta)$)")
+    ax.set_xlabel("Track Evaluation Scenario", fontsize=12)
+    ax.set_ylabel("Cosine Similarity Value", fontsize=16)
     ax.set_ylim(-0.05, 1.1)
     ax.legend(title="Agent Configuration", frameon=True, loc='lower left')
     
     plt.tight_layout()
-    path = os.path.join(save_folder, "cosine_similarity_comparison.pdf")
+    path = os.path.join(save_folder, "ds_cosine_similarity_comparison.pdf")
     plt.savefig(path, bbox_inches='tight', dpi=300)
     plt.close()
     print(f"[Saved Plot] {path}")
