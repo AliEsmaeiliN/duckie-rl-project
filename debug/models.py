@@ -10,7 +10,7 @@ class ImpalaCNN(nn.Module):
             nn.Conv2d(in_channels, 16, 8, stride=4), nn.LeakyReLU(),
             nn.Conv2d(16, 32, 4, stride=2), nn.LeakyReLU(), 
             nn.Flatten(),
-            nn.Linear(32 * 81, feature_dim)
+            nn.Linear(32 * 9, feature_dim)
         )
         
     def forward(self, obs):
