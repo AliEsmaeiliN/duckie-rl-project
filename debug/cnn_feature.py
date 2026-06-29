@@ -216,7 +216,10 @@ def plot_cosine_comparison(df: pd.DataFrame, save_folder: str):
     
     name_mapping = {
         "sac_vr2": "Original Baseline (84x84)",
-        "sac_vr2_ds": "Downsampled Policy (42x42)"
+        "sac_vr2_ds": "Downsampled Policy (42x42)",
+        "sac_vr1": "Original Baseline (84x84)",
+        "td3_vr1": "Downsampled Policy (42x42)",
+        "td3_vr2": "Original Baseline (84x84)"
     }
     
     df = df.copy()
