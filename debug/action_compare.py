@@ -179,11 +179,11 @@ def plot_action_space(df: pd.DataFrame, save_path: str):
     
     # 2. Complete naming architecture map
     name_mapping = {
-        "sac_vr2": "SAC with Unified Reward (84x84)",
-        "sac_vr2_ds": "SAC with Unified Reward (42x42)",
-        "sac_vr1": "SAC with Adaptive Reward (84x84)",
-        "td3_vr1": "TD3 with Adaptive Reward (84x84)",
-        "td3_vr2": "TD3 with Unified Reward (84x84)"
+        "sac_vr2": "SAC with Unified Reward",
+        "sac_vr2_ds": "SAC with Unified Reward",
+        "sac_vr1": "SAC with Adaptive Reward",
+        "td3_vr1": "TD3 with Adaptive Reward",
+        "td3_vr2": "TD3 with Unified Reward"
     }
     
     # Shape dictionary for track positions
