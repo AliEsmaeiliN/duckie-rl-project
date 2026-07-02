@@ -46,13 +46,14 @@ class Sim2RealComparator:
             "..", "..", "rl_models", f"{model_name}.cleanrl_model"
         )
 
-        # Explicitly pass the downscaled property flag if your environment layout tracks it
-        dummy_env = DuckieOvalEnv.create_wrapped("dummy", grayscale=self.grayscale)
+        dummy_env = DuckieOvalEnv.create_wrapped(
+            "dummy", grayscale=self.grayscale, downscaled=self.is_downscaled
+        )
 
         if "td3" in model_name.lower():
-            self.actor = TD3Actor(dummy_env).to(self.device)
+            self.actor = TD3Actor(dummy_env, downscaled=self.is_downscaled).to(self.device)
         else:
-            self.actor = SACActor(dummy_env).to(self.device)
+            self.actor = SACActor(dummy_env, downscaled=self.is_downscaled).to(self.device)
 
         checkpoint = torch.load(
             os.path.expanduser(self.model_path),
@@ -196,14 +197,6 @@ class Sim2RealComparator:
 
 SCENARIO_ORDER = ['Long Straight', 'Short Straight', 'Left Curve', 'Right Curve']
 
-# Global master name mapping to ensure shared naming configurations across printouts and charts
-GLOBAL_NAME_MAPPING = {
-    "sac_vr2": "SAC with Unified R",
-    "sac_vr1": "SAC with Adaptive R",
-    "td3_vr2": "TD3 with Unified R",   # Fixed typo
-    "td3_vr1": "TD3 with Adaptive R"   # Fixed typo
-}
-
 def _style():
     sns.set_theme(style="whitegrid", context="paper")
     plt.rcParams.update({
@@ -216,23 +209,28 @@ def _style():
 
 def plot_cosine_comparison(df: pd.DataFrame, save_folder: str):
     """
-    Generates a clean publication grouped bar chart comparing 4 models
-    side-by-side across all driving scenarios.
+    Generates a high-quality grouped bar chart explicitly comparing 
+    Cosine Similarity across models and driving scenarios.
     """
     _style()
-    fig, ax = plt.subplots(figsize=(11, 5))
+    fig, ax = plt.subplots(figsize=(8.5, 5))
+    
+    name_mapping = {
+        "sac_vr2": "Original Baseline (84x84)",
+        "sac_vr2_ds": "Downsampled Policy (42x42)",
+        "sac_vr1": "Original Baseline (84x84)",
+        "td3_vr1": "Downsampled Policy (42x42)",
+        "td3_vr2": "Original Baseline (84x84)"
+    }
     
     df = df.copy()
-    df['Model'] = df['Model'].map(lambda x: GLOBAL_NAME_MAPPING.get(x, x))
+    df['Model'] = df['Model'].map(lambda x: name_mapping.get(x, x))
     df['Scenario'] = pd.Categorical(df['Scenario'], categories=SCENARIO_ORDER, ordered=True)
     df = df.sort_values('Scenario')
 
-    # Enriched color scheme matching algorithmic groupings
     custom_colors = {
-        "SAC with Unified R":  "#1B365D",  # Dark Navy Blue
-        "SAC with Adaptive R": "#7EA6CC",  # Muted Ice Blue
-        "TD3 with Unified R":  "#990000",  # Rich Crimson Red
-        "TD3 with Adaptive R": "#E06666"   # Muted Soft Coral
+        "Original Baseline (84x84)": "#1B365D",     # Deep Navy Blue
+        "Downsampled Policy (42x42)": "#E06666"     # Soft Coral / Muted Red-Salmon for contrast
     }
 
     sns.barplot(
@@ -240,29 +238,33 @@ def plot_cosine_comparison(df: pd.DataFrame, save_folder: str):
         x='Scenario',
         y='Cosine Similarity',
         hue='Model',
-        palette=custom_colors,  
+        palette=custom_colors,  # Using high-contrast publication friendly palette
         alpha=0.9,
         ax=ax
     )
 
+    # Upper bound alignment indicator line
     ax.axhline(1.0, color='black', linewidth=1.0, linestyle='--', alpha=0.5, label='Perfect Alignment (1.0)')
     
-    ax.set_title("Sim-to-Real Latent Geometry Alignment Across Network Configurations", weight='bold', pad=15)
-    ax.set_xlabel("Track Evaluation Scenario")
-    ax.set_ylabel("Cosine Similarity Value)", fontsize=18)
+    ax.set_xlabel("Track Evaluation Scenario", fontsize=12)
+    ax.set_ylabel("Cosine Similarity Value", fontsize=16)
     ax.set_ylim(-0.05, 1.1)
-    
     ax.legend(title="Agent Configuration", frameon=True, loc='lower left')
     
     plt.tight_layout()
-    path = os.path.join(save_folder, "cosine_similarity_4model_comparison.pdf")
+    path = os.path.join(save_folder, "ds_cosine_similarity_comparison.pdf")
     plt.savefig(path, bbox_inches='tight', dpi=300)
     plt.close()
     print(f"[Saved Plot] {path}")
 
 def print_summary_table(df: pd.DataFrame):
+    # Remap strings for terminal output readability too
+    name_mapping = {
+        "sac_vr2": "Original Baseline (84x84)",
+        "sac_vr2_ds": "Downsampled Policy (42x42)"
+    }
     df_print = df.copy()
-    df_print['Model'] = df_print['Model'].map(lambda x: GLOBAL_NAME_MAPPING.get(x, x))
+    df_print['Model'] = df_print['Model'].map(lambda x: name_mapping.get(x, x))
     
     print("\n" + "=" * 75)
     print("  SIM-TO-REAL LATENT COSINE SIMILARITY SUMMARY")
