@@ -663,13 +663,14 @@ class Simulator(gym.Env):
         
 
         init_vel = np.array([0, 0])
+        target_hardware_delay = 0.0
 
         # Initialize Dynamics model
         if self.dynamics_rand:
             trim = 0 + self.randomization_settings["trim"][0]
-            p = get_DB18_uncalibrated(delay=0.15, trim=trim)
+            p = get_DB18_uncalibrated(delay=target_hardware_delay, trim=trim)
         else:
-            p = get_DB18_nominal(delay=0.15)
+            p = get_DB18_nominal(delay=target_hardware_delay)
 
         q = self.cartesian_from_weird(self.cur_pos, self.cur_angle)
         v0 = geometry.se2_from_linear_angular(init_vel, 0)

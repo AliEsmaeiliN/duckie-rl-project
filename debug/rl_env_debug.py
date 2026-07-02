@@ -5,7 +5,7 @@ from gym_duckietown.simulator import Simulator
 from utils.wrappers.wrappers import *
 from utils.wrappers.observation_wrappers import *
 from utils.wrappers.action_wrappers import *
-from wrappers_debug import DebugRewardWrapper
+from wrappers_debug import DebugRewardWrapper, TileTrackingWrapper, ResizeWrapper, CropWrapper
 from utils.wrappers.reward_wrappers import AdditiveJerkPenalty
 
 
@@ -34,7 +34,7 @@ class DuckieOvalEnv(Simulator):
     def create_wrapped(cls, run_name, capture_video=False, 
                         ema=False, motion_blur=False, grayscale=True, 
                         frame_stack=4, latency_rand=False, recovery_step=False,
-                        jerk_penalty=False, reward_type="adp",
+                        jerk_penalty=True, reward_type="adp",
                         **kwargs
                     ):
         """
@@ -42,7 +42,11 @@ class DuckieOvalEnv(Simulator):
         """
         env = cls(**kwargs)
 
+        env = TileTrackingWrapper(env)
+
         env = KinematicActionWrapper(env, wheel_dist=0.102, radius=0.0318, k=27.0)
+
+        
 
         if ema:
             env = ActionSmoothingWrapper(env)
@@ -51,24 +55,20 @@ class DuckieOvalEnv(Simulator):
             env = ActionLatencyWrapper(env)
 
 
-        if capture_video:
-            video_folder = f"videos/{run_name}"
-            os.makedirs(video_folder, exist_ok=True)
-            env = gym.wrappers.RecordVideo(env, video_folder, episode_trigger=lambda x: True)
+        env = DirectionLockWrapper(env)
         
         if motion_blur:
             env = FastKinematicBlurWrapper(env)
 
-        env = CLAHEWrapper(env)
+        env = CropWrapper(env)
+        env = ResizeWrapper(env)
         
-        env = GaussianBlurWrapper(env)
-        
-        env = CropResizeWrapper(env, shape=(84, 84))
+        #env = CropResizeWrapper(env, shape=(84, 84))
 
         
         if grayscale:
             env = GrayscaleWrapper(env)
-            env = ContrastStretchingWrapper(env)
+            #env = ContrastStretchingWrapper(env)
         else:
             env = ImgWrapper(env) # Transpose to CHW
 

@@ -36,7 +36,8 @@ class RewardCompute():
             "dbg": self.dbg_reward,
             "pid": self.pid_reward,
             "ufd": self.unified_reward,
-            "eval": self.eval_reward
+            "eval": self.eval_reward,
+            "ufd2": self.unified2
         }
         if name not in funcs:
             raise ValueError(f"Reward type '{name}' not recognized.")
@@ -163,12 +164,53 @@ class RewardCompute():
         
 
         return 0.5 * r_speed , 0.3 * r_lane , 0.2 * r_heading , 0, 0
+    
+    def unified2(self, speed, distance, heading, angle, danger_zone, current_action, previous_action):
+        
+        
+        target_offset = -0.02 
+        wrong_lane_limit = -0.2
+        max_expected_angle = 30.0
+
+        v = speed
+        reward_speed = 3.0 * v * max(0.0, heading)
+        
+        dist_error = np.abs(distance - target_offset)
+        normalized = np.clip( dist_error / np.abs(wrong_lane_limit), 0.0, 1.0)
+        reward_distance = -5 * normalized
+
+        normalized_angle = np.clip(np.abs(angle) / max_expected_angle, 0.0, 1.0)
+        reward_heading = -3.0 * normalized_angle
+        
+        lane_quality = (1.0 - np.clip(dist_error / np.abs(wrong_lane_limit), 0.0, 1.0))
+        alignment    = (1.0 - normalized_angle)
+        reward_lane  = 2.0 * lane_quality * alignment
+
+        return reward_speed, reward_distance, reward_heading, reward_lane, 0
 
         
 
+class CropWrapper(gym.ObservationWrapper):
+    def __init__(self, env, shape=(84, 84)):
+        super().__init__(env)
+        self.shape = shape 
+        self.observation_space = spaces.Box(
+            low=0, 
+            high=255, 
+            shape=(self.shape[0], self.shape[1], 3), 
+            dtype=np.uint8
+        )
 
+    def observation(self, obs):
+        
+        h, w = obs.shape[:2]
+        top_boundary = int(h / 3)
+        cropped = obs[top_boundary:h, 0:w]
+        
+        return cropped
+    
 class ResizeWrapper(gym.ObservationWrapper):
-    def __init__(self, env=None, shape=(120, 160, 3)):
+    def __init__(self, env=None, shape=(84, 84, 3)):
         super().__init__(env)
         self.observation_space = spaces.Box(
             low=0, 
@@ -227,7 +269,6 @@ class DtRewardWrapper(gym.RewardWrapper):
         return reward
 
 
-# this is needed because at max speed the duckie can't turn anymore
 class ActionWrapper(gym.ActionWrapper):
     def __init__(self, env):
         super().__init__(env)
@@ -508,3 +549,60 @@ class RecoveryTrainingWrapper(gym.Wrapper):
     def reset(self, **kwargs):
         self.recovery_steps = 0
         return self.env.reset(**kwargs)
+    
+class TileTrackingWrapper(gym.Wrapper):
+    """
+    Tracks the number of tiles traversed and loops completed during an episode.
+    Injects these metrics into the `info` dictionary for evaluation logging.
+    """
+    def __init__(self, env):
+        super().__init__(env)
+        self.current_tile = None
+        self.start_tile = None
+        self.tiles_passed = 0
+        self.laps_completed = 0
+        self.visited_tiles = set()
+
+    def reset(self, **kwargs):
+        obs, info = self.env.reset(**kwargs)
+        
+        sim = self.unwrapped
+        self.current_tile = sim.get_grid_coords(sim.cur_pos)
+        self.start_tile = self.current_tile
+        
+        self.tiles_passed = 0
+        self.laps_completed = 0
+        self.visited_tiles = {self.current_tile}
+        
+        return obs, info
+
+    def step(self, action):
+        obs, reward, done, truncated, info = self.env.step(action)
+        sim = self.unwrapped
+        
+        new_tile = sim.get_grid_coords(sim.cur_pos)
+        
+        # If the agent moved to a new tile
+        if new_tile != self.current_tile:
+            self.current_tile = new_tile
+            self.tiles_passed += 1
+            self.visited_tiles.add(new_tile)
+            print(f" tile passed: {self.tiles_passed}")
+            
+            # Detect a completed loop
+            # An oval map usually has around 8-12 drivable tiles. 
+            # We assume a loop is made if we return to the start tile 
+            # after exploring at least half the track (e.g., > 4 unique tiles).
+            if new_tile == self.start_tile and len(self.visited_tiles) > 4:
+                self.laps_completed += 1
+                # Reset visited tiles so we can count the next lap
+                self.visited_tiles = {self.start_tile}
+                print("one loop done")
+                if self.laps_completed == 2:
+                    done = True
+        
+        # Inject metrics into the info dict
+        info['tiles_passed'] = self.tiles_passed
+        info['laps_completed'] = self.laps_completed
+        
+        return obs, reward, done, truncated, info

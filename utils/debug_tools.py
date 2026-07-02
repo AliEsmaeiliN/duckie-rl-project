@@ -7,7 +7,7 @@ import cv2
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from utils.wrappers.reward_wrappers import compute_unified_eval_reward
+from utils.wrappers.reward_wrappers import compute_hybrid_eval_reward as evaluation_reward
 
 class DuckiebotEvaluator:
     """
@@ -85,9 +85,9 @@ class DuckiebotEvaluator:
 
         log_dict = {f"{self.prefix}/performance_summary": wandb.Image(fig)}
 
-        table = wandb.Table(columns=["step", "avg_reward", "std_reward", "risk_adjusted_score", "success_rate"])
+        table = wandb.Table(columns=["step", "avg_reward", "std_reward", "risk_adjusted_score", "success_rate", "loops_done"])
         for h in self.eval_history:
-            table.add_data(h["step"], h["avg_reward"], h["std_reward"], h["risk_adjusted_score"], h["success_rate"])
+            table.add_data(h["step"], h["avg_reward"], h["std_reward"], h["risk_adjusted_score"], h["success_rate"], h["loops_done"])
         log_dict[f"{self.prefix}/performance_data"] = table
 
         if extra_payload:
@@ -155,7 +155,7 @@ class DuckiebotEvaluator:
                             action = self.actor(obs_tensor)
                         action = action.cpu().numpy().reshape(-1)
                     
-                    r_tot, r_sp, r_ln, r_hd, r_jk = compute_unified_eval_reward(
+                    r_tot, r_sp, r_ln, r_hd, r_jk = evaluation_reward(
                         sim, current_action=action, prev_action=prev_action, return_components=True
                     )
                     traj_r_total.append(r_tot)
@@ -266,7 +266,7 @@ class DuckiebotEvaluator:
             ax_rew.plot(traj_steps, traj_r_speed, label='Progress Component (30%)', color='#bcbd22', linestyle='--', alpha=0.8)
             ax_rew.plot(traj_steps, traj_r_lane, label='Lane Center Component (30%)', color='#e377c2', linestyle='--', alpha=0.8)
             ax_rew.plot(traj_steps, traj_r_heading, label='Heading Component (20%)', color='#17becf', linestyle='--', alpha=0.8)
-            ax_rew.plot(traj_steps, traj_r_jerk, label='Lane Reward (20%)', color='#7f7f7f', linestyle=':', alpha=0.9)            
+            ax_rew.plot(traj_steps, traj_r_jerk, label='Smoothness Reward (20%)', color='#7f7f7f', linestyle=':', alpha=0.9)            
 
             ax_rew.set_title(f'Objective Evaluation Reward Matrix Analysis ({direction_key}) - Step {global_step}', fontweight='bold', pad=12)
             ax_rew.set_ylabel('Component Score Contributions')
@@ -276,9 +276,9 @@ class DuckiebotEvaluator:
             ax_rew.grid(True, linestyle='--', alpha=0.5)
             
             plt.tight_layout()
-            log_payload[f"{self.prefix}/best_milestone_reward_decompositions_{direction_key}"] = wandb.Image(
-                fig_rew, caption=f"Evaluation Metric Breakdown Profiles ({direction_key}) - Step {global_step}"
-            )
+            #log_payload[f"{self.prefix}/best_milestone_reward_decompositions_{direction_key}"] = wandb.Image(
+            #   fig_rew, caption=f"Evaluation Metric Breakdown Profiles ({direction_key}) - Step {global_step}"
+            #)
             plt.close(fig_rew)
 
         # Restore original environment state
@@ -299,6 +299,7 @@ class DuckiebotEvaluator:
         self.actor.eval()
 
         all_rewards = []
+        all_tiles = []
         completed_episodes = 0
         self.eval_env.reset(seed=self.seed)
 
@@ -320,24 +321,27 @@ class DuckiebotEvaluator:
                 
                     action = action.cpu().numpy().reshape(-1)
 
-                next_obs, _, terminated, truncated, _ = self.eval_env.step(action)
-                step_eval_reward = compute_unified_eval_reward(
+                next_obs, _, terminated, truncated, info = self.eval_env.step(action)
+                step_eval_reward = evaluation_reward(
                     raw_sim, current_action=action, prev_action=prev_action, return_components=False
                 )
                 
                 obs = next_obs
                 episodic_reward += step_eval_reward            
-                done = terminated or truncated
                 prev_action = action.copy()
+                ep_tiles = info.get('tiles_passed', 0)
+                done = terminated or truncated
 
             all_rewards.append(episodic_reward)
+            all_tiles.append(ep_tiles)
             if truncated and not terminated:
                 completed_episodes += 1
 
         avg_reward = np.mean(all_rewards)
         std_reward = np.std(all_rewards)
         success_rate = (completed_episodes / num_episodes) * 100
-        print(f"--- {eval_type} Evaluation Complete | Average Reward: {avg_reward:.2f} (Std: {std_reward:.2f}) | Success Rate: {success_rate:.2f} ---")
+        loops_done = np.mean(all_tiles) / 10
+        print(f"--- {eval_type} Evaluation Complete | Average Reward: {avg_reward:.2f} (Std: {std_reward:.2f}) | Success Rate: {success_rate:.2f} | Loops Done: {loops_done:.2f}---")
 
         beta = 0.5
         risk_adjusted_score = avg_reward - (beta * std_reward)
@@ -352,13 +356,14 @@ class DuckiebotEvaluator:
                 "avg_reward": float(avg_reward),
                 "std_reward": float(std_reward),
                 "risk_adjusted_score": float(risk_adjusted_score),
-                "success_rate": int(success_rate)
+                "success_rate": int(success_rate),
+                "loops_done": float(loops_done)
             })
 
             if is_best:
                 print("Launching clean dual trajectory tracking...")
                 self.best_trajectory_payload = self.generate_trajectory(global_step=global_step)
-                wandb.log(self.best_trajectory_payload, step=global_step)
+                #wandb.log(self.best_trajectory_payload, step=global_step)
             if not is_interval:
                 self._log_distribution_plot(global_step=global_step, extra_payload=self.best_trajectory_payload)
             

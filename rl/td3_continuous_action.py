@@ -53,7 +53,7 @@ class Args(SharedDuckieArgs):
     """noise clip parameter of the Target Policy Smoothing Regularization"""
 
 def make_env(seed, idx, run_name, capture_video=False, action_smoothing=False, motion_blur=False,
-             latency_rand=False, jerk_penalty=False, recovery_step=False, preprocessing=False, **env_kwargs):
+             latency_rand=False, jerk_penalty=False, recovery_step=False, preprocessing=False, is_eval=False, **env_kwargs):
     def thunk():
         render_mode = "rgb_array" if (capture_video and idx == 0) else None
         env = DuckieOvalEnv.create_wrapped(
@@ -66,8 +66,10 @@ def make_env(seed, idx, run_name, capture_video=False, action_smoothing=False, m
             jerk_penalty=jerk_penalty,
             recovery_step=recovery_step,
             preprocessing=preprocessing,
+            is_eval=is_eval,
             
             direction=args.direction,
+            reward_type=args.reward_type,
             **env_kwargs
         )
         env.action_space.seed(seed)
@@ -150,7 +152,7 @@ if __name__ == "__main__":
     args = tyro.cli(Args)
     input_mode = "" if args.grayscale else "_RGB"
     timestamp = datetime.now().strftime("%m%d_%H%M")
-    run_name = f"td3__{args.env_id}{input_mode}__v{args.version}__{args.seed}__{timestamp}"
+    run_name = f"td3__{args.env_id}{input_mode}__{args.reward_type}__{args.seed}__{timestamp}"
     if args.track:
         import wandb
         active_tags = [args.env_id]
@@ -223,19 +225,21 @@ if __name__ == "__main__":
     eval_env_imperfect = make_env(
         seed=eval_env_seed, 
         idx=0, 
-        run_name=f"{run_name}_eval", 
+        run_name=f"{run_name}_eval_im", 
         action_smoothing=eval_ema, 
         motion_blur=True, 
         latency_rand=True, 
         preprocessing=eval_preprocess,
+        is_eval=True,
         **robust_cfg
     )()
     
     eval_env_perfect = make_env(
         seed=eval_env_seed, 
         idx=0, 
-        run_name=f"{run_name}_eval2", 
+        run_name=f"{run_name}_eval_p", 
         preprocessing=eval_preprocess,
+        is_eval=True,
         **base_cfg
     )()
 
@@ -272,6 +276,7 @@ if __name__ == "__main__":
 
     evaluator_p = DuckiebotEvaluator(eval_env_perfect, eval_env_seed, actor, args, device, prefix="eval_perfect")
     evaluator_imp = DuckiebotEvaluator(eval_env_imperfect, eval_env_seed, actor, args, device, prefix="eval_imperfect")
+    randomization_unlocked = False
     
     envs.single_observation_space.dtype = np.uint8
     rb = ReplayBuffer(
@@ -313,7 +318,6 @@ if __name__ == "__main__":
             for i in range(envs.num_envs):
                 # Using the mask '_episode' to see which sub-env actually finished
                 if "_episode" in infos and infos["_episode"][i]:
-                    print(f"global_step={global_step}, episodic_return={infos['episode']['r'][i]}")
                     writer.add_scalar("charts/episodic_return", infos['episode']['r'][i], global_step)
                     writer.add_scalar("charts/episodic_length", infos['episode']['l'][i], global_step)  
 
@@ -398,6 +402,16 @@ if __name__ == "__main__":
                     best_reward=best_eval_reward,
                     num_episodes=10
                 )
+                if not randomization_unlocked and score1 >= 450.0 and args.curriculum_randomization: 
+                    print(f"\n[Performance Gate] Peak Mastery Detected (Score: {score1:.2f}/500)!")
+                    print("Unlocking all Visual, Camera, and Dynamics Randomizations simultaneously.")
+                    
+                    envs.call("set_curriculum", 
+                            domain_rand=args.domain_rand, 
+                            camera_rand=args.camera_rand, 
+                            dynamics_rand=args.dynamics_rand)
+                    
+                    randomization_unlocked = True
                 
                 writer.add_scalar("charts/risk_adjusted_score_perfect", score1, global_step)
                 writer.add_scalar("charts/risk_adjusted_score_imperfect", score2, global_step)
@@ -409,12 +423,12 @@ if __name__ == "__main__":
                         actor=actor, qf1=qf1, qf2=qf2, 
                         step=global_step, run_name=run_name, 
                         args=args, env_params=env_params, 
-                        suffix=f"v{args.version}_BEST"
+                        suffix=f"vr{args.reward_type}s{args.seed}_BEST"
                     )
 
 
     if args.save_model:
-        save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix=f"v{args.version}_Final")
+        save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix=f"vr{args.reward_type}s{args.seed}_Final")
 
     eval_env_perfect.close()
     eval_env_imperfect.close()

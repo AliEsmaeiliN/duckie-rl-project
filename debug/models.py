@@ -33,16 +33,11 @@ class SACActor(nn.Module):
 
     def forward(self, x):
         x = self.encoder(x)
-        return self.fc_mean(x), self.fc_logstd(x)
-
-    def get_action(self, x):
-        """Only returns the mean action"""
-        mean, _ = self.forward(x)
+        mean = self.fc_mean(x)
         v = torch.sigmoid(mean[:, 0:1])
         omega = torch.tanh(mean[:, 1:2])
-        
         action = torch.cat([v, omega], dim=-1)
-        return None, None, action * self.action_scale + self.action_bias
+        return action * self.action_scale + self.action_bias
     
 class TD3Actor(nn.Module):
     def __init__(self, grayscale=True, action_dim=2):

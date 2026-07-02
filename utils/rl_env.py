@@ -5,7 +5,7 @@ from gym_duckietown.simulator import Simulator
 from utils.wrappers.wrappers import *
 from utils.wrappers.observation_wrappers import *
 from utils.wrappers.action_wrappers import *
-from utils.wrappers.reward_wrappers import UnifiedRewardv2 as RewardWrapper
+from utils.wrappers.reward_wrappers import *
 from utils.wrappers.reward_wrappers import AdditiveJerkPenalty
 
 
@@ -19,8 +19,8 @@ class DuckieOvalEnv(Simulator):
         kwargs.setdefault('camera_height', 480)
         kwargs.setdefault('accept_start_angle_deg', 20)
         kwargs.setdefault('full_transparency', True)
-        kwargs.setdefault('max_steps', 4000)
-        kwargs.setdefault('frame_skip', 4)
+        kwargs.setdefault('max_steps', 3000)
+        kwargs.setdefault('frame_skip', 3)
         kwargs.setdefault('spawn_mode', 'curriculum')
         kwargs.setdefault('spawn_difficulty', 0.0)
         
@@ -31,17 +31,22 @@ class DuckieOvalEnv(Simulator):
         self.motor_k = 27.0
 
     @classmethod
-    def create_wrapped(cls, run_name, capture_video=False, 
+    def create_wrapped(cls, run_name, reward_type="unf", capture_video=False, 
                         ema=False, motion_blur=False, grayscale=True, 
                         frame_stack=4, latency_rand=False, recovery_step=False,
-                        jerk_penalty=False, preprocessing=False, **kwargs
+                        jerk_penalty=False, preprocessing=False, is_eval=True,
+                        direction_lock=False, **kwargs
                     ):
         """
         Static method to build the fully wrapped stack.
         """
         env = cls(**kwargs)
 
+        if is_eval:
+            env = TileTrackingWrapper(env)
+
         env = KinematicActionWrapper(env, wheel_dist=0.102, radius=0.0318, k=27.0)
+
 
         if ema:
             env = ActionSmoothingWrapper(env)
@@ -49,6 +54,8 @@ class DuckieOvalEnv(Simulator):
         if latency_rand:
             env = ActionLatencyWrapper(env)
 
+        if direction_lock:
+            env = DirectionLockWrapper(env)
 
         if capture_video:
             video_folder = f"videos/{run_name}"
@@ -72,8 +79,21 @@ class DuckieOvalEnv(Simulator):
         else:
             env = ImgWrapper(env) # Transpose to CHW
 
-        
-        env = RewardWrapper(env)
+        reward_registry = {
+            "unf": UnifiedReward,
+            "r1": AdaptiveRewardWrapper,
+            "r3": UnifiedRewardv2,
+            "r2": UnifiedRewardv1,
+            "unf3": UnifiedRewardV3,
+        }
+
+        if reward_type not in reward_registry:
+            raise ValueError(f"Unknown reward_type requested: {reward_type}. Choose from {list(reward_registry.keys())}")
+        else:
+            print(f"Using {reward_registry[reward_type].__name__} For the Reward Function")
+            
+        env = reward_registry[reward_type](env)
+
         if jerk_penalty:
             env = AdditiveJerkPenalty(env)
         
@@ -140,23 +160,23 @@ def update_curriculum_stage(envs, global_step, args):
     """
     total_timesteps = args.total_timesteps
 
-    if global_step == 0 and args.recovery:
-        envs.call("set_curriculum", max_recovery_steps=20)        
+    if args.recovery:
+        if global_step == 0:
+            envs.call("set_curriculum", max_recovery_steps=20)        
 
-    elif global_step == 300000:
+        elif global_step == int(0.35 * total_timesteps): 
+            print(f"\n[Curriculum] Step {global_step}: Tightening recovery window to 5 steps.")
+            envs.call("set_curriculum", max_recovery_steps=10)
+
+        elif global_step == int(0.7 * total_timesteps):
+            print(f"\n[Curriculum] Step {global_step}: Safety Horizon closed (0 steps). Policy running under absolute constraints.")
+            envs.call("set_curriculum", max_recovery_steps=0)
+
+    if global_step == 300000:
         print(f"\n[Curriculum] Step {global_step}: Visual Domain Randomization ON.")
-        envs.call("set_curriculum", domain_rand=args.domain_rand)
+        #envs.call("set_curriculum", domain_rand=args.domain_rand)
 
     elif global_step == 450000:
         print(f"\n[Curriculum] Step {global_step}: Activating Camera & Dynamics Randomization.")
-        envs.call("set_curriculum", camera_rand=args.camera_rand, dynamics_rand=args.dynamics_rand)
-
-    elif global_step == 600000 and args.recovery: 
-        print(f"\n[Curriculum] Step {global_step}: Tightening recovery window to 10 steps.")
-        envs.call("set_curriculum", max_recovery_steps=10)
-
-    elif global_step == int(0.7 * total_timesteps):
-        if args.recovery:
-            print(f"\n[Curriculum] Step {global_step}: Safety Horizon closed (0 steps). Policy running under absolute constraints.")
-            envs.call("set_curriculum", max_recovery_steps=0)
+        #envs.call("set_curriculum", camera_rand=args.camera_rand, dynamics_rand=args.dynamics_rand)
         
