@@ -1,11 +1,188 @@
-# Gym-Duckietown
 
-[![Build Status](https://circleci.com/gh/duckietown/gym-duckietown/tree/master.svg?style=shield)](https://circleci.com/gh/duckietown/gym-duckietown/tree/master) [![Docker Hub](https://img.shields.io/docker/pulls/duckietown/gym-duckietown.svg)](https://hub.docker.com/r/duckietown/gym-duckietown)
+# Gym-Duckietown (Duckie-RL Fork)
 
 
-[Duckietown](http://duckietown.com/) self-driving car simulator environments for OpenAI Gym.
+Duckietown self-driving car simulator environments optimized for **Deep Reinforcement Learning** using modern **Gymnasium** APIs and the **CleanRL** ecosystem.
 
-Please use this bibtex if you want to cite this repository in your publications:
+This repository is specifically refactored to support visual lane-navigation and advanced continuous-control algorithms (SAC, TD3) on customizable maps (such as `oval_loop`), tracking precision control metrics directly via localized wrappers.
+
+
+
+## Introduction
+
+**Duckie-RL** is a specialized, high-performance reinforcement learning fork of the Duckietown Universe simulator. Built entirely on Python/OpenGL (`Pyglet`), this version swaps out classical robotics components for streamlined CleanRL execution scripts, custom high-stride CNN encoders, modular perception wrappers, and advanced multi-track evaluation logging.
+
+### Key Enhancements
+
+* **Gymnasium API Alignment:** Fully converted wrapper architectures and environment definitions to standard `gymnasium` vector and wrapper classes.
+* **Kinematic Actuation Core:** Implements physical motor dynamics (Gain/Trim/PWM constraints) directly via `KinematicActionWrapper` to match physical robot behavior.
+* **ImpalaCNN Features:** Integrates high-efficiency, stride-based visual feature extraction networks optimized for fast spatial convergence.
+* **Risk-Adjusted Evaluation Stack:** Automatically monitors evaluation metrics across parallel tracks (`eval_perfect` and `eval_imperfect`) tracking $\text{Mean} - \beta \cdot \text{Std}$ scores and trajectory telemetry on weights and biases.
+
+---
+
+## Workspace Architecture
+
+When creating modifications or expanding core environment behavior, adhere to the following project file structure:
+
+* **Modifying/Adding Wrappers:** Place your custom behavioral modifications (observation, action, or reward modifiers) inside their dedicated files within the `utils/wrappers/` folder (e.g., `observation_wrappers.py`, `action_wrappers.py`, `reward_wrappers.py`).
+* **Environment Assembly Stack:** Connect and instantiate new wrappers within the environment compilation pipeline inside `utils/rl_env.py` (specifically under the `create_wrapped` method stack).
+* **Reward Tuning Lab:** Before running full-scale training workloads, use the sandbox testing file `debug/simlab.py` to test, verify, and print your step-by-step reward function dynamics under controlled tracking conditions.
+
+---
+
+## Installation
+
+### Requirements
+
+* Python 3.10+
+* Gymnasium
+* NumPy
+* Pyglet
+* PyYAML
+* PyTorch (with CUDA support)
+* OpenCV (cv2)
+
+### Installation Using Conda (Recommended)
+
+Set up your isolated workspace containing the proper graphic linking configurations and deep learning dependencies:
+
+```bash
+git clone https://github.com/AliEsmaeiliN/duckie-rl-project.git
+cd duckie-rl-project
+conda env create -f environment.yaml
+conda activate duckie-rl
+pip install -e .
+
+```
+
+Ensure your python environment knows how to map execution pathways:
+
+```bash
+export PYTHONPATH="${PYTHONPATH}:`pwd`"
+
+```
+
+---
+
+## Usage
+
+### Physical Telemetry Verification
+
+Verify your installation, CUDA visibility, and host OpenGL vendor configurations by executing the system testing script:
+
+```bash
+./run_tests.py
+
+```
+
+To drive the agent manually using keyboard control mapping inside the default `oval_loop` tracking environment:
+
+```bash
+./manual_control.py --env-name Duckietown
+
+```
+
+---
+
+### Reinforcement Learning Training
+
+This environment contains dedicated algorithm scripts written using CleanRL paradigms. To train an autonomous driving agent on a vectorized continuous-action setup, execute either from your terminal:
+
+```bash
+# Train a Twin Delayed DDPG (TD3) Agent
+python rl/td3_continuous_action.py --seed 42 --env-id oval_loop
+
+# Train a Soft Actor-Critic (SAC) Agent
+python rl/sac_continuous_action.py --seed 42 --env-id oval_loop
+
+```
+
+### Policy Evaluation & Visual Tracking
+
+To evaluate a trained checkpoint saved down locally or streamed down from WandB:
+
+```bash
+python rl/eval_sac.py --model-path runs/models/sac_latest_step.cleanrl_model --local True
+
+```
+
+---
+
+## Pipeline Architecture & Design
+
+### 1. Observations Pipeline
+
+The environment produces raw camera tensors shaped to $(120, 160, 3)$ matching the downscaled Raspberry Pi field-of-view matrices. The wrapping pipeline modifies these parameters sequentially:
+
+```
+[Raw Frame: 120x160x3 RGB] 
+         │
+         ▼
+[CropResizeWrapper] ───► Crops horizon / Resizes down to (84, 84, 3)
+         │
+         ▼
+[GrayscaleWrapper]  ───► Converts to (1, 84, 84) single-channel
+         │
+         ▼
+[FrameStackObservation]► Combines historical sequences into (4, 84, 84) Tensors
+
+```
+
+### 2. Actions & Kinematics Space
+
+The model calculates a continuous control vector bounded to $[-1, 1]^2$, translating explicitly to forward velocity ($v$) and steering angular momentum ($\omega$).
+
+```
+[Actor Network Output] ──► [v, ω]
+                              │
+                              ▼
+                  [KinematicActionWrapper]
+                              │
+      ┌───────────────────────┴───────────────────────┐
+      ▼                                               ▼
+[Left Wheel PWM (u_l)]                        [Right Wheel PWM (u_r)]
+
+```
+
+The `KinematicActionWrapper` transforms these choices into specific left/right wheel duty cycles ($u_l, u_r$) mapping the real-world motor coefficients ($k$), wheel distance base ($d$), and tire radius ($r$):
+
+$$omega_r = \frac{v + 0.5 \cdot \omega \cdot d}{r}, \quad omega_l = \frac{v - 0.5 \cdot \omega \cdot d}{r}$$
+
+### 3. Objective Matrix (Reward Function)
+
+The standard reward uses asymmetric and lookahead tracking to penalize cross-track deviations ($e_{\text{cte}}$) and orientation mismatch relative to a local Bezier centerline curve layout:
+
+$$\text{Reward} = w_{\text{speed}} \cdot r_{\text{speed}} + w_{\text{lane}} \cdot r_{\text{lane}} + w_{\text{heading}} \cdot r_{\text{heading}} + w_{\text{jerk}} \cdot r_{\text{jerk}}$$
+
+* **Jerk Penalization:** Smooths physical movement by enforcing structural consistency between steps ($\| a_t - a_{t-1} \|_2$) using the `AdditiveJerkPenalty` wrapper.
+* **FSM Recovery Protocols:** Dynamically inserts a `RecoveryTrainingWrapper` to allow exploratory policy reconstruction during out-of-bounds events without triggering hard termination loops.
+
+---
+
+## Headless Execution & Cluster Deployment
+
+### Running Headless via Xvfb (MILA Cluster Syntax)
+
+For cluster environments requiring a virtual X11 server instance to complete internal Pyglet drawing requests:
+
+```bash
+# Allocate cluster hardware node
+sinter --mem=12000 -c2 --gres=gpu:1
+
+# Setup virtual render targets
+Xvfb :$SLURM_JOB_ID -screen 0 1024x768x24 -ac +extension GLX +render -noreset &> xvfb.log &
+export DISPLAY=:$SLURM_JOB_ID
+export PYGLET_DEBUG_GL=False
+
+# Launch background execution pipeline
+python rl/sac_continuous_action.py --track True
+
+```
+
+---
+
+## Citation
 
 ```
 @misc{gym_duckietown,
@@ -16,261 +193,9 @@ Please use this bibtex if you want to cite this repository in your publications:
   journal = {GitHub repository},
   howpublished = {\url{https://github.com/duckietown/gym-duckietown}},
 }
-```
-
-This simulator was created as part of work done at [Mila](https://mila.quebec/).
-
-<p align="center">
-<img src="media/simplesim_free.png" width="300px"><br>
-</p>
-
-<h2 align="center">
-Welcome to <b>Duckietown</b>!
-</h2>
-
-## Introduction
-Duckie-RL is a specialized fork of the Duckietown Universe simulator, optimized for Reinforcement Learning (SAC, TD3, PPO) using the CleanRL framework. Written in pure Python/OpenGL (Pyglet), it places your agent—a Duckiebot—inside a hectic environment featuring road loops, intersections, obstacles, and pedestrians.
-
-This version has been refactored to support:
-
-    Gymnasium API: Updated for compatibility with modern RL libraries.
-
-Gym-Duckietown is a simulator for the [Duckietown](https://duckietown.org) Universe, written in pure Python/OpenGL (Pyglet). It places your agent, a Duckiebot, inside of an instance of a Duckietown: a loop of roads with turns, intersections, obstacles, Duckie pedestrians, and other Duckiebots. It can be a pretty hectic place!
-
-Gym-Duckietown is fast, open, and incredibly customizable. What started as a lane-following simulator has evolved into a fully-functioning autonomous driving simulator that you can use to train and test your Machine Learning, Reinforcement Learning, Imitation Learning, or even classical robotics algorithms. Gym-Duckietown offers a wide range of tasks, from simple lane-following to full city navigation with dynamic obstacles. Gym-Duckietown also ships with features, wrappers, and tools that can help you bring your algorithms to the real robot, including [domain-randomization](https://blog.openai.com/spam-detection-in-the-physical-world/), accurate camera distortion, and differential-drive physics (and most importantly, realistic waddling).
-
-<p align="center">
-<img src="media/finalmain.gif"><br>
-</p>
-
-There are multiple registered gym environments, each corresponding to a different [map file](https://github.com/duckietown/gym-duckietown/tree/master/gym_duckietown/maps):
-- `Duckietown-straight_road-v0`
-- `Duckietown-4way-v0`
-- `Duckietown-udem1-v0`
-- `Duckietown-small_loop-v0`
-- `Duckietown-small_loop_cw-v0`
-- `Duckietown-zigzag_dists-v0`
-- `Duckietown-loop_obstacles-v0` (static obstacles in the road)
-- `Duckietown-loop_pedestrians-v0` (moving obstacles in the road)
-
-The `MultiMap-v0` environment is essentially a [wrapper](https://github.com/duckietown/gym-duckietown/blob/master/gym_duckietown/envs/multimap_env.py) for the simulator which
-will automatically cycle through all available [map files](https://github.com/duckietown/gym-duckietown/tree/master/gym_duckietown/maps). This makes it possible to train on
-a variety of different maps at the same time, with the idea that training on a variety of
-different scenarios will make for a more robust policy/model.
-
-`gym-duckietown` is an _accompanying_ simulator to real Duckiebots, which allow you to run your code on the real robot. We provide a domain randomization API, which can help you transfer your trained policies from simulation to real world. Without using a domain transfer method, your learned models will likely overfit to various aspects of the simulator, which won't transfer to the real world. When you deploy, you and your Duckiebot will be running around in circles trying to figure out what's going on.
-
-<p align="center">
-<img src="media/domainrand-sim.gif" width="300px" height="200px" ><img src="media/needfordr.gif" width="300px" height="200px" ><br>
-</p>
-
-
-<!--The `Duckiebot-v0` environment is meant to connect to software running on
-a real Duckiebot and remotely control the robot. It is a tool to test that policies
-trained in simulation can transfer to the real robot. If you want to
-control your robot remotely with the `Duckiebot-v0` environment, you will need to
-install the software found in the [duck-remote-iface](https://github.com/maximecb/duck-remote-iface)
-repository on your Duckiebot.
--->
-
-<p align="center">
-<img src="media/duckiebot_1.png" width="300px"><br>
-Duckiebot-v0
-</p>
-
-## Installation
-
-Requirements:
-- Python 3.10+
-- Gymnasium
-- NumPy
-- Pyglet
-- PyYAML
-- PyTorch
-
-You can install all the dependencies except PyTorch with `pip3`:
 
 ```
-git clone https://github.com/duckietown/gym-duckietown.git
-cd gym-duckietown
-pip3 install -e .
-```
-
-Reinforcement learning code forked from [this repository](https://github.com/ikostrikov/pytorch-a2c-ppo-acktr)
-is included under [/pytorch_rl](/pytorch_rl). If you wish to use this code, you
-should install [PyTorch](http://pytorch.org/).
-
-### Installation Using Conda (Alternative Method)
-
-Alternatively, you can install all the dependencies, including PyTorch, using Conda as follows. For those trying to use this package on MILA machines, this is the way to go:
 
 ```
-git clone https://github.com/AliEsmaeiliN/duckie-rl-project.git
-cd duckie-rl-project
-conda env create -f environment.yaml
-pip install -e .
-```
 
-Please note that if you use Conda to install this package instead of pip, you will need to activate your Conda environment and add the package to your Python path before you can use it:
-
-```
-source activate duckie-rl
-export PYTHONPATH="${PYTHONPATH}:`pwd`"
-```
-
-## Usage
-
-### Testing
-
-There is a simple UI application which allows you to control the simulation or real robot manually. The `manual_control.py` application will launch the Gym environment, display camera images and send actions (keyboard commands) back to the simulator or robot. You can specify which map file to load with the `--map-name` argument. You can try the Duckietown environment using the Duckietown `--env-name`, otherwise the custom environment of RL which is defaulted to `oval-map` will be lunched:
-
-```
-./manual_control.py --env-name Duckietown
-```
-
-There is also a script to run automated tests (`run_tests.py`).
-Verify your installation, CUDA status, and OpenGL vendor by running the integrated test suite:
-```
-./run_tests.py
-```
-
-### Reinforcement Learning
-
-This workspace is designed to work with CleanRL. To train a SAC or TD3 agent, move your scripts to the [rl](/rl). folder and run:
-
-```
-python rl/sac_continuous_action.py
-```
-
-Then, to visualize the results of training, you can run the following command. The follwoing will evaluate the saved  `.cleanrl_model` which can be saved manualy or on [WandB](https://github.com/wandb/wandb):
-
-```
-python rl/eval_sac.py --model-path --local True\False
-```
-
-
-## Design
-
-### Map File Format
-
-The simulator supports a YAML-based file format which is designed to be easy to hand edit. See the [maps subdirectory](https://github.com/duckietown/gym-duckietown/blob/master/gym_duckietown/maps) for examples. Each map file has two main sections: a two-dimensional array of tiles, and a listing of objects to be placed around the map. The tiles are based on the [Duckietown appearance specification](https://docs.duckietown.org/daffy/opmanual_duckietown/out/duckietown_specs.html).
-
-The available tile types are:
-- empty
-- straight
-- curve_left
-- curve_right
-- 3way_left (3-way intersection)
-- 3way_right
-- 4way (4-way intersection)
-- asphalt
-- grass
-- floor (office floor)
-
-The available object types are:
-- barrier
-- cone (traffic cone)
-- duckie
-- duckiebot (model of a Duckietown robot)
-- tree
-- house
-- truck (delivery-style truck)
-- bus
-- building (multi-floor building)
-- sign_stop, sign_T_intersect, sign_yield, etc. (see [meshes subdirectory](https://github.com/duckietown/gym-duckietown/blob/master/gym_duckietown/meshes))
-
-Although the environment is rendered in 3D, the map is essentially two-dimensional. As such, objects coordinates are specified along two axes. The coordinates are rescaled based on the tile size, such that coordinates [0.5, 1.5] would mean middle of the first column of tiles, middle of the second row. Objects can have an `optional` flag set, which means that they randomly may or may not appear during training, as a form of domain randomization.
-
-### Observations
-
-The observations are single camera images, as numpy arrays of size (120, 160, 3). These arrays contain unsigned 8-bit integer values in the [0, 255] range.
-This image size was chosen because it is exactly one quarter of the 640x480 image resolution provided by the camera, which makes it fast and easy to scale down
-the images. The choice of 8-bit integer values over floating-point values was made because the resulting images are smaller if stored on disk and faster to send over a networked connection.
-
-### Actions
-
-The simulator uses continuous actions by default. Actions passed to the `step()` function should be numpy arrays containining two numbers between -1 and 1. These two numbers correspond to forward velocity, and a steering angle, respectively. A positive velocity makes the robot go forward, and a positive steering angle makes the robot turn left. There is also a [Gym wrapper class](https://github.com/duckietown/gym-duckietown/blob/master/gym_duckietown/wrappers.py) named `DiscreteWrapper` which allows you to use discrete actions (turn left, move forward, turn right) instead of continuous actions if you prefer.
-
-### Reward Function
-
-The default reward function tries to encourage the agent to drive forward along the right lane in each tile. Each tile has an associated bezier curve defining the path the agent is expected to follow. The agent is rewarded for being as close to the curve as possible, and also for facing the same direction as the curve's tangent. The episode is terminated if the agent gets too far outside of a drivable tile, or if the `max_steps` parameter is exceeded. See the `step` function in [this source file](https://github.com/duckietown/gym-duckietown/blob/master/gym_duckietown/envs/simplesim_env.py).
-
-### ImportError: Library "GLU" not found
-
-You may need to manually install packaged needed by Pyglet or OpenAI Gym on your system. The command you need to use will vary depending which OS you are running. For example, to install the glut package on Ubuntu:
-
-```
-sudo apt-get install freeglut3-dev
-```
-
-And on Fedora:
-
-```
-sudo dnf install freeglut-devel
-```
-
-### NoSuchDisplayException: Cannot connect to "None"
-
-If you are connected through SSH, or running the simulator in a Docker image, you will need to use xvfb to create a virtual display in order to run the simulator. See the "Running Headless" subsection below.
-
-### Running headless
-
-The simulator uses the OpenGL API to produce graphics. This requires an X11 display to be running, which can be problematic if you are trying to run training code through on SSH, or on a cluster. You can create a virtual display using [Xvfb](https://en.wikipedia.org/wiki/Xvfb). The instructions shown below illustrate this. Note, however, that these instructions are specific to MILA, look further down for instructions on an Ubuntu box:
-
-```
-# Reserve a Debian 9 machine with 12GB ram, 2 cores and a GPU on the cluster
-sinter --reservation=res_stretch --mem=12000 -c2 --gres=gpu
-
-# Activate the gym-duckietown Conda environment
-source activate gym-duckietown
-
-cd gym-duckietown
-
-# Add the gym_duckietown package to your Python path
-export PYTHONPATH="${PYTHONPATH}:`pwd`"
-
-# Load the GLX library
-# This has to be done before starting Xvfb
-export LD_LIBRARY_PATH=/Tmp/glx:$LD_LIBRARY_PATH
-
-# Create a virtual display with OpenGL support
-Xvfb :$SLURM_JOB_ID -screen 0 1024x768x24 -ac +extension GLX +render -noreset &> xvfb.log &
-export DISPLAY=:$SLURM_JOB_ID
-
-# You are now ready to train
-```
-
-### Running headless and training in a cloud based environment (AWS)
-
-We recommend using the Ubuntu-based [Deep Learning AMI](https://aws.amazon.com/marketplace/pp/B077GCH38C) to provision your server which comes with all the deep learning libraries.
-
-```
-# Install xvfb
-sudo apt-get install xvfb mesa-utils -y
-
-# Remove the nvidia display drivers (this doesn't remove the CUDA drivers)
-# This is necessary as nvidia display doesn't play well with xvfb
-sudo nvidia-uninstall -y
-
-# Sanity check to make sure you still have CUDA driver and its version
-nvcc --version
-
-# Start xvfb
-Xvfb :1 -screen 0 1024x768x24 -ac +extension GLX +render -noreset &> xvfb.log &
-
-# Export your display id
-export DISPLAY=:1
-
-# Check if your display settings are valid
-glxinfo
-
-# You are now ready to train
-```
-
-### Poor performance, low frame rate
-
-It's possible to improve the performance of the simulator by disabling Pyglet error-checking code. Export this environment variable before running the simulator:
-
-```
-export PYGLET_DEBUG_GL=True
 ```
