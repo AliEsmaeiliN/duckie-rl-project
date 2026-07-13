@@ -98,20 +98,6 @@ class DuckietownEnv(Simulator):
         return obs, reward, done, truncated,info
 
 
-class DuckietownLF(DuckietownEnv):
-    """
-    Environment for the Duckietown lane following task with
-    and without obstacles (LF and LFV tasks)
-    """
-
-    def __init__(self, **kwargs):
-        DuckietownEnv.__init__(self, **kwargs)
-
-    def step(self, action):
-        obs, reward, done, truncated, info = DuckietownEnv.step(self, action)
-        return obs, reward, done,truncated, info
-
-
 class DuckietownNav(DuckietownEnv):
     """
     Environment for the Duckietown navigation task (NAV)
@@ -152,17 +138,5 @@ class DuckietownNav(DuckietownEnv):
 
         return obs, reward, done, truncated, info
     
-class Curriculum:
-    def __init__(self):
-        self.levels = [
-            (0, 7),        # Easy: trajectory 1
-            (500000, 8),    # Medium: trajectory 1 and 2
-            (1200000, 9),    # Hard: all trajectories
-        ]
-
-    def get_difficulty(self, step):
-        for s, traj in reversed(self.levels):
-            if step >= s:
-                return traj
     
     
