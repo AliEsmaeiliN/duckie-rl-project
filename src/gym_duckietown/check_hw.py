@@ -1,9 +1,11 @@
 from ctypes import c_char_p, cast
 from typing import Dict
 import json
+import sys
 import pyglet
 
-pyglet.options["headless"] = True
+if sys.platform != "darwin":  # EGL headless mode is Linux-only
+    pyglet.options["headless"] = True
 from pyglet import gl
 
 __all__ = ["get_graphics_information"]
