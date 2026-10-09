@@ -148,7 +148,7 @@ class DuckiebotEvaluator:
                     traj_cte.append(cte)
                     
                     with torch.no_grad():
-                        obs_tensor = torch.Tensor(traj_obs).unsqueeze(0).to(self.device)
+                        obs_tensor = torch.from_numpy(traj_obs).float().unsqueeze(0).to(self.device)
                         if hasattr(self.actor, "get_action"):
                             _, _, action = self.actor.get_action(obs_tensor)
                         else:
@@ -313,7 +313,7 @@ class DuckiebotEvaluator:
             
             while not done:
                 with torch.no_grad():
-                    obs_tensor = torch.Tensor(obs).unsqueeze(0).to(self.device)
+                    obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
                     if hasattr(self.actor, "get_action"):
                         _, _, action = self.actor.get_action(obs_tensor) 
                     else:

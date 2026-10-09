@@ -89,7 +89,7 @@ class ImpalaCNN(nn.Module):
         #return torch.squeeze(F.layer_norm(x, x.size()))
         x = obs.float() / 255.0 - 0.5
         h = self.main(x)
-        return F.layer_norm(h, (h.size(-1),))
+        return F.layer_norm(h, (h.size(-1),)).contiguous()
 
 
 class DrQEncoderV2(nn.Module):  

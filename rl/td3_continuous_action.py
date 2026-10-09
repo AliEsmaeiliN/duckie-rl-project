@@ -35,7 +35,8 @@ duckietown_logger.setLevel(logging.WARNING)
 # Disable error checking for maximum training throughput
 import pyglet
 pyglet.options['debug_gl'] = False
-
+pyglet.options['headless'] = True
+pyglet.options['shadow_window'] = False
 
 @dataclass
 class Args(SharedDuckieArgs):
@@ -201,7 +202,7 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     torch.backends.cudnn.deterministic = args.torch_deterministic
 
-    device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+    device = torch.device("mps" if torch.backends.mps.is_available() and args.cuda else "cpu")
 
     # env setup
     env_params = {
@@ -299,9 +300,9 @@ if __name__ == "__main__":
             actions = raw_actions
         else:
             with torch.no_grad():
-                actions = actor(torch.Tensor(obs).to(device))
+                obs_tensor = torch.from_numpy(obs).float().to(device)
+                actions = actor(obs_tensor)
                 actions += torch.normal(0, actor.action_scale * args.exploration_noise)
-                actions = actions.cpu().numpy().clip(envs.single_action_space.low, envs.single_action_space.high)
 
         # TRY NOT TO MODIFY: execute the game and log data.
         next_obs, rewards, terminations, truncations, infos = envs.step(actions)
