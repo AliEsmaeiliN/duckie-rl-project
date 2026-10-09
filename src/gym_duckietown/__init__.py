@@ -15,7 +15,11 @@ import pyglet
 on_mac = "Darwin" in platform.system()
 print(pyglet.options)
 if on_mac:
+    # EGL headless mode does not exist on macOS. Also skip pyglet's shadow window: it is
+    # created on import and crashes when there is no screen (headless Mac over SSH).
+    # The simulator creates its own context, see graphics.create_shadow_context().
     pyglet.options["headless"] = False
+    pyglet.options["shadow_window"] = False
 else:
     pyglet.options["headless"] = True
 

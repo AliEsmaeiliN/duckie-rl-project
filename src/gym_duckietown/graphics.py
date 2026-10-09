@@ -1,5 +1,7 @@
 # coding=utf-8
 import math
+import os
+import sys
 from ctypes import byref
 from functools import lru_cache
 from typing import Tuple
@@ -167,6 +169,28 @@ def load_texture(tex_path: str, segment: bool = False, segment_into_color=None):
         )
 
     return tex
+
+
+def _mac_has_screen() -> bool:
+    try:
+        return len(pyglet.canvas.get_display().get_screens()) > 0
+    except Exception:
+        return False
+
+
+def create_shadow_context():
+    """
+    Create the invisible GL context the simulator renders with.
+
+    On macOS without a screen (e.g. over SSH on a headless Mac) pyglet cannot open a
+    window, so use an offscreen CGL context instead. DUCKIETOWN_GL=cgl|window forces one.
+    """
+    backend = os.environ.get("DUCKIETOWN_GL", "auto")
+    if sys.platform == "darwin" and (backend == "cgl" or (backend == "auto" and not _mac_has_screen())):
+        from .cgl_context import get_offscreen_context
+
+        return get_offscreen_context()
+    return pyglet.window.Window(width=1, height=1, visible=False)
 
 
 def create_frame_buffers(width: int, height: int, num_samples: int) -> Tuple[int, int]:

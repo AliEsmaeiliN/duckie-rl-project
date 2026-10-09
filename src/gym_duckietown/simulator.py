@@ -346,10 +346,11 @@ class Simulator(gym.Env):
         self.window = None
 
         # Invisible window to render into (shadow OpenGL context)
-        self.shadow_window = window.Window(width=1, height=1, visible=False)
+        self.shadow_window = graphics.create_shadow_context()
+        self.shadow_window.switch_to()
 
-        # For displaying text
-        self.text_label = pyglet.text.Label(font_name="Arial", font_size=14, x=5, y=WINDOW_HEIGHT - 19)
+        # For displaying text (created on first human render, it needs a font backend)
+        self.text_label = None
 
         # Create a frame buffer object for the observation
         self.multi_fbo, self.final_fbo = create_frame_buffers(self.camera_width, self.camera_height, 4)
@@ -2024,6 +2025,8 @@ class Simulator(gym.Env):
         # Display position/state information
         if mode != "free_cam":
             x, y, z = self.cur_pos
+            if self.text_label is None:
+                self.text_label = pyglet.text.Label(font_name="Arial", font_size=14, x=5, y=WINDOW_HEIGHT - 19)
             self.text_label.text = (
                 f"pos: ({x:.2f}, {y:.2f}, {z:.2f}), angle: "
                 f"{np.rad2deg(self.cur_angle):.1f} deg, steps: {self.step_count}, "

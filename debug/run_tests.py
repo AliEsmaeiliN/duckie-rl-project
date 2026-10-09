@@ -4,10 +4,11 @@ import os
 import torch
 import numpy as np
 import gymnasium as gym
+import sys
 import pyglet
-import pyglet
-pyglet.options['headless'] = True
-pyglet.options['shadow_window'] = False
+if sys.platform != "darwin":  # EGL headless mode is Linux-only; macOS is handled in gym_duckietown
+    pyglet.options['headless'] = True
+    pyglet.options['shadow_window'] = False
 from gym_duckietown.envs import DuckietownEnv, MultiMapEnv
 from gym_duckietown.simulator import get_agent_corners
 from gym_duckietown.wrappers import PyTorchObsWrapper
