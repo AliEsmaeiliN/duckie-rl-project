@@ -266,6 +266,13 @@ class Simulator(gym.Env):
         :param enable_leds: Enables LEDs drawing.
         """
         self.enable_leds = enable_leds
+
+        # Invisible window to render into (shadow OpenGL context). Created before any GL
+        # call: on macOS there is no pyglet shadow window, and GL calls without a current
+        # context segfault there
+        self.shadow_window = graphics.create_shadow_context()
+        self.shadow_window.switch_to()
+
         information = get_graphics_information()
         logger.info(
             f"Information about the graphics card:",
@@ -344,10 +351,6 @@ class Simulator(gym.Env):
 
         # Window for displaying the environment to humans
         self.window = None
-
-        # Invisible window to render into (shadow OpenGL context)
-        self.shadow_window = graphics.create_shadow_context()
-        self.shadow_window.switch_to()
 
         # For displaying text (created on first human render, it needs a font backend)
         self.text_label = None
