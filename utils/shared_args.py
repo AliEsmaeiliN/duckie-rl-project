@@ -71,3 +71,14 @@ class SharedDuckieArgs:
     """Override preprocessing for evaluation. If None, inherits the training setting."""
     reward_type: str = "unified_v1"
     """The target reward wrapper to deploy: ['custom', 'simple', 'adaptive', 'pid', 'unified_v1']"""
+
+
+def pick_device(use_gpu: bool = True):
+    """CUDA on Linux/Windows servers, MPS on Apple Silicon, else CPU."""
+    import torch
+
+    if use_gpu and torch.cuda.is_available():
+        return torch.device("cuda")
+    if use_gpu and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")

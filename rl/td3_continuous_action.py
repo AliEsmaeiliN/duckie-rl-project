@@ -25,7 +25,7 @@ from rl.cnn_architectures import ImpalaCNN as cnn_encoder
 # Utilities
 from utils.rl_env import DuckieOvalEnv, update_curriculum_stage
 from utils.debug_tools import save_models, DuckiebotEvaluator
-from utils.shared_args import SharedDuckieArgs
+from utils.shared_args import SharedDuckieArgs, pick_device
 
 # Target the specific logger used in the simulator
 import logging
@@ -202,7 +202,11 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     torch.backends.cudnn.deterministic = args.torch_deterministic
 
-    device = torch.device("mps" if torch.backends.mps.is_available() and args.cuda else "cpu")
+    device = pick_device(args.cuda)
+    print(f"Using device: {device}")
+    if args.track:
+        import platform
+        wandb.config.update({"device": str(device), "host": platform.node()})
 
     # env setup
     env_params = {
