@@ -206,6 +206,11 @@ def create_frame_buffers(width: int, height: int, num_samples: int) -> Tuple[int
     # support multisampling on frame buffer objects
     # noinspection PyBroadException
     try:
+        # On macOS legacy (2.1) contexts the GL 3.2 multisample entry points are not
+        # available and calling them segfaults instead of raising, so check first
+        if not (gl.gl_info.have_version(3, 2) or gl.gl_info.have_extension("GL_ARB_texture_multisample")):
+            raise RuntimeError("multisampled textures not supported by this context")
+
         # Create a multisampled texture to render into
         fbTex = gl.GLuint(0)
         gl.glGenTextures(1, byref(fbTex))
