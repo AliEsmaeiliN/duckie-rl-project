@@ -25,7 +25,7 @@ from rl.cnn_architectures import ImpalaCNN as cnn_encoder
 # Utilities
 from utils.rl_env import DuckieOvalEnv, update_curriculum_stage
 from utils.debug_tools import save_models, DuckiebotEvaluator
-from utils.shared_args import SharedDuckieArgs
+from utils.shared_args import SharedDuckieArgs, pick_device
 
 # Target the specific logger used in the simulator
 import logging
@@ -256,7 +256,11 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     torch.backends.cudnn.deterministic = args.torch_deterministic
 
-    device = torch.device("mps" if torch.backends.mps.is_available() and args.cuda else "cpu")
+    device = pick_device(args.cuda)
+    print(f"Using device: {device}")
+    if args.track:
+        import platform
+        wandb.config.update({"device": str(device), "host": platform.node()})
 
     # env setup
     env_params = {
@@ -357,6 +361,8 @@ if __name__ == "__main__":
         handle_timeout_termination=False,
     )
     start_time = time.time()
+    # Per-window timing: SPS over the last 100 steps and where the time goes
+    perf_window_start, perf_window_step, perf_env_time = time.perf_counter(), 0, 0.0
 
     # TRY NOT TO MODIFY: start the game
     obs, _ = envs.reset(seed=args.seed)
@@ -372,7 +378,9 @@ if __name__ == "__main__":
             actions = actions.detach().cpu().numpy()
 
         # TRY NOT TO MODIFY: execute the game and log data.
+        t_env = time.perf_counter()
         next_obs, rewards, terminations, truncations, infos = envs.step(actions)
+        perf_env_time += time.perf_counter() - t_env
 
         # Curriculum spawn
         if any(terminations) or any(truncations):
@@ -510,6 +518,14 @@ if __name__ == "__main__":
                         suffix=f"vr{args.reward_type}s{args.seed}_BEST"
                     )
 
+
+        if global_step > 0 and global_step % 100 == 0:
+            window = time.perf_counter() - perf_window_start
+            n = global_step - perf_window_step
+            writer.add_scalar("perf/SPS_recent", n / window, global_step)
+            writer.add_scalar("perf/env_step_ms", 1000 * perf_env_time / n, global_step)
+            writer.add_scalar("perf/policy_and_update_ms", 1000 * (window - perf_env_time) / n, global_step)
+            perf_window_start, perf_window_step, perf_env_time = time.perf_counter(), global_step, 0.0
 
     if args.save_model:
         save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix=f"vr{args.reward_type}s{args.seed}_Final")
