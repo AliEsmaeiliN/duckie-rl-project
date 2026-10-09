@@ -31,6 +31,7 @@ def main():
     parser.add_argument("--learning-starts", type=int, default=5000)
     parser.add_argument("--runs", type=int, default=1, help="number of seeds to run in parallel")
     parser.add_argument("--seed", type=int, default=1, help="seed of the first run")
+    parser.add_argument("--reward-type", default="unf", help="one of the keys of reward_registry in utils/rl_env.py")
     parser.add_argument("--project", default="Duckie-RL-V2", help="wandb project")
     parser.add_argument("--entity", default=None, help="wandb entity (team or user)")
     parser.add_argument("--no-track", action="store_true", help="skip wandb, TensorBoard only")
@@ -58,6 +59,7 @@ def main():
             "--seed", str(seed),
             "--total-timesteps", str(args.steps),
             "--learning-starts", str(args.learning_starts),
+            "--reward-type", args.reward_type,
             "--start-evaluation", str(args.steps + 1),
             "--no-save-model",
             "--wandb-group", group,
