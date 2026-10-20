@@ -292,6 +292,9 @@ if __name__ == "__main__":
         n_envs=args.num_envs,
         handle_timeout_termination=False,
     )
+    online_params = list(actor.parameters()) + list(qf1.parameters()) + list(qf2.parameters())
+    target_params = list(target_actor.parameters()) + list(qf1_target.parameters()) + list(qf2_target.parameters())
+
     start_time = time.time()
 
     # TRY NOT TO MODIFY: start the game
@@ -371,12 +374,9 @@ if __name__ == "__main__":
                 actor_optimizer.step()
 
                 # update the target network
-                for param, target_param in zip(actor.parameters(), target_actor.parameters()):
-                    target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
-                for param, target_param in zip(qf1.parameters(), qf1_target.parameters()):
-                    target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
-                for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
-                    target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
+                # Polyak update as one batched op instead of a Python loop over parameters
+                with torch.no_grad():
+                    torch._foreach_lerp_(target_params, online_params, args.tau)
 
             if global_step % 100 == 0:
                 writer.add_scalar("losses/qf1_values", qf1_a_values.mean().item(), global_step)

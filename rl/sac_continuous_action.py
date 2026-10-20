@@ -345,7 +345,7 @@ if __name__ == "__main__":
     if args.autotune:
         target_entropy = -float(np.prod(envs.single_action_space.shape))
         log_alpha = torch.zeros(1, requires_grad=True, device=device)
-        alpha = log_alpha.exp().item()
+        alpha = log_alpha.exp().detach()
         a_optimizer = optim.Adam([log_alpha], lr=args.q_lr)
     else:
         alpha = args.alpha
@@ -360,6 +360,9 @@ if __name__ == "__main__":
         n_envs=args.num_envs,
         handle_timeout_termination=False,
     )
+    online_q_params = list(qf1.parameters()) + list(qf2.parameters())
+    target_q_params = list(qf1_target.parameters()) + list(qf2_target.parameters())
+
     start_time = time.time()
     # Per-window timing: SPS over the last 100 steps and where the time goes
     perf_window_start, perf_window_step, perf_env_time = time.perf_counter(), 0, 0.0
@@ -454,14 +457,13 @@ if __name__ == "__main__":
                         a_optimizer.zero_grad()
                         alpha_loss.backward()
                         a_optimizer.step()
-                        alpha = log_alpha.exp().item()
+                        alpha = log_alpha.exp().detach()
 
             # update the target networks
             if global_step % args.target_network_frequency == 0:
-                for param, target_param in zip(qf1.parameters(), qf1_target.parameters()):
-                    target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
-                for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
-                    target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
+                # Polyak update as one batched op instead of a Python loop over parameters
+                with torch.no_grad():
+                    torch._foreach_lerp_(target_q_params, online_q_params, args.tau)
 
             if global_step % 100 == 0:
                 writer.add_scalar("losses/qf1_values", qf1_a_values.mean().item(), global_step)
@@ -470,7 +472,7 @@ if __name__ == "__main__":
                 writer.add_scalar("losses/qf2_loss", qf2_loss.item(), global_step)
                 writer.add_scalar("losses/qf_loss", qf_loss.item() / 2.0, global_step)
                 writer.add_scalar("losses/actor_loss", actor_loss.item(), global_step)
-                writer.add_scalar("losses/alpha", alpha, global_step)
+                writer.add_scalar("losses/alpha", float(alpha), global_step)
                 writer.add_scalar(
                     "charts/SPS",
                     int(global_step / (time.time() - start_time)),
