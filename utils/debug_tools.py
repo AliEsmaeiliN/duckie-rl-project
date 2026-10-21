@@ -370,7 +370,11 @@ class DuckiebotEvaluator:
         self.actor.train() 
         return risk_adjusted_score, avg_reward, std_reward, is_best, success_rate
 
-def save_models(actor, qf1, qf2, step, run_name, args, env_params, suffix=""):
+def save_models(actor, qf1=None, qf2=None, step=0, run_name="", args=None, env_params=None, suffix="", critic=None):
+    """
+    Saves the actor plus the critic: either `critic` (one module holding both Q-functions
+    and their shared encoder, as the training scripts build it now) or separate qf1/qf2.
+    """
     
     model_dir = f"runs/{run_name}/models"
     if not os.path.exists(model_dir):
@@ -389,8 +393,8 @@ def save_models(actor, qf1, qf2, step, run_name, args, env_params, suffix=""):
 
     torch.save({
         'actor_state_dict': actor.state_dict(),
-        'qf1_state_dict': qf1.state_dict(),
-        'qf2_state_dict': qf2.state_dict(),
+        **({'critic_state_dict': critic.state_dict()} if critic is not None else
+           {'qf1_state_dict': qf1.state_dict(), 'qf2_state_dict': qf2.state_dict()}),
         'global_step': step,
         'env_id': args.env_id,
         'run_notes': args.run_notes,

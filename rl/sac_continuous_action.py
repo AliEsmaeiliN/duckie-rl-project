@@ -17,13 +17,13 @@ import torch.optim as optim
 import tyro
 from torch.utils.tensorboard import SummaryWriter
 
-from cleanrl_utils.buffers import ReplayBuffer
+from cleanrl_utils.frame_buffer import FrameStackReplayBuffer
 
 # CNN Architucture 
 from rl.cnn_architectures import ImpalaCNN as cnn_encoder
 
 # Utilities
-from utils.rl_env import DuckieOvalEnv, update_curriculum_stage
+from utils.rl_env import DuckieOvalEnv, update_curriculum_stage, make_vector_env
 from utils.debug_tools import save_models, DuckiebotEvaluator
 from utils.shared_args import SharedDuckieArgs, pick_device
 
@@ -32,11 +32,8 @@ import logging
 duckietown_logger = logging.getLogger("gym-duckietown")
 duckietown_logger.setLevel(logging.WARNING)
 
-# Disable error checking for maximum training throughput
-import pyglet
-pyglet.options['debug_gl'] = False
-pyglet.options['headless'] = True
-pyglet.options['shadow_window'] = False
+# pyglet options (headless, GL error checking off) are set in gym_duckietown/__init__.py:
+# they only take effect before pyglet.gl is imported, which happens on the import above
 
 
 @dataclass
@@ -59,6 +56,9 @@ class Args(SharedDuckieArgs):
 
 def make_env(seed, idx, run_name, capture_video=False, action_smoothing=False, motion_blur=False, direction_lock=False,
              latency_rand=False, jerk_penalty=False, recovery_step=False, preprocessing=False, is_eval=False, **env_kwargs):
+    # Read here, not in thunk: the thunk is sent to the env worker processes
+    direction, reward_type = args.direction, args.reward_type
+
     def thunk():
         render_mode = "rgb_array" if (capture_video and idx == 0) else None
         env = DuckieOvalEnv.create_wrapped(
@@ -74,8 +74,8 @@ def make_env(seed, idx, run_name, capture_video=False, action_smoothing=False, m
             is_eval=is_eval,
             direction_lock=direction_lock,
             
-            direction=args.direction,
-            reward_type=args.reward_type,
+            direction=direction,
+            reward_type=reward_type,
             **env_kwargs
         )
         env.action_space.seed(seed)
@@ -83,42 +83,46 @@ def make_env(seed, idx, run_name, capture_video=False, action_smoothing=False, m
 
     return thunk
 
-# ALGO LOGIC: initialize agent here:
-class SoftQNetwork(nn.Module):
-    def __init__(self, env, feature_dim=256):
-        super().__init__()
 
-        self.channels = 4 if args.grayscale else 12
-        # Independent Visual Encoder
+# ALGO LOGIC: initialize agent here:
+class QHead(nn.Module):
+    def __init__(self, feature_dim, action_dim):
+        super().__init__()
+        # The input size is feature_dim (visuals) + action_dim (robot commands)
+        self.fc1 = nn.Linear(feature_dim + action_dim, 512)
+        self.fc2 = nn.Linear(512, 256)
+        self.fc_q = nn.Linear(256, 1)
+
+    def forward(self, features, a):
+        # [Batch, 256] + [Batch, 2] -> [Batch, 258]
+        x = torch.cat([features, a], dim=1)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        return self.fc_q(x)
+
+
+class SoftQNetwork(nn.Module):
+    """
+    Twin soft Q-networks sharing one visual encoder (DrQ / SAC-AE style). The encoder is
+    trained by the critic loss only; the actor reads its features detached.
+    """
+    def __init__(self, env, feature_dim=256, grayscale=True):
+        super().__init__()
+        self.channels = 4 if grayscale else 12
         self.encoder = cnn_encoder(
             in_channels=self.channels,
             obs_shape=env.single_observation_space.shape,
             feature_dim=feature_dim
         )
-
-        # The input size is feature_dim (visuals) + action_dim (robot commands)
         action_dim = np.prod(env.single_action_space.shape)
+        self.q1 = QHead(feature_dim, action_dim)
+        self.q2 = QHead(feature_dim, action_dim)
 
-        self.fc1 = nn.Linear(feature_dim + action_dim, 512)
-        self.fc2 = nn.Linear(512, 256)
-        self.fc_q = nn.Linear(256, 1)
+    def q_from_features(self, features, a):
+        return self.q1(features, a), self.q2(features, a)
 
     def forward(self, x, a):
-        # x: Image observations (Batch, 12, 120, 160)
-        # a: Actions (Batch, 2)
-        
-        # Extract features from the images
-        visual_features = self.encoder(x)
-        
-        # Concatenate visual features with the action vector
-        # [Batch, 256] + [Batch, 2] -> [Batch, 258]
-        combined_input = torch.cat([visual_features, a], dim=1)
-        
-        # Standard MLP layers to estimate Q-value
-        x = F.relu(self.fc1(combined_input))
-        x = F.relu(self.fc2(x))
-        q_value = self.fc_q(x)
-        return q_value
+        return self.q_from_features(self.encoder(x), a)
 
 
 LOG_STD_MAX = 2
@@ -126,23 +130,21 @@ LOG_STD_MIN = -5
 
 
 class Actor(nn.Module):
-    def __init__(self, env, grayscale=True):
+    """
+    Policy head on the critic's encoder. `encoder` is the critic's module, so the saved
+    actor state dict has the same layout as before (encoder + fc_mean + fc_logstd) and
+    deployment code loads it unchanged. Only head_parameters() go to the actor optimizer.
+    """
+    def __init__(self, env, encoder=None, feature_dim=256, grayscale=True):
         super().__init__()
-
-        self.channels = 4 if grayscale else 12
-        # Modified Encoder
-        self.encoder = cnn_encoder(
-            in_channels=self.channels,
+        # Without a critic encoder (e.g. loading a checkpoint for inspection) build a private one
+        self.encoder = encoder if encoder is not None else cnn_encoder(
+            in_channels=4 if grayscale else 12,
             obs_shape=env.single_observation_space.shape,
-            feature_dim=256
+            feature_dim=feature_dim
         )
-        
-
-
-        #self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod(), 256)
-        #self.fc2 = nn.Linear(256, 256)
-        self.fc_mean = nn.Linear(256, np.prod(env.single_action_space.shape))
-        self.fc_logstd = nn.Linear(256, np.prod(env.single_action_space.shape))
+        self.fc_mean = nn.Linear(feature_dim, np.prod(env.single_action_space.shape))
+        self.fc_logstd = nn.Linear(feature_dim, np.prod(env.single_action_space.shape))
         # action rescaling
         self.register_buffer(
             "action_scale",
@@ -159,19 +161,25 @@ class Actor(nn.Module):
             ),
         )
 
+    def head_parameters(self):
+        return list(self.fc_mean.parameters()) + list(self.fc_logstd.parameters())
+
     def forward(self, x):
-        #x = F.relu(self.fc1(x))
-        #x = F.relu(self.fc2(x))
-        x = self.encoder(x)
-        mean = self.fc_mean(x)
-        log_std = self.fc_logstd(x)
+        return self.dist_params(self.encoder(x))
+
+    def dist_params(self, features):
+        mean = self.fc_mean(features)
+        log_std = self.fc_logstd(features)
         log_std = torch.tanh(log_std)
         log_std = LOG_STD_MIN + 0.5 * (LOG_STD_MAX - LOG_STD_MIN) * (log_std + 1)  # From SpinUp / Denis Yarats
 
         return mean, log_std
 
     def get_action(self, x):
-        mean, log_std = self(x)
+        return self.action_from_features(self.encoder(x))
+
+    def action_from_features(self, features):
+        mean, log_std = self.dist_params(features)
         std = log_std.exp()
         normal = torch.distributions.Normal(mean, std)
 
@@ -180,7 +188,6 @@ class Actor(nn.Module):
         omega_t = torch.tanh(x_t[:,1:2])
         y_t = torch.cat([v_t, omega_t], dim=-1)
 
-        #y_t = torch.tanh(x_t)
         action = y_t * self.action_scale + self.action_bias
 
         # --- LOG PROB CORRECTION (Jacobian) ---
@@ -199,10 +206,6 @@ class Actor(nn.Module):
         mean_omega = torch.tanh(mean[:, 1:2])
         mean_action = torch.cat([mean_v, mean_omega], dim=-1) * self.action_scale + self.action_bias
 
-        # Enforcing Action Bound
-        #log_prob -= torch.log(self.action_scale * (1 - y_t.pow(2)) + 1e-6)
-        #log_prob = log_prob.sum(1, keepdim=True)
-        #mean = torch.tanh(mean) * self.action_scale + self.action_bias
         return action, log_prob, mean_action
 
 
@@ -277,6 +280,20 @@ if __name__ == "__main__":
 
     active_env_params = {} if args.curriculum_randomization else env_params.copy()
 
+    # Training envs first: async workers are spawned before this process opens a GL context
+    envs = make_vector_env([
+        make_env(
+            args.seed + i, i, run_name,
+            recovery_step=args.recovery, 
+            action_smoothing=args.ema, 
+            motion_blur=args.motion_blur, 
+            latency_rand=args.action_latency, 
+            jerk_penalty=args.jerk_penalty, 
+            preprocessing=args.preprocessing, 
+            **active_env_params
+        ) for i in range(args.num_envs)
+    ], async_envs=args.async_envs)
+
     # LIGHTWEIGHT UNIFIED EVALUATION ENVIRONMENTS
     best_eval_reward = -float('inf')
     eval_env_seed = args.seed + 100
@@ -307,33 +324,15 @@ if __name__ == "__main__":
     eval_env_perfect.unwrapped.set_curriculum(margin_factor=0.1)
     eval_env_imperfect.unwrapped.set_curriculum(margin_factor=0.1)
     eval_env_imperfect.unwrapped.set_spawn_config(mode="curriculum", difficulty=1)
-    
-    envs = gym.vector.SyncVectorEnv([
-        make_env(
-            args.seed + i, i, run_name,
-            recovery_step=args.recovery, 
-            action_smoothing=args.ema, 
-            motion_blur=args.motion_blur, 
-            latency_rand=args.action_latency, 
-            jerk_penalty=args.jerk_penalty, 
-            preprocessing=args.preprocessing, 
-            **active_env_params
-        ) for i in range(args.num_envs)
-    ])
    
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
-    max_action = float(envs.single_action_space.high[0])
-
-    actor = Actor(envs, grayscale=args.grayscale).to(device)
-    qf1 = SoftQNetwork(envs, feature_dim=256).to(device)
-    qf2 = SoftQNetwork(envs, feature_dim=256).to(device)
-    qf1_target = SoftQNetwork(envs, feature_dim=256).to(device)
-    qf2_target = SoftQNetwork(envs, feature_dim=256).to(device)
-    qf1_target.load_state_dict(qf1.state_dict())
-    qf2_target.load_state_dict(qf2.state_dict())
-    q_optimizer = optim.Adam(list(qf1.parameters()) + list(qf2.parameters()), lr=args.q_lr)
-    actor_optimizer = optim.Adam(list(actor.parameters()), lr=args.policy_lr)
+    qf = SoftQNetwork(envs, feature_dim=256, grayscale=args.grayscale).to(device)
+    qf_target = SoftQNetwork(envs, feature_dim=256, grayscale=args.grayscale).to(device)
+    qf_target.load_state_dict(qf.state_dict())
+    actor = Actor(envs, encoder=qf.encoder).to(device)
+    q_optimizer = optim.Adam(list(qf.parameters()), lr=args.q_lr)
+    actor_optimizer = optim.Adam(actor.head_parameters(), lr=args.policy_lr)
 
     evaluator_p = DuckiebotEvaluator(eval_env_perfect, eval_env_seed, actor, args, device, prefix="eval_perfect")
     evaluator2_imp = DuckiebotEvaluator(eval_env_imperfect, eval_env_seed, actor, args, device, prefix="eval_imperfect")
@@ -350,40 +349,122 @@ if __name__ == "__main__":
     else:
         alpha = args.alpha
 
-    #envs.single_observation_space.dtype = np.float32  previous version
-    envs.single_observation_space.dtype = np.uint8
-    rb = ReplayBuffer(
+    buffer_device = device if args.buffer_device == "auto" else torch.device(args.buffer_device)
+    rb = FrameStackReplayBuffer(
         args.buffer_size,
-        envs.single_observation_space,
-        envs.single_action_space,
-        device,
-        n_envs=args.num_envs,
-        handle_timeout_termination=False,
+        envs.single_observation_space.shape,
+        int(np.prod(envs.single_action_space.shape)),
+        frame_channels=1 if args.grayscale else 3,
+        device=buffer_device,
     )
-    online_q_params = list(qf1.parameters()) + list(qf2.parameters())
-    target_q_params = list(qf1_target.parameters()) + list(qf2_target.parameters())
+    online_q_params = list(qf.parameters())
+    target_q_params = list(qf_target.parameters())
+
+    def update(n_updates):
+        """One SAC gradient step. Returns the metrics as tensors, read only when logged."""
+        global alpha
+        data = rb.sample(args.batch_size)
+        s_obs = data.observations.to(device, non_blocking=True)
+        s_next_obs = data.next_observations.to(device, non_blocking=True)
+        s_actions = data.actions.to(device, non_blocking=True)
+
+        with torch.no_grad():
+            next_state_actions, next_state_log_pi, _ = actor.get_action(s_next_obs)
+            qf1_next_target, qf2_next_target = qf_target(s_next_obs, next_state_actions)
+            min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
+            next_q_value = data.rewards.to(device) + (1 - data.dones.to(device)) * args.gamma * (min_qf_next_target).view(-1)
+
+        # One encoder pass for both Q heads; the actor below reuses these features
+        features = qf.encoder(s_obs)
+        qf1_a_values, qf2_a_values = qf.q_from_features(features, s_actions)
+        qf1_a_values, qf2_a_values = qf1_a_values.view(-1), qf2_a_values.view(-1)
+        qf1_loss = F.mse_loss(qf1_a_values, next_q_value)
+        qf2_loss = F.mse_loss(qf2_a_values, next_q_value)
+        qf_loss = qf1_loss + qf2_loss
+
+        # optimize the model
+        q_optimizer.zero_grad()
+        qf_loss.backward()
+        q_optimizer.step()
+
+        metrics = {"qf1_values": qf1_a_values.mean(), "qf2_values": qf2_a_values.mean(),
+                   "qf1_loss": qf1_loss, "qf2_loss": qf2_loss, "qf_loss": qf_loss / 2.0}
+
+        if n_updates % args.policy_frequency == 0:  # TD 3 Delayed update support
+            features = features.detach()
+            for _ in range(
+                args.policy_frequency
+            ):  # compensate for the delay by doing 'actor_update_interval' instead of 1
+                pi, log_pi, _ = actor.action_from_features(features)
+                qf1_pi, qf2_pi = qf.q_from_features(features, pi)
+                min_qf_pi = torch.min(qf1_pi, qf2_pi)
+                actor_loss = ((alpha * log_pi) - min_qf_pi).mean()
+
+                actor_optimizer.zero_grad()
+                actor_loss.backward()
+                actor_optimizer.step()
+                metrics["actor_loss"] = actor_loss
+
+                if args.autotune:
+                    with torch.no_grad():
+                        _, log_pi, _ = actor.action_from_features(features)
+                    alpha_loss = (-log_alpha.exp() * (log_pi + target_entropy)).mean()
+
+                    a_optimizer.zero_grad()
+                    alpha_loss.backward()
+                    a_optimizer.step()
+                    alpha = log_alpha.exp().detach()
+                    metrics["alpha_loss"] = alpha_loss
+
+        # update the target networks
+        if n_updates % args.target_network_frequency == 0:
+            # Polyak update as one batched op instead of a Python loop over parameters
+            with torch.no_grad():
+                torch._foreach_lerp_(target_q_params, online_q_params, args.tau)
+        return metrics
 
     start_time = time.time()
     # Per-window timing: SPS over the last 100 steps and where the time goes
-    perf_window_start, perf_window_step, perf_env_time = time.perf_counter(), 0, 0.0
+    perf_window_start, perf_window_step, perf_wait_time, perf_update_time = time.perf_counter(), 0, 0.0, 0.0
+    n_updates = 0
+    metrics = {}
+
+    def every(interval):
+        # True once per `interval` transitions, global_step advances by num_envs per iteration
+        return global_step % interval < args.num_envs
 
     # TRY NOT TO MODIFY: start the game
     obs, _ = envs.reset(seed=args.seed)
-    for global_step in range(args.total_timesteps + 1):
+    # Envs whose episode ended on the previous step: their next step only resets them
+    # (gymnasium's next-step autoreset) and is not a transition to store
+    autoreset = np.zeros(args.num_envs, dtype=bool)
+    for iteration in range(args.total_timesteps // args.num_envs + 1):
+        global_step = iteration * args.num_envs
         # ALGO LOGIC: put action logic here
         if global_step < args.learning_starts:
             raw_actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
             raw_actions[:, 0] = np.abs(raw_actions[:, 0])
             actions = raw_actions
         else:
-            obs_tensor = torch.from_numpy(obs).float().to(device)
-            actions, _, _ = actor.get_action(obs_tensor)
-            actions = actions.detach().cpu().numpy()
+            with torch.no_grad():
+                actions, _, _ = actor.get_action(torch.from_numpy(obs).to(device))
+            actions = actions.cpu().numpy()
 
         # TRY NOT TO MODIFY: execute the game and log data.
-        t_env = time.perf_counter()
-        next_obs, rewards, terminations, truncations, infos = envs.step(actions)
-        perf_env_time += time.perf_counter() - t_env
+        # The envs step in their worker processes while the networks update on the buffer
+        envs.step_async(actions)
+
+        # ALGO LOGIC: training.
+        if global_step > args.learning_starts:
+            t_update = time.perf_counter()
+            for _ in range(args.gradient_steps):
+                metrics = update(n_updates)
+                n_updates += 1
+            perf_update_time += time.perf_counter() - t_update
+
+        t_wait = time.perf_counter()
+        next_obs, rewards, terminations, truncations, infos = envs.step_wait()
+        perf_wait_time += time.perf_counter() - t_wait
 
         # Curriculum spawn
         if any(terminations) or any(truncations):
@@ -399,91 +480,28 @@ if __name__ == "__main__":
                     writer.add_scalar("charts/episodic_return", infos['episode']['r'][i], global_step)
                     writer.add_scalar("charts/episodic_length", infos['episode']['l'][i], global_step)  
 
-        # TRY NOT TO MODIFY: save data to reply buffer; handle `final_observation`
-        real_next_obs = next_obs.copy()
-        if "final_observation" in infos:
-            for idx, has_final_obs in enumerate(infos.get("_final_observation", [])):
-                if has_final_obs:
-                    real_next_obs[idx] = infos["final_observation"][idx]
-        rb.add(obs, real_next_obs, actions, rewards, terminations, infos)
+        # TRY NOT TO MODIFY: save data to reply buffer. With next-step autoreset, next_obs of
+        # a finished episode is its real last observation, so no final_observation handling
+        rb.add(obs, next_obs, actions, rewards, terminations, valid=~autoreset)
+        autoreset = np.logical_or(terminations, truncations)
 
         # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
         obs = next_obs
 
-        # ALGO LOGIC: training.
         if global_step > args.learning_starts:
-            data = rb.sample(args.batch_size)
-        
-            s_obs = data.observations.to(device, non_blocking=True)
-            s_next_obs = data.next_observations.to(device, non_blocking=True)
-
-            with torch.no_grad():
-                next_state_actions, next_state_log_pi, _ = actor.get_action(s_next_obs)
-                qf1_next_target = qf1_target(s_next_obs, next_state_actions)
-                qf2_next_target = qf2_target(s_next_obs, next_state_actions)
-                min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
-                next_q_value = data.rewards.flatten() + (1 - data.dones.flatten()) * args.gamma * (min_qf_next_target).view(-1)
-
-            qf1_a_values = qf1(s_obs, data.actions).view(-1)
-            qf2_a_values = qf2(s_obs, data.actions).view(-1)
-            qf1_loss = F.mse_loss(qf1_a_values, next_q_value)
-            qf2_loss = F.mse_loss(qf2_a_values, next_q_value)
-            qf_loss = qf1_loss + qf2_loss
-
-            # optimize the model
-            q_optimizer.zero_grad()
-            qf_loss.backward()
-            q_optimizer.step()
-
-            if global_step % args.policy_frequency == 0:  # TD 3 Delayed update support
-                for _ in range(
-                    args.policy_frequency
-                ):  # compensate for the delay by doing 'actor_update_interval' instead of 1
-                    pi, log_pi, _ = actor.get_action(s_obs)
-                    qf1_pi = qf1(s_obs, pi)
-                    qf2_pi = qf2(s_obs, pi)
-                    min_qf_pi = torch.min(qf1_pi, qf2_pi)
-                    actor_loss = ((alpha * log_pi) - min_qf_pi).mean()
-
-                    actor_optimizer.zero_grad()
-                    actor_loss.backward()
-                    actor_optimizer.step()
-
-                    if args.autotune:
-                        with torch.no_grad():
-                            _, log_pi, _ = actor.get_action(s_obs)
-                        alpha_loss = (-log_alpha.exp() * (log_pi + target_entropy)).mean()
-
-                        a_optimizer.zero_grad()
-                        alpha_loss.backward()
-                        a_optimizer.step()
-                        alpha = log_alpha.exp().detach()
-
-            # update the target networks
-            if global_step % args.target_network_frequency == 0:
-                # Polyak update as one batched op instead of a Python loop over parameters
-                with torch.no_grad():
-                    torch._foreach_lerp_(target_q_params, online_q_params, args.tau)
-
-            if global_step % 100 == 0:
-                writer.add_scalar("losses/qf1_values", qf1_a_values.mean().item(), global_step)
-                writer.add_scalar("losses/qf2_values", qf2_a_values.mean().item(), global_step)
-                writer.add_scalar("losses/qf1_loss", qf1_loss.item(), global_step)
-                writer.add_scalar("losses/qf2_loss", qf2_loss.item(), global_step)
-                writer.add_scalar("losses/qf_loss", qf_loss.item() / 2.0, global_step)
-                writer.add_scalar("losses/actor_loss", actor_loss.item(), global_step)
+            if every(100) and metrics:
+                for key, value in metrics.items():
+                    writer.add_scalar(f"losses/{key}", value.item(), global_step)
                 writer.add_scalar("losses/alpha", float(alpha), global_step)
                 writer.add_scalar(
                     "charts/SPS",
                     int(global_step / (time.time() - start_time)),
                     global_step,
                 )
-                if args.autotune:
-                    writer.add_scalar("losses/alpha_loss", alpha_loss.item(), global_step)
             if args.curriculum_randomization:
                 update_curriculum_stage(envs=envs, global_step=global_step, args=args)
             
-            if global_step % args.eval_interval == 0 and global_step >= args.start_evaluation:
+            if every(args.eval_interval) and global_step >= args.start_evaluation:
                 score1, _, _, is_best_p, _ = evaluator_p.evaluate(
                     is_interval=True,
                     global_step=global_step,
@@ -514,23 +532,25 @@ if __name__ == "__main__":
                     best_eval_reward = score2
                     print(f" New Peak Performance Milestone! Saving weights...")
                     save_models(
-                        actor=actor, qf1=qf1, qf2=qf2, 
+                        actor=actor, critic=qf, 
                         step=global_step, run_name=run_name, 
                         args=args, env_params=env_params, 
                         suffix=f"vr{args.reward_type}s{args.seed}_BEST"
                     )
 
 
-        if global_step > 0 and global_step % 100 == 0:
+        if global_step > 0 and every(100):
             window = time.perf_counter() - perf_window_start
             n = global_step - perf_window_step
             writer.add_scalar("perf/SPS_recent", n / window, global_step)
-            writer.add_scalar("perf/env_step_ms", 1000 * perf_env_time / n, global_step)
-            writer.add_scalar("perf/policy_and_update_ms", 1000 * (window - perf_env_time) / n, global_step)
-            perf_window_start, perf_window_step, perf_env_time = time.perf_counter(), global_step, 0.0
+            # Time blocked waiting for the envs, i.e. stepping not hidden behind the update
+            writer.add_scalar("perf/env_wait_ms", 1000 * perf_wait_time / n, global_step)
+            writer.add_scalar("perf/update_ms", 1000 * perf_update_time / n, global_step)
+            perf_window_start, perf_window_step = time.perf_counter(), global_step
+            perf_wait_time, perf_update_time = 0.0, 0.0
 
     if args.save_model:
-        save_models(actor, qf1, qf2, global_step, run_name, args, env_params, suffix=f"vr{args.reward_type}s{args.seed}_Final")
+        save_models(actor, critic=qf, step=global_step, run_name=run_name, args=args, env_params=env_params, suffix=f"vr{args.reward_type}s{args.seed}_Final")
     
     eval_env_perfect.close()
     eval_env_imperfect.close()
