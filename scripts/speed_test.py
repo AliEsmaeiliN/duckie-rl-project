@@ -4,15 +4,16 @@ Short SAC training run to measure throughput, tracked on Weights & Biases.
 
 Evaluation and checkpointing are disabled so only env stepping and learning are timed.
 Metrics to look at in wandb (group "speedtest-<host>"):
-  perf/SPS_recent              steps/s over the last 100 steps
-  perf/env_step_ms             time per step spent in the simulator
-  perf/policy_and_update_ms    time per step spent in the policy and gradient updates
+  perf/SPS_recent              transitions/s over the last 100 transitions
+  perf/env_wait_ms             time per transition blocked on the envs (stepping not hidden behind the update)
+  perf/update_ms               time per transition spent in gradient updates
 Before --learning-starts only the simulator runs, after it learning kicks in.
 
 Usage (from the repo root):
   python scripts/speed_test.py                      # one run, 20k steps
   python scripts/speed_test.py --runs 4             # 4 seeds in parallel, to measure total throughput
   python scripts/speed_test.py -- --grayscale False # anything after -- goes to the training script
+  python scripts/speed_test.py -- --num-envs 4 --gradient-steps 2   # parallel envs, update-to-data ratio 0.5
 """
 import argparse
 import os

@@ -18,6 +18,9 @@ class SharedDuckieArgs:
     # --- Environment & Architecture ---
     env_id: str = "Oval-"
     num_envs: int = 1
+    """parallel training envs, each in its own process. Every loop iteration collects num_envs transitions"""
+    async_envs: bool = True
+    """run the training envs in subprocesses, stepping them while the networks update"""
     grayscale: bool = True
     capture_video: bool = False
     
@@ -37,6 +40,10 @@ class SharedDuckieArgs:
     tau: float = 0.005
     learning_starts: int = int(5e3)
     policy_frequency: int = 2
+    gradient_steps: int = 1
+    """gradient updates per loop iteration (update-to-data ratio = gradient_steps / num_envs)"""
+    buffer_device: str = "auto"
+    """where the replay buffer lives: 'auto' (the training device) or 'cpu'"""
     
     # --- Duckietown specific arguments ---
     domain_rand: bool = False

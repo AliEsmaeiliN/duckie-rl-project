@@ -165,23 +165,47 @@ def update_curriculum_stage(envs, global_step, args):
     """
     total_timesteps = args.total_timesteps
 
+    # global_step advances by num_envs per call, so test whether a milestone was just crossed
+    def reached(milestone):
+        return global_step - args.num_envs < milestone <= global_step
+
     if args.recovery:
-        if global_step == 0:
+        if reached(0):
             envs.call("set_curriculum", max_recovery_steps=20)        
 
-        elif global_step == int(0.35 * total_timesteps): 
+        elif reached(int(0.35 * total_timesteps)): 
             print(f"\n[Curriculum] Step {global_step}: Tightening recovery window to 5 steps.")
             envs.call("set_curriculum", max_recovery_steps=10)
 
-        elif global_step == int(0.7 * total_timesteps):
+        elif reached(int(0.7 * total_timesteps)):
             print(f"\n[Curriculum] Step {global_step}: Safety Horizon closed (0 steps). Policy running under absolute constraints.")
             envs.call("set_curriculum", max_recovery_steps=0)
 
-    if global_step == 300000:
+    if reached(300000):
         print(f"\n[Curriculum] Step {global_step}: Visual Domain Randomization ON.")
         #envs.call("set_curriculum", domain_rand=args.domain_rand)
 
-    elif global_step == 450000:
+    elif reached(450000):
         print(f"\n[Curriculum] Step {global_step}: Activating Camera & Dynamics Randomization.")
         #envs.call("set_curriculum", camera_rand=args.camera_rand, dynamics_rand=args.dynamics_rand)
-        
+
+
+class _SyncVectorEnv(gym.vector.SyncVectorEnv):
+    """SyncVectorEnv with AsyncVectorEnv's split step, so the training loop drives either."""
+
+    def step_async(self, actions):
+        self._pending_actions = actions
+
+    def step_wait(self):
+        return self.step(self._pending_actions)
+
+
+def make_vector_env(env_fns, async_envs=True):
+    """
+    Vector env for training. Async runs each env in its own process so they step in
+    parallel, and lets the training loop update the networks while they step. The
+    workers are spawned, not forked: each one must open its own GL context.
+    """
+    if async_envs:
+        return gym.vector.AsyncVectorEnv(env_fns, context="spawn")
+    return _SyncVectorEnv(env_fns)
