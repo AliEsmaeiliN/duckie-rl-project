@@ -1,3 +1,4 @@
+import functools
 import itertools
 import os
 from collections import namedtuple
@@ -29,8 +30,6 @@ from pyglet import gl, image, window
 from gym_duckietown import graphics
 
 from duckietown_world import (
-    get_DB18_nominal,
-    get_DB18_uncalibrated,
     get_texture_file,
     MapFormat1,
     MapFormat1Constants,
@@ -69,6 +68,7 @@ from .randomization import Randomizer
 from .utils import get_subdir_path
 from path_planning.controller import Controller
 from scipy.spatial.distance import cdist
+from .dynamics import DB18Dynamics
 
 DIM = 0.5
 
@@ -598,7 +598,7 @@ class Simulator(gym.Env):
             rng = self.np_random if self.domain_rand else None
 
             kind = tile["kind"]
-            fn = get_texture_file(f"tiles-processed/{self.style}/{kind}/texture")[0]
+            fn = _tile_texture_file(self.style, kind)
             # ft = get_fancy_textures(self.style, texture_name)
             t = load_texture(fn, segment=False, segment_into_color=False)
             tt = Texture(t, tex_name=kind, rng=rng)
@@ -666,20 +666,14 @@ class Simulator(gym.Env):
         self.episode_dir = get_driving_direction(tile, propose_angle)
         
 
-        init_vel = np.array([0, 0])
         target_hardware_delay = 0.0
 
-        # Initialize Dynamics model
-        if self.dynamics_rand:
-            trim = 0 + self.randomization_settings["trim"][0]
-            p = get_DB18_uncalibrated(delay=target_hardware_delay, trim=trim)
-        else:
-            p = get_DB18_nominal(delay=target_hardware_delay)
-
-        q = self.cartesian_from_weird(self.cur_pos, self.cur_angle)
-        v0 = geometry.se2_from_linear_angular(init_vel, 0)
-        c0 = q, v0
-        self.state = p.initialize(c0=c0, t0=0)
+        # Initialize Dynamics model (numpy port of duckietown_world's DB18 model, see dynamics.py)
+        assert target_hardware_delay == 0, "DB18Dynamics does not model actuation delay"
+        trim = self.randomization_settings["trim"][0] if self.dynamics_rand else 0.0
+        x0 = float(self.cur_pos[0])
+        y0 = self.grid_height * self.road_tile_size - float(self.cur_pos[2])
+        self.state = DB18Dynamics(x0, y0, float(self.cur_angle), trim=trim)
 
         #logger.info(f"Starting at {self.cur_pos} {self.cur_angle}")
 
@@ -2142,6 +2136,13 @@ def get_right_vec(cur_angle: float) -> np.ndarray:
     return np.array([x, 0, z])
 
 
+@functools.lru_cache(maxsize=None)
+def _tile_texture_file(style: str, kind: str) -> str:
+    # get_texture_file scans every resource path on each call (~4 ms), and reset() asks
+    # for one texture per tile, so the lookup alone made a reset cost ~50 ms
+    return get_texture_file(f"tiles-processed/{style}/{kind}/texture")[0]
+
+
 def _update_pos(self, action):
     """
     Update the position of the robot, simulating differential drive
@@ -2149,12 +2150,11 @@ def _update_pos(self, action):
     returns pos, angle
     """
 
-    action = DynamicsInfo(motor_left=action[0], motor_right=action[1])
-    self.state = self.state.integrate(self.delta_time, action)
-    q = self.state.TSE2_from_state()[0]
-    pos, angle = self.weird_from_cartesian(q)
-    pos = np.asarray(pos)
-    return pos, angle
+    self.state.integrate(self.delta_time, motor_left=action[0], motor_right=action[1])
+    x, y, theta = self.state.pose
+    # Cartesian (0,0 bottom left) -> simulator frame, as in weird_from_cartesian
+    pos = np.array([x, 0.0, self.grid_height * self.road_tile_size - y])
+    return pos, theta
 
 
 def get_duckiebot_mesh(color: str) -> ObjMesh:
