@@ -76,8 +76,8 @@ class SharedDuckieArgs:
     """if toggled, applies the full sim-to-real visual enhancement stack (CLAHE, blur, contrast stretching)"""
     preprocessing_eval: Optional[bool] = None
     """Override preprocessing for evaluation. If None, inherits the training setting."""
-    reward_type: str = "unified_v1"
-    """The target reward wrapper to deploy: ['custom', 'simple', 'adaptive', 'pid', 'unified_v1']"""
+    reward_type: str = "r2"
+    """The target reward wrapper to deploy"""
 
 
 def pick_device(use_gpu: bool = True):
