@@ -26,6 +26,7 @@ duckie_rl.sif
 output/
 outputs/
 logs/
+docs/*
 artifacts/
 duckie_deploy/models/*
 trained_models/
