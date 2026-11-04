@@ -241,11 +241,15 @@ class UnifiedLineReward(gym.Wrapper):
 
     Line positions come from the road texture: on a 0.585 m tile the white line's
     inner edge sits 0.114 m right of the lane center, the yellow line's 0.104 m left.
+
+    Keep k_white + k_yellow below the ~1.5/step that centered driving earns: with gamma=0.99,
+    any routine state worth less than about -0.1/step makes the -10 termination the better
+    deal and the agent learns to crash early (return flat near zero).
     """
     WHITE_EDGE = 0.114
     YELLOW_EDGE = 0.104
 
-    def __init__(self, env, k_white=3.0, k_yellow=2.0, margin=0.01, line_scale=0.04):
+    def __init__(self, env, k_white=1.0, k_yellow=0.5, margin=0.0, line_scale=0.04):
         super().__init__(env)
         self.wrong_lane_limit = 0.2
         self.k_white = k_white
@@ -266,14 +270,19 @@ class UnifiedLineReward(gym.Wrapper):
         return obs, reward, terminated, truncated, info
 
     def _footprint_excess(self, sim):
-        """Max distance (m) any body corner is past the white / yellow boundary."""
+        """
+        Max distance (m) the robot is past the white / yellow boundary, measured at the points
+        termination checks (_valid_pose): both wheels and the front. Rectangle corners would
+        swing 2-3 cm further out with any heading error or on tight curves and penalize normal
+        centered driving.
+        """
         from gym_duckietown.simulator import ROBOT_LENGTH, ROBOT_WIDTH, _actual_center, get_dir_vec, get_right_vec
 
         angle = sim.cur_angle
         center = _actual_center(sim.cur_pos, angle)
         f = 0.5 * ROBOT_LENGTH * get_dir_vec(angle)
         r = 0.5 * ROBOT_WIDTH * get_right_vec(angle)
-        corners = (center + f - r, center + f + r, center - f - r, center - f + r)
+        corners = (center - r, center + r, center + f)
 
         white_limit = self.WHITE_EDGE - self.margin
         yellow_limit = self.YELLOW_EDGE - self.margin
