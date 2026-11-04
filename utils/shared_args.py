@@ -26,7 +26,7 @@ class SharedDuckieArgs:
     
     # --- Evaluation & Saving ---
     eval_interval: int = 20000
-    start_evaluation: int = 3e4
+    start_evaluation: int = 5e5
     eval_model: bool = True
     save_model: bool = True
     save_interval: int = 50000
@@ -34,11 +34,11 @@ class SharedDuckieArgs:
     
     # --- Shared Off-Policy RL Hyperparameters ---
     total_timesteps: int = 1000000
-    buffer_size: int = int(5e4)
+    buffer_size: int = int(2e5)
     batch_size: int = 256
     gamma: float = 0.99
     tau: float = 0.005
-    learning_starts: int = int(5e3)
+    learning_starts: int = int(10e3)
     policy_frequency: int = 2
     gradient_steps: int = 1
     """gradient updates per loop iteration (update-to-data ratio = gradient_steps / num_envs)"""
@@ -76,7 +76,7 @@ class SharedDuckieArgs:
     """if toggled, applies the full sim-to-real visual enhancement stack (CLAHE, blur, contrast stretching)"""
     preprocessing_eval: Optional[bool] = None
     """Override preprocessing for evaluation. If None, inherits the training setting."""
-    reward_type: str = "r2"
+    reward_type: str = "unfl"
     """The target reward wrapper to deploy: unf or unfl"""
 
 
