@@ -77,7 +77,7 @@ class SharedDuckieArgs:
     preprocessing_eval: Optional[bool] = None
     """Override preprocessing for evaluation. If None, inherits the training setting."""
     reward_type: str = "r2"
-    """The target reward wrapper to deploy"""
+    """The target reward wrapper to deploy: unf or unfl"""
 
 
 def pick_device(use_gpu: bool = True):

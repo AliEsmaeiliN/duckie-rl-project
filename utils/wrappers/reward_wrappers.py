@@ -227,6 +227,120 @@ class UnifiedRewardV3(gym.RewardWrapper):
 
         return r_speed + r_dist + r_heading + r_survival
 
+
+class UnifiedLineReward(gym.Wrapper):
+    """
+    UnifiedReward plus a graded penalty for the robot body crossing the lane lines.
+
+    On tight right turns the wheels can clip the white line while the forward camera
+    still sees only road, so termination arrives without visual warning. This term
+    instead charges a cost that grows with how far the body's footprint is past the
+    line, starting `margin` before the paint, so the agent gets a dense, Markov signal
+    (it depends only on the current pose) and learns to keep clearance. Termination
+    itself is unchanged; use this instead of RecoveryTrainingWrapper.
+
+    Line positions come from the road texture: on a 0.585 m tile the white line's
+    inner edge sits 0.114 m right of the lane center, the yellow line's 0.104 m left.
+    """
+    WHITE_EDGE = 0.114
+    YELLOW_EDGE = 0.104
+
+    def __init__(self, env, k_white=3.0, k_yellow=2.0, margin=0.01, line_scale=0.04):
+        super().__init__(env)
+        self.wrong_lane_limit = 0.2
+        self.k_white = k_white
+        self.k_yellow = k_yellow
+        self.margin = margin          # start charging this far (m) before the paint
+        self.line_scale = line_scale  # excess (m) at which the penalty saturates
+        self._polylines = {}          # (i, j, curve index) -> sampled lane points and tangents
+
+    def reset(self, **kwargs):
+        self._polylines.clear()  # the map may change between episodes (multimap)
+        return self.env.reset(**kwargs)
+
+    def step(self, action):
+        obs, reward, terminated, truncated, info = self.env.step(action)
+        reward, white_excess, yellow_excess = self._reward(reward)
+        info["line_excess_white"] = white_excess
+        info["line_excess_yellow"] = yellow_excess
+        return obs, reward, terminated, truncated, info
+
+    def _footprint_excess(self, sim):
+        """Max distance (m) any body corner is past the white / yellow boundary."""
+        from gym_duckietown.simulator import ROBOT_LENGTH, ROBOT_WIDTH, _actual_center, get_dir_vec, get_right_vec
+
+        angle = sim.cur_angle
+        center = _actual_center(sim.cur_pos, angle)
+        f = 0.5 * ROBOT_LENGTH * get_dir_vec(angle)
+        r = 0.5 * ROBOT_WIDTH * get_right_vec(angle)
+        corners = (center + f - r, center + f + r, center - f - r, center - f + r)
+
+        white_limit = self.WHITE_EDGE - self.margin
+        yellow_limit = self.YELLOW_EDGE - self.margin
+        dir_vec = 2.0 * f / ROBOT_LENGTH
+        white, yellow = 0.0, 0.0
+        for p in corners:
+            d = self._signed_lane_dist(sim, p, angle, dir_vec)
+            if d is None:
+                # Corner is over a non-drivable tile: the full line is already crossed
+                return self.line_scale, yellow
+            white = max(white, d - white_limit)
+            yellow = max(yellow, -d - yellow_limit)
+        return white, yellow
+
+    def _signed_lane_dist(self, sim, p, angle, dir_vec):
+        """
+        Signed distance from p to the lane curve sim.closest_curve_point would pick, using a cached
+        dense sampling of the curve (the recursive Bezier search is ~10x slower). Same sign as
+        get_lane_pos2: positive is RIGHT of the lane, toward the white line, despite that
+        function's comment. None when p is not on a drivable tile.
+        """
+        i, j = sim.get_grid_coords(p)
+        tile = sim._get_tile(i, j)
+        if tile is None or not tile["drivable"]:
+            return None
+        if tile["kind"] == "4way":  # direction-dependent curve choice, use the simulator's lookup
+            point, tangent = sim.closest_curve_point(p, angle)
+            return None if point is None else float(np.dot(p - point, np.cross(tangent, [0.0, 1.0, 0.0])))
+
+        curves = tile["curves"]
+        idx = int(np.argmax((curves[:, -1, :] - curves[:, 0, :]) @ dir_vec))
+        key = (i, j, idx)
+        if key not in self._polylines:
+            from gym_duckietown.graphics import bezier_point, bezier_tangent
+            ts = np.linspace(0.0, 1.0, 64)
+            pts = np.array([bezier_point(curves[idx], t) for t in ts])
+            normals = np.array([np.cross(bezier_tangent(curves[idx], t), [0.0, 1.0, 0.0]) for t in ts])
+            self._polylines[key] = (pts, normals)
+        pts, normals = self._polylines[key]
+        k = int(np.argmin(((pts - p) ** 2).sum(axis=1)))
+        return float(np.dot(p - pts[k], normals[k]))
+
+    def _reward(self, reward):
+        if reward == -1000:
+            return -10.0, 0.0, 0.0
+
+        sim = self.env.unwrapped
+        try:
+            lp = sim.get_lane_pos2(sim.cur_pos, sim.cur_angle)
+        except Exception:
+            return -10.0, 0.0, 0.0
+
+        # --- UnifiedReward terms ---
+        v = sim.speed
+        reward_speed = 2.0 * v * lp.dot_dir
+        normalized = np.clip(np.abs(lp.dist) / self.wrong_lane_limit, 0.0, 1.0)
+        reward_distance = -4 * normalized**2
+        reward_survival = 1.0 if v > 0.05 else -1.0
+
+        # --- Line clearance ---
+        white, yellow = self._footprint_excess(sim)
+        reward_line = (-self.k_white * np.clip(white / self.line_scale, 0.0, 1.0)
+                       - self.k_yellow * np.clip(yellow / self.line_scale, 0.0, 1.0))
+
+        return (reward_speed + reward_distance + reward_survival + reward_line,
+                max(white, 0.0), max(yellow, 0.0))
+
 class AdditiveJerkPenalty(gym.Wrapper):
     """
     Penalizes large changes between consecutive actions.

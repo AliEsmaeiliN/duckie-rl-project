@@ -90,6 +90,7 @@ class DuckieOvalEnv(Simulator):
             "unf1": UnifiedRewardv2,
             "unf2": UnifiedRewardv1,
             "unf3": UnifiedRewardV3,
+            "unfl": UnifiedLineReward,
         }
 
         if reward_type not in reward_registry:
