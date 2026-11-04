@@ -58,14 +58,12 @@ class AdaptiveRewardWrapper(gym.RewardWrapper):
             # Special "Stabilization" Values
             speed_coeff = 1.0
             dist_coeff = -15.0
-            jerk_coeff = -1.2
             target_offset = 0.05
             alignment_k = 5.0
         else:
             # "Race Mode" for straights
             speed_coeff = 2.5
             dist_coeff = -10.0
-            jerk_coeff = - 2
             target_offset = 0.0
             alignment_k = 2.0
         
