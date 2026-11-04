@@ -90,35 +90,8 @@ class AdaptiveRewardWrapper(gym.RewardWrapper):
  
         return total_reward
     
-    
+
 class UnifiedReward(gym.RewardWrapper):
-    def __init__(self, env):
-        super().__init__(env)
-        self.wrong_lane_limit = -0.2
-        self.max_expected_angle = 30.0
-
-    def reward(self, reward):
-
-        if reward == -1000:
-            return -10
-        
-        sim = self.env.unwrapped
-        try:
-            lp = sim.get_lane_pos2(sim.cur_pos, sim.cur_angle)
-        except Exception:
-            return -10.0 
-
-        v = sim.speed
-        reward_speed = 2.0 * v * lp.dot_dir
-        
-        
-        reward_distance = -15.0 * np.abs(lp.dist)
-        
-        reward_survival = 1.0 if v > 0.05 else -1.0
-        
-        return reward_speed + reward_distance + reward_survival
-        
-class UnifiedRewardv1(gym.RewardWrapper):
     def __init__(self, env, target_offset= -0.02):
         super().__init__(env)
         self.target_offset = 0 
@@ -147,7 +120,7 @@ class UnifiedRewardv1(gym.RewardWrapper):
         
         return reward_speed + reward_distance + reward_survival
     
-class UnifiedRewardv2(gym.RewardWrapper):
+class UnifiedRewardv1(gym.RewardWrapper):
     def __init__(self, env):
         super().__init__(env)
         self.deadzone = 0.02
@@ -184,6 +157,33 @@ class UnifiedRewardv2(gym.RewardWrapper):
         reward_survival = 1.0
         
         return reward_progress + reward_distance + reward_survival + reward_heading
+
+class UnifiedRewardv2(gym.RewardWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        self.wrong_lane_limit = -0.2
+        self.max_expected_angle = 30.0
+
+    def reward(self, reward):
+
+        if reward == -1000:
+            return -10
+        
+        sim = self.env.unwrapped
+        try:
+            lp = sim.get_lane_pos2(sim.cur_pos, sim.cur_angle)
+        except Exception:
+            return -10.0 
+
+        v = sim.speed
+        reward_speed = 2.0 * v * lp.dot_dir
+        
+        
+        reward_distance = -15.0 * np.abs(lp.dist)
+        
+        reward_survival = 1.0 if v > 0.05 else -1.0
+        
+        return reward_speed + reward_distance + reward_survival
 
 class UnifiedRewardV3(gym.RewardWrapper):
     """
