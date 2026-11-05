@@ -66,6 +66,19 @@ class Actor(nn.Module):
         return a * self.action_scale + self.action_bias
 
 
+def load_camera_calibration(path: str):
+    """(K, D, (w, h)) from a Duckiematrix map's cameras.yaml (a map dir or the file itself)."""
+    import yaml
+    if os.path.isdir(path):
+        path = os.path.join(path, "cameras.yaml")
+    with open(path) as f:
+        cams = yaml.safe_load(f)["cameras"]
+    cam = next(iter(cams.values()))
+    K = np.array(cam["camera_matrix"], dtype=np.float64).reshape(3, 3)
+    D = np.array(cam["distortion_parameters"], dtype=np.float64)
+    return K, D, (int(cam["width"]), int(cam["height"]))
+
+
 @dataclass
 class PolicySpec:
     algo: str
@@ -96,7 +109,7 @@ class MatrixPolicy:
                  ema: bool = False, ema_alpha: float = 0.8, v_scale: float = 0.8,
                  omega_scale: float = 3.0, gain: float = 1.0, trim: float = 0.0,
                  wheel_dist: float = 0.102, radius: float = 0.0318, motor_k: float = 27.0,
-                 device: str = "cpu"):
+                 rectify_calib: Optional[str] = None, device: str = "cpu"):
         ckpt = torch.load(model_path, map_location="cpu", weights_only=False)
         state = ckpt["actor_state_dict"]
         self.spec = _infer_spec(state, frame_stack)
@@ -117,6 +130,12 @@ class MatrixPolicy:
         self.k_r_inv = (gain + trim) / motor_k
         self.k_l_inv = (gain - trim) / motor_k
         self._clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        self._calib = None  # (K, D) of the rendered camera, when rectifying
+        if rectify_calib:
+            K, D, self._calib_wh = load_camera_calibration(rectify_calib)
+            self._calib = (K, D)
+        self._rect_maps = None
+        self.last_view: Optional[np.ndarray] = None  # camera frame as fed to the crop (BGR)
         self.reset()
 
     def reset(self):
@@ -124,7 +143,22 @@ class MatrixPolicy:
         self.prev_action = np.zeros(2, dtype=np.float32)
 
     # ---- observation ----
+    def rectify(self, bgr: np.ndarray) -> np.ndarray:
+        """Undistort like the real-robot pipeline (debug/agent.py: alpha=0, same output size)."""
+        h, w = bgr.shape[:2]
+        if self._rect_maps is None or self._rect_maps[0] != (w, h):
+            K, D = self._calib
+            sx, sy = w / self._calib_wh[0], h / self._calib_wh[1]
+            K = K * np.array([[sx], [sy], [1.0]])
+            newK, _ = cv2.getOptimalNewCameraMatrix(K, D, (w, h), 0, (w, h))
+            mx, my = cv2.initUndistortRectifyMap(K, D, None, newK, (w, h), cv2.CV_32FC1)
+            self._rect_maps = ((w, h), mx, my)
+        return cv2.remap(bgr, self._rect_maps[1], self._rect_maps[2], cv2.INTER_LINEAR)
+
     def preprocess(self, bgr: np.ndarray) -> np.ndarray:
+        if self._calib is not None:
+            bgr = self.rectify(bgr)
+        self.last_view = bgr
         rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         if (rgb.shape[1], rgb.shape[0]) != SIM_CAMERA_SIZE:
             rgb = cv2.resize(rgb, SIM_CAMERA_SIZE, interpolation=cv2.INTER_AREA)
@@ -172,4 +206,5 @@ class MatrixPolicy:
     def describe(self) -> str:
         s = self.spec
         return (f"{self.name}: {s.algo.upper()} | {'gray' if s.grayscale else 'rgb'} x{s.frame_stack} "
+                f"{'| rectified ' if self._calib is not None else ''}"
                 f"@ {s.resolution}px | step={s.meta.get('global_step')} env_id={s.meta.get('env_id')}")
