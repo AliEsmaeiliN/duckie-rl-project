@@ -13,7 +13,7 @@ dependencies:
       - duckietown-sdk==0.2.0
       - dtps-http==1.6.1   # transport the SDK imports but does not declare
       - numpy<2
-      - opencv-python-headless
+      - opencv-python==4.11.0.86   # GUI build, needed for --show
       - pyyaml
       - tyro
       - matplotlib

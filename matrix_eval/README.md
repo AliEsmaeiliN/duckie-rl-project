@@ -14,6 +14,8 @@ leave the `duckie-rl` env untouched.
 | `matrix_io.py` | camera, motors, reset and pose via `duckietown-sdk` |
 | `lane_geometry.py` | right-lane centre lines built from the engine's map layers |
 | `probe.py` | checks the connection and prints the raw message formats |
+| `make_oval_map.py` | builds `maps/oval_loop_{ccw,cw}` (the training track) from `loop_map/` |
+| `live_view.py` | the `--show` window |
 | `evaluate.py` | runs the episodes and writes CSV, JSON and plot results |
 | `environment.yaml` | the `duckie-matrix` conda env |
 
@@ -24,20 +26,32 @@ conda env create -f matrix_eval/environment.yaml   # already created on this mac
 conda activate duckie-matrix
 ```
 
-## 2. Start the Duckiematrix
+## 2. Build the training-track maps
+
+```bash
+python matrix_eval/make_oval_map.py                    # lens distortion off: matches gym training
+python matrix_eval/make_oval_map.py --lens-distortion  # fisheye render, closer to the real bot
+```
+
+This turns the 3x3 template loop in `loop_map/` into the 4x3 `oval_loop` training
+track. It writes `maps/oval_loop_ccw` and `maps/oval_loop_cw`, which differ only in the
+spawn pose. The engine respawns the robot at that pose on every reset. Training used
+`--direction mixed`, so evaluate on both.
+
+## 3. Start the Duckiematrix
 
 You need the dts **ente** profile. The Duckiematrix commands aren't in `daffy`.
 
 ```bash
 dts profile switch ente
 dts matrix run --standalone --sandbox            # engine + renderer, default sandbox map
-# or with a custom map directory:
-dts matrix run --standalone --map <path/to/map_dir>
+# the training oval (one direction per engine run):
+dts matrix run --standalone --map matrix_eval/maps/oval_loop_ccw
 # lockstep (simulation-time) mode:
 dts matrix run --standalone --sandbox --gym --delta-t 0.1
 ```
 
-## 3. Probe once
+## 4. Probe once
 
 ```bash
 python matrix_eval/probe.py --robot map_0/vehicle_0
@@ -52,13 +66,23 @@ The probe:
 If `parsed (x, y, yaw)` prints `None`, update `parse_pose()` in `matrix_io.py` to match
 the message it printed.
 
-## 4. Evaluate
+## 5. Evaluate
 
 ```bash
 python matrix_eval/evaluate.py \
     --models ~/workspace/rl_models/sac_vr3.cleanrl_model ~/workspace/rl_models/td3_vr2.cleanrl_model \
-    --episodes 5 --max-steps 1000 --tag sandbox
+    --episodes 5 --max-steps 1000 --tag oval_ccw --show
 ```
+
+`--show` opens a live window. It shows the camera frame, with the crop line at 1/3,
+next to the four stacked frames the policy actually receives, plus v/omega, wheel PWM,
+lane offset and heading. Press `q`/`Esc` to stop (results are still written) and
+`p`/space to pause (the wheels stop while paused). The renderer window shows the
+robot from outside at the same time.
+
+`--rectify <map_dir>` undistorts each frame with that map's `cameras.yaml`
+before the crop, like the real-robot pipeline. Use it for maps built with
+`--lens-distortion`.
 
 Results go to `matrix_eval/results/<timestamp>_<tag>/` (this folder is git-ignored):
 

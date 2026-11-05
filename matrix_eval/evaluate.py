@@ -27,6 +27,7 @@ import cv2
 import numpy as np
 import tyro
 
+from live_view import LiveView
 from matrix_io import MatrixRobot
 from policy import MatrixPolicy
 
@@ -75,6 +76,11 @@ class Args:
     out_dir: str = os.path.join(HERE, "results")
     tag: str = ""
     video: bool = False
+    show: bool = False
+    """live window: camera next to the stacked policy input, actions and lane state (q quits, p pauses)"""
+    rectify: Optional[str] = None
+    """undistort frames with this map dir's cameras.yaml before the crop, like the real-robot
+    pipeline. Use with maps rendered with lens distortion on"""
     seed: int = 0
 
 
@@ -82,7 +88,8 @@ STEP_FIELDS = ["step", "t", "v", "omega", "pwm_l", "pwm_r", "x", "y", "yaw",
                "lane_dist", "lane_angle", "on_road", "infer_ms", "loop_ms"]
 
 
-def run_episode(policy: MatrixPolicy, robot: MatrixRobot, a: Args, ep_dir: str, ep: int):
+def run_episode(policy: MatrixPolicy, robot: MatrixRobot, a: Args, ep_dir: str, ep: int,
+                view: Optional[LiveView] = None):
     if a.reset:
         robot.reset(settle=a.settle_time)
     policy.reset()
@@ -116,6 +123,13 @@ def run_episode(policy: MatrixPolicy, robot: MatrixRobot, a: Args, ep_dir: str, 
                     distance += math.hypot(pose[0] - prev_xy[0], pose[1] - prev_xy[1])
                 prev_xy = pose[:2]
                 off_lane_run = 0 if lane is not None else off_lane_run + 1
+
+            if view is not None:
+                cmd = view.update(policy.last_view, obs, policy.spec.grayscale, action, (pwm_l, pwm_r),
+                                  lane, (lane is not None) if pose is not None else None,
+                                  f"{policy.name}  ep{ep}  step {step}/{a.max_steps}", on_pause=robot.halt)
+                if cmd == "quit":
+                    raise KeyboardInterrupt
 
             if a.video:
                 if writer is None:
@@ -236,19 +250,21 @@ def main(a: Args):
     robot = MatrixRobot(a.robot, host=a.host, port=a.port, use_pose=a.use_pose, pose_units=a.pose_units,
                         lane_offset=a.lane_offset)
     robot.start()
+    view = LiveView() if a.show else None
     all_rows, summary, stop = [], {}, False
     try:
         for path in a.models:
             policy = MatrixPolicy(os.path.expanduser(path), frame_stack=a.frame_stack,
                                   preprocessing=a.preprocessing, ema=a.ema, ema_alpha=a.ema_alpha,
-                                  v_scale=a.v_scale, omega_scale=a.omega_scale, gain=a.gain, trim=a.trim)
+                                  v_scale=a.v_scale, omega_scale=a.omega_scale, gain=a.gain, trim=a.trim,
+                                  rectify_calib=os.path.expanduser(a.rectify) if a.rectify else None)
             print("\n" + policy.describe())
             model_dir = os.path.join(run_dir, policy.name)
             os.makedirs(model_dir, exist_ok=True)
 
             ep_metrics, ep_rows = [], []
             for ep in range(a.episodes):
-                m, rows = run_episode(policy, robot, a, model_dir, ep)
+                m, rows = run_episode(policy, robot, a, model_dir, ep, view)
                 ep_metrics.append(m)
                 ep_rows.append(rows)
                 all_rows.append({"model": policy.name, "episode": ep, **m})
@@ -276,6 +292,8 @@ def main(a: Args):
     finally:
         robot.halt()
         robot.stop()
+        if view is not None:
+            view.close()
 
     if all_rows:
         with open(os.path.join(run_dir, "episodes.csv"), "w", newline="") as f:
