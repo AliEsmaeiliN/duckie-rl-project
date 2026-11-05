@@ -117,7 +117,7 @@ class DuckiebotAgent:
         with torch.no_grad():
             if self.algo_type == "sac":
                 # use mean_action
-                _, _, action = self.actor.get_action(input_tensor)
+                action = self.actor.forward(input_tensor)
             else:
                 action = self.actor(input_tensor)
         
