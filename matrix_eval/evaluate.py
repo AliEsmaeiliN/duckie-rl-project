@@ -45,12 +45,16 @@ class Args:
     """policy rate. Training used 30 Hz sim with frame_skip=3 -> 10 Hz. Set 0 to step as fast as
     frames arrive (use this when the engine runs in --gym lockstep mode)"""
 
-    robot: str = "map_0/vehicle_0"
+    robots: List[str] = field(default_factory=lambda: ["map_0/vehicle_0"])
+    """robots to evaluate, one after another (e.g. map_0/vehicle_0 map_0/vehicle_1 on oval_loop_both)"""
     host: str = "127.0.0.1"
     port: Optional[int] = None
     """engine DTPS port (SDK default for simulated robots is 7501)"""
     frame_timeout: float = 2.0
     reset: bool = True
+    alternate_direction: bool = False
+    """odd episodes: after the reset, U-turn into the opposite lane so the robot laps the other
+    way (closed-loop on ground-truth heading; needs --use-pose)"""
     """respawn the robot through the engine reset flag before each episode"""
     settle_time: float = 1.0
 
@@ -92,11 +96,19 @@ def run_episode(policy: MatrixPolicy, robot: MatrixRobot, a: Args, ep_dir: str, 
                 view: Optional[LiveView] = None):
     if a.reset:
         robot.reset(settle=a.settle_time)
+    if a.alternate_direction and ep % 2 == 1:
+        end = robot.u_turn()
+        if end is None:
+            print("  [u-turn] skipped: needs ground-truth pose and the map")
+        else:
+            lane = robot.lane_position(end)
+            print(f"  [u-turn] now heading {robot.travel_direction(end)}"
+                  + (f", lane d={lane[0]:+.3f}m hdg={math.degrees(lane[1]):+.1f}deg" if lane else ", OFF ROAD"))
     policy.reset()
 
     writer = None
     rows = []
-    prev_xy, distance, off_lane_run = None, 0.0, 0
+    prev_xy, distance, off_lane_run, direction = None, 0.0, 0, None
     termination = "max_steps"
     period = 1.0 / a.control_hz if a.control_hz > 0 else 0.0
     t_start = last_print = time.perf_counter()
@@ -119,6 +131,8 @@ def run_episode(policy: MatrixPolicy, robot: MatrixRobot, a: Args, ep_dir: str, 
             pose = robot.world_pose()
             lane = robot.lane_position(pose)
             if pose is not None:
+                if direction is None:
+                    direction = robot.travel_direction(pose)
                 if prev_xy is not None:
                     distance += math.hypot(pose[0] - prev_xy[0], pose[1] - prev_xy[1])
                 prev_xy = pose[:2]
@@ -171,7 +185,8 @@ def run_episode(policy: MatrixPolicy, robot: MatrixRobot, a: Args, ep_dir: str, 
                     time.sleep(sleep)
     except KeyboardInterrupt:
         termination = "interrupted"
-    print()
+    if last_print > t_start:  # end the live status line
+        print()
 
     robot.halt()
     if writer is not None:
@@ -182,7 +197,7 @@ def run_episode(policy: MatrixPolicy, robot: MatrixRobot, a: Args, ep_dir: str, 
         w.writeheader()
         w.writerows(rows)
 
-    return summarize(rows, distance, termination, a), rows
+    return {"direction": direction or "?", **summarize(rows, distance, termination, a)}, rows
 
 
 def summarize(rows, distance, termination, a: Args) -> dict:
@@ -237,6 +252,16 @@ def plot_trajectories(model_dir: str, name: str, episodes_rows):
     plt.close(fig)
 
 
+def short(robot_name: str) -> str:
+    return robot_name.split("/")[-1]
+
+
+def summarize_group(ep_metrics):
+    numeric = [k for k, v in ep_metrics[0].items() if isinstance(v, (int, float))]
+    return {k: {"mean": float(np.nanmean([e[k] for e in ep_metrics])),
+                "std": float(np.nanstd([e[k] for e in ep_metrics]))} for k in numeric}
+
+
 def main(a: Args):
     if not a.models:
         raise SystemExit("pass at least one checkpoint with --models")
@@ -247,9 +272,12 @@ def main(a: Args):
     with open(os.path.join(run_dir, "config.json"), "w") as f:
         json.dump(vars(a), f, indent=2)
 
-    robot = MatrixRobot(a.robot, host=a.host, port=a.port, use_pose=a.use_pose, pose_units=a.pose_units,
+    robots = {}
+    for name in a.robots:
+        r = MatrixRobot(name, host=a.host, port=a.port, use_pose=a.use_pose, pose_units=a.pose_units,
                         lane_offset=a.lane_offset)
-    robot.start()
+        r.start()
+        robots[name] = r
     view = LiveView() if a.show else None
     all_rows, summary, stop = [], {}, False
     try:
@@ -259,39 +287,52 @@ def main(a: Args):
                                   v_scale=a.v_scale, omega_scale=a.omega_scale, gain=a.gain, trim=a.trim,
                                   rectify_calib=os.path.expanduser(a.rectify) if a.rectify else None)
             print("\n" + policy.describe())
-            model_dir = os.path.join(run_dir, policy.name)
-            os.makedirs(model_dir, exist_ok=True)
+            model_metrics, groups = [], {}
 
-            ep_metrics, ep_rows = [], []
-            for ep in range(a.episodes):
-                m, rows = run_episode(policy, robot, a, model_dir, ep, view)
-                ep_metrics.append(m)
-                ep_rows.append(rows)
-                all_rows.append({"model": policy.name, "episode": ep, **m})
-                print(f"  ep{ep}: {m['termination']:<9} steps={m['steps']:<5} "
-                      f"dist={m['distance_m']:.2f}m on_road={m['on_road_ratio']:.2f} "
-                      f"|d|={m['mean_abs_lane_dist_m']:.3f}m |hdg|={m['mean_abs_heading_deg']:.1f}deg "
-                      f"jerk={m['action_jerk']:.3f} {m['mean_loop_hz']:.1f}Hz")
-                if m["termination"] == "interrupted":
-                    stop = True
+            for name, robot in robots.items():
+                for other in robots.values():  # only the evaluated robot moves
+                    if other is not robot:
+                        other.halt()
+                robot_dir = os.path.join(run_dir, policy.name, short(name))
+                os.makedirs(robot_dir, exist_ok=True)
+                ep_metrics, ep_rows = [], []
+                for ep in range(a.episodes):
+                    m, rows = run_episode(policy, robot, a, robot_dir, ep, view)
+                    ep_metrics.append(m)
+                    ep_rows.append(rows)
+                    all_rows.append({"model": policy.name, "robot": name, "episode": ep, **m})
+                    print(f"  {short(name)} {m['direction']:<3} ep{ep}: {m['termination']:<11} "
+                          f"steps={m['steps']:<5} dist={m['distance_m']:.2f}m on_road={m['on_road_ratio']:.2f} "
+                          f"|d|={m['mean_abs_lane_dist_m']:.3f}m |hdg|={m['mean_abs_heading_deg']:.1f}deg "
+                          f"jerk={m['action_jerk']:.3f} {m['mean_loop_hz']:.1f}Hz")
+                    if m["termination"] == "interrupted":
+                        stop = True
+                        break
+                plot_trajectories(robot_dir, f"{policy.name} / {short(name)}", ep_rows)
+                for direction in sorted({e["direction"] for e in ep_metrics}):
+                    subset = [e for e in ep_metrics if e["direction"] == direction]
+                    groups[f"{short(name)}_{direction}"] = {"robot": name, "direction": direction,
+                                                            **summarize_group(subset)}
+                model_metrics += ep_metrics
+                if stop:
                     break
 
-            plot_trajectories(model_dir, policy.name, ep_rows)
-            numeric = [k for k, v in ep_metrics[0].items() if isinstance(v, (int, float))]
-            summary[policy.name] = {
-                "checkpoint": path,
-                "meta": {k: v for k, v in policy.spec.meta.items() if isinstance(v, (str, int, float, dict))},
-                **{k: {"mean": float(np.nanmean([e[k] for e in ep_metrics])),
-                       "std": float(np.nanstd([e[k] for e in ep_metrics]))} for k in numeric},
-            }
+            if model_metrics:
+                summary[policy.name] = {
+                    "checkpoint": path,
+                    "meta": {k: v for k, v in policy.spec.meta.items() if isinstance(v, (str, int, float, dict))},
+                    "overall": summarize_group(model_metrics),
+                    "groups": groups,
+                }
             if stop:
                 print("\ninterrupted, writing partial results")
                 break
     except KeyboardInterrupt:
         print("\ninterrupted, writing partial results")
     finally:
-        robot.halt()
-        robot.stop()
+        for r in robots.values():
+            r.halt()
+            r.stop()
         if view is not None:
             view.close()
 
@@ -303,11 +344,16 @@ def main(a: Args):
     with open(os.path.join(run_dir, "summary.json"), "w") as f:
         json.dump(summary, f, indent=2, default=str)
 
-    print(f"\n{'model':<24}{'success':>9}{'dist[m]':>10}{'on_road':>9}{'|d|[m]':>9}{'jerk':>8}")
+    print(f"\n{'model':<24}{'robot':<12}{'dir':<5}{'success':>8}{'dist[m]':>9}{'on_road':>9}{'|d|[m]':>8}{'jerk':>7}")
     for name, s in summary.items():
-        print(f"{name:<24}{s['success']['mean']:>9.2f}{s['distance_m']['mean']:>10.2f}"
-              f"{s['on_road_ratio']['mean']:>9.2f}{s['mean_abs_lane_dist_m']['mean']:>9.3f}"
-              f"{s['action_jerk']['mean']:>8.3f}")
+        rows = [(s["groups"][g]["robot"].split("/")[-1], s["groups"][g]["direction"], s["groups"][g])
+                for g in s["groups"]]
+        if len(rows) > 1:
+            rows.append(("all", "", s["overall"]))
+        for robot_label, direction, m in rows:
+            print(f"{name:<24}{robot_label:<12}{direction:<5}{m['success']['mean']:>8.2f}"
+                  f"{m['distance_m']['mean']:>9.2f}{m['on_road_ratio']['mean']:>9.2f}"
+                  f"{m['mean_abs_lane_dist_m']['mean']:>8.3f}{m['action_jerk']['mean']:>7.3f}")
     print(f"\nresults -> {run_dir}")
 
 

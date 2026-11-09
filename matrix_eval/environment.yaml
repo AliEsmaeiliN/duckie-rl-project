@@ -1,19 +1,17 @@
-# Separate env for Duckiematrix evaluation, kept apart from the training env (duckie-rl).
-#   conda env create -f matrix_eval/environment.yaml
 name: duckie-matrix
 channels:
   - conda-forge
 dependencies:
   - python=3.10
   - pip
-  - libjpeg-turbo      # native lib PyTurboJPEG (duckietown-sdk camera) needs
+  - libjpeg-turbo
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cpu
       - torch            # CPU build: the actor is tiny, inference is <1 ms on CPU
       - duckietown-sdk==0.2.0
-      - dtps-http==1.6.1   # transport the SDK imports but does not declare
+      - dtps-http==1.6.1   
       - numpy<2
-      - opencv-python==4.11.0.86   # GUI build, needed for --show
+      - opencv-python==4.11.0.86
       - pyyaml
       - tyro
       - matplotlib

@@ -81,6 +81,16 @@ class LaneMap:
     def n_drivable(self) -> int:
         return len(self.paths)
 
+    @property
+    def centre(self) -> np.ndarray:
+        """Mean of the drivable tile centres (the middle of a loop)."""
+        return (np.array(list(self.paths.keys()), dtype=float) + 0.5).mean(axis=0) * self.ts
+
+    def travel_direction(self, x: float, y: float, yaw: float) -> str:
+        """'ccw' or 'cw' around the map centre, from a pose."""
+        r = np.array([x, y]) - self.centre
+        return "ccw" if r[0] * math.sin(yaw) - r[1] * math.cos(yaw) > 0 else "cw"
+
     def tile_of(self, x: float, y: float) -> Tuple[int, int]:
         return math.floor(x / self.ts), math.floor(y / self.ts)
 

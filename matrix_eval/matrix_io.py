@@ -123,6 +123,34 @@ class MatrixRobot:
         self.robot.reset_flag.set_reset(False)
         time.sleep(settle)
 
+    def u_turn(self, speed: float = 0.35, wheel_dist: float = 0.102, tol_deg: float = 3.0,
+               timeout: float = 10.0, settle: float = 0.5) -> Optional[Tuple[float, float, float]]:
+        """
+        Forward U-turn into the opposite lane, closed-loop on the ground-truth heading.
+        The arc radius is half the distance to the other lane's centre, so the robot ends up
+        there facing the other way. Returns the final pose, or None without pose/map.
+        """
+        pose = self.world_pose()
+        if pose is None or self.lane_map is None:
+            return None
+        lane = self.lane_position(pose)
+        offset = lane[0] if lane else 0.0  # + = left of the lane centre, i.e. closer to the other lane
+        radius = max(self.lane_offset * self.lane_map.ts - offset, 0.6 * wheel_dist)
+        ratio = (radius - wheel_dist / 2) / (radius + wheel_dist / 2)  # left/right wheel speed for a left arc
+        target = pose[2] + math.pi
+        t0 = time.perf_counter()
+        while time.perf_counter() - t0 < timeout:
+            p = self.world_pose()
+            err = (target - p[2] + math.pi) % (2 * math.pi) - math.pi
+            if abs(err) < math.radians(tol_deg):
+                break
+            u = speed if abs(err) > math.radians(25) else 0.4 * speed  # slow down to limit overshoot
+            self.drive(u * ratio, u)
+            time.sleep(1 / 30)
+        self.halt()
+        time.sleep(settle)
+        return self.world_pose()
+
     # ---- ground truth ----
     def raw_pose(self):
         return self.robot.pose.latest if self.use_pose else None
@@ -136,6 +164,11 @@ class MatrixRobot:
         if self.pose_units == "tiles" and self.lane_map:
             x, y = x * self.lane_map.ts, y * self.lane_map.ts
         return x, y, yaw
+
+    def travel_direction(self, pose) -> Optional[str]:
+        if self.lane_map is None or pose is None:
+            return None
+        return self.lane_map.travel_direction(*pose)
 
     def lane_position(self, pose):
         """Signed lateral offset (m, + = left) and heading error (rad) w.r.t. the right lane,

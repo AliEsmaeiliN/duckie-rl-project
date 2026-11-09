@@ -14,7 +14,7 @@ leave the `duckie-rl` env untouched.
 | `matrix_io.py` | camera, motors, reset and pose via `duckietown-sdk` |
 | `lane_geometry.py` | right-lane centre lines built from the engine's map layers |
 | `probe.py` | checks the connection and prints the raw message formats |
-| `make_oval_map.py` | builds `maps/oval_loop_{ccw,cw}` (the training track) from `loop_map/` |
+| `make_oval_map.py` | builds `maps/oval_loop_{ccw,cw,both}` (the training track) from `loop_map/` |
 | `live_view.py` | the `--show` window |
 | `evaluate.py` | runs the episodes and writes CSV, JSON and plot results |
 | `environment.yaml` | the `duckie-matrix` conda env |
@@ -34,9 +34,19 @@ python matrix_eval/make_oval_map.py --lens-distortion  # fisheye render, closer 
 ```
 
 This turns the 3x3 template loop in `loop_map/` into the 4x3 `oval_loop` training
-track. It writes `maps/oval_loop_ccw` and `maps/oval_loop_cw`, which differ only in the
-spawn pose. The engine respawns the robot at that pose on every reset. Training used
-`--direction mixed`, so evaluate on both.
+track, as `maps/oval_loop_ccw` and `maps/oval_loop_cw`. They differ only in the spawn
+pose; the engine respawns the robot there on every reset.
+
+Training used `--direction mixed`, so evaluate both directions. The easiest way is one
+engine run on `oval_loop_ccw` with `evaluate.py --alternate-direction`. On odd episodes
+the robot then makes a scripted forward U-turn into the opposite lane after the reset,
+before the policy takes over. The turn is closed-loop on the ground-truth heading, and
+its radius is half the distance between the two lanes. `oval_loop_cw` is there if you
+want clockwise episodes that start straight from a spawn.
+
+(`--two-robots` also builds `oval_loop_both`, with a second, clockwise robot as
+`vehicle_1`. Select it with `--robots map_0/vehicle_0 map_0/vehicle_1`. The idle robot
+stays parked in its lane, in view of the active one.)
 
 ## 3. Start the Duckiematrix
 
@@ -45,7 +55,7 @@ You need the dts **ente** profile. The Duckiematrix commands aren't in `daffy`.
 ```bash
 dts profile switch ente
 dts matrix run --standalone --sandbox            # engine + renderer, default sandbox map
-# the training oval (one direction per engine run):
+# the training oval (both directions with evaluate.py --alternate-direction):
 dts matrix run --standalone --map matrix_eval/maps/oval_loop_ccw
 # lockstep (simulation-time) mode:
 dts matrix run --standalone --sandbox --gym --delta-t 0.1
@@ -72,7 +82,15 @@ the message it printed.
 python matrix_eval/evaluate.py \
     --models ~/workspace/rl_models/sac_vr3.cleanrl_model ~/workspace/rl_models/td3_vr2.cleanrl_model \
     --episodes 5 --max-steps 1000 --tag oval_ccw --show
+
+# both directions on oval_loop_ccw: even episodes CCW, odd episodes U-turn then CW
+python matrix_eval/evaluate.py --models runs/sac_unf_s1_0310.cleanrl_model \
+    --alternate-direction --episodes 6 --tag oval_mixed --show
 ```
+
+Each episode records its `direction` (`ccw`/`cw`), worked out from the spawn pose.
+`summary.json` gives each model an `overall` block and a `groups` block per robot and direction. Step logs
+go under `<model>/<vehicle>/`.
 
 `--show` opens a live window. It shows the camera frame, with the crop line at 1/3,
 next to the four stacked frames the policy actually receives, plus v/omega, wheel PWM,
@@ -86,11 +104,11 @@ before the crop, like the real-robot pipeline. Use it for maps built with
 
 Results go to `matrix_eval/results/<timestamp>_<tag>/` (this folder is git-ignored):
 
-- `episodes.csv`: one row per model and episode
-- `summary.json`: mean and standard deviation per model
-- `<model>/ep<k>.csv`: per-step log
-- `<model>/trajectories.png`: driven trajectories
-- `<model>/ep<k>.mp4`: video of each episode, with `--video`
+- `episodes.csv`: one row per model, robot and episode, including `direction`
+- `summary.json`: mean and standard deviation per model, overall and per robot
+- `<model>/<vehicle>/ep<k>.csv`: per-step log
+- `<model>/<vehicle>/trajectories.png`: driven trajectories
+- `<model>/<vehicle>/ep<k>.mp4`: video of each episode, with `--video`
 
 ### Matching training settings
 

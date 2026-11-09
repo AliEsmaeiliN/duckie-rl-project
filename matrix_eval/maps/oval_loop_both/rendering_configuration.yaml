@@ -1,0 +1,12 @@
+version: 1.0
+rendering_configuration:
+  map_0/vehicle_0/camera_0:
+    lens_distortion: false
+    hdr: false
+    anti_aliasing: true
+    shadows: true
+  map_0/vehicle_1/camera_0:
+    anti_aliasing: true
+    hdr: false
+    lens_distortion: false
+    shadows: true
