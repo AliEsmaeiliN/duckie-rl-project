@@ -5,9 +5,13 @@ import torch
 import numpy as np
 import gymnasium as gym
 import pyglet
+import pyglet
+pyglet.options['headless'] = True
+pyglet.options['shadow_window'] = False
 from gym_duckietown.envs import DuckietownEnv, MultiMapEnv
 from gym_duckietown.simulator import get_agent_corners
 from gym_duckietown.wrappers import PyTorchObsWrapper
+
 
 def test_hardware_and_cleanrl():
     print("\n=== 1. Hardware & CleanRL Check ===")

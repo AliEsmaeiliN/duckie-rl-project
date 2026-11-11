@@ -35,6 +35,8 @@ duckietown_logger.setLevel(logging.WARNING)
 # Disable error checking for maximum training throughput
 import pyglet
 pyglet.options['debug_gl'] = False
+pyglet.options['headless'] = True
+pyglet.options['shadow_window'] = False
 
 
 @dataclass
@@ -254,7 +256,7 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     torch.backends.cudnn.deterministic = args.torch_deterministic
 
-    device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+    device = torch.device("mps" if torch.backends.mps.is_available() and args.cuda else "cpu")
 
     # env setup
     env_params = {
@@ -337,7 +339,7 @@ if __name__ == "__main__":
 
     # Automatic entropy tuning
     if args.autotune:
-        target_entropy = -torch.prod(torch.Tensor(envs.single_action_space.shape).to(device)).item()
+        target_entropy = -float(np.prod(envs.single_action_space.shape))
         log_alpha = torch.zeros(1, requires_grad=True, device=device)
         alpha = log_alpha.exp().item()
         a_optimizer = optim.Adam([log_alpha], lr=args.q_lr)
@@ -365,7 +367,7 @@ if __name__ == "__main__":
             raw_actions[:, 0] = np.abs(raw_actions[:, 0])
             actions = raw_actions
         else:
-            obs_tensor = torch.Tensor(obs).to(device)
+            obs_tensor = torch.from_numpy(obs).float().to(device)
             actions, _, _ = actor.get_action(obs_tensor)
             actions = actions.detach().cpu().numpy()
 
