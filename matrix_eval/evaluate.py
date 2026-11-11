@@ -28,6 +28,7 @@ import numpy as np
 import tyro
 
 from live_view import LiveView
+from gym_client import GymMatrixRobot
 from matrix_io import MatrixRobot
 from policy import MatrixPolicy
 
@@ -45,6 +46,11 @@ class Args:
     """policy rate. Training used 30 Hz sim with frame_skip=3 -> 10 Hz. Set 0 to step as fast as
     frames arrive (use this when the engine runs in --gym lockstep mode)"""
 
+    gym: bool = False
+    sim_dt: float = 0.1
+    """seconds of simulation per step in --gym mode (read from the engine when available)"""
+    """engine runs in lockstep (dts matrix run ... --gym --delta-t 0.1): each policy step advances
+    the simulation by exactly delta_t, as fast as rendering allows. Implies --control-hz 0"""
     robots: List[str] = field(default_factory=lambda: ["map_0/vehicle_0"])
     """robots to evaluate, one after another (e.g. map_0/vehicle_0 map_0/vehicle_1 on oval_loop_both)"""
     host: str = "127.0.0.1"
@@ -172,7 +178,7 @@ def run_episode(policy: MatrixPolicy, robot: MatrixRobot, a: Args, ep_dir: str, 
                     "OFF-ROAD" if pose is not None else "no pose")
                 line = (f"  ep{ep} step {step:>5}/{a.max_steps}  v={action[0]:.2f} w={action[1]:+.2f}  "
                         f"{lane_txt:<26}  dist={distance:6.2f}m  "
-                        f"{(step + 1) / (time.perf_counter() - t_start):4.1f}Hz")
+                        f"{(step + 1) / (time.perf_counter() - t_start):5.1f} steps/s")
                 print("\r" + line.ljust(100), end="", flush=True)
 
             if pose is not None and off_lane_run >= a.off_lane_patience:
@@ -206,7 +212,9 @@ def summarize(rows, distance, termination, a: Args) -> dict:
     dists = np.array([r["lane_dist"] for r in rows if r["lane_dist"] is not None])
     angles = np.array([r["lane_angle"] for r in rows if r["lane_angle"] is not None])
     in_lane = [r["on_road"] for r in rows if r["on_road"] is not None]
-    duration = rows[-1]["t"] if rows else 0.0
+    wall = rows[-1]["t"] if rows else 0.0
+    # simulated time: the wall clock in realtime mode, steps x delta_t in gym (lockstep) mode
+    duration = n * a.sim_dt if a.gym else wall
     nan = float("nan")
     return {
         "steps": n,
@@ -223,7 +231,8 @@ def summarize(rows, distance, termination, a: Args) -> dict:
         "mean_abs_omega": float(np.abs(acts[:, 1]).mean()) if n else nan,
         "action_jerk": float(np.abs(np.diff(acts, axis=0)).sum(1).mean()) if n > 1 else nan,
         "mean_infer_ms": float(np.mean([r["infer_ms"] for r in rows])) if n else nan,
-        "mean_loop_hz": n / duration if duration > 0 else nan,
+        "mean_loop_hz": n / wall if wall > 0 else nan,
+        "sim_speedup": duration / wall if wall > 0 else nan,
     }
 
 
@@ -272,12 +281,22 @@ def main(a: Args):
     with open(os.path.join(run_dir, "config.json"), "w") as f:
         json.dump(vars(a), f, indent=2)
 
+    if a.gym and a.control_hz:
+        a.control_hz = 0.0  # simulation time is set by the engine's delta_t, not the wall clock
+    robot_cls = GymMatrixRobot if a.gym else MatrixRobot
     robots = {}
     for name in a.robots:
-        r = MatrixRobot(name, host=a.host, port=a.port, use_pose=a.use_pose, pose_units=a.pose_units,
+        r = robot_cls(name, host=a.host, port=a.port, use_pose=a.use_pose, pose_units=a.pose_units,
                         lane_offset=a.lane_offset)
         r.start()
         robots[name] = r
+    if a.gym:
+        dt = next(iter(robots.values())).session.delta_time()
+        if dt:
+            a.sim_dt = dt
+        if abs(a.sim_dt - 0.1) > 1e-6:
+            print(f"[gym] warning: engine delta_t = {a.sim_dt}s, but the policies were trained at 0.1 s/step "
+                  "(30 Hz, frame_skip=3). Restart the engine with --delta-t 0.1")
     view = LiveView() if a.show else None
     all_rows, summary, stop = [], {}, False
     try:

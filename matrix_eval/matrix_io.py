@@ -115,6 +115,10 @@ class MatrixRobot:
             self.drive(0.0, 0.0)
             time.sleep(1 / 30)
 
+    def _tick(self):
+        """Let the simulation advance a little (realtime: wait; gym mode overrides this to step)."""
+        time.sleep(1 / 30)
+
     def reset(self, settle: float = 1.0):
         """Ask the engine to respawn the robot, then wait for it to settle."""
         self.halt()
@@ -138,15 +142,16 @@ class MatrixRobot:
         radius = max(self.lane_offset * self.lane_map.ts - offset, 0.6 * wheel_dist)
         ratio = (radius - wheel_dist / 2) / (radius + wheel_dist / 2)  # left/right wheel speed for a left arc
         target = pose[2] + math.pi
-        t0 = time.perf_counter()
-        while time.perf_counter() - t0 < timeout:
+        t0, ticks = time.perf_counter(), 0
+        while time.perf_counter() - t0 < timeout and ticks < 30 * timeout:
+            ticks += 1
             p = self.world_pose()
             err = (target - p[2] + math.pi) % (2 * math.pi) - math.pi
             if abs(err) < math.radians(tol_deg):
                 break
             u = speed if abs(err) > math.radians(25) else 0.4 * speed  # slow down to limit overshoot
             self.drive(u * ratio, u)
-            time.sleep(1 / 30)
+            self._tick()
         self.halt()
         time.sleep(settle)
         return self.world_pose()

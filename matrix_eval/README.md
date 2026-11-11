@@ -16,6 +16,7 @@ leave the `duckie-rl` env untouched.
 | `probe.py` | checks the connection and prints the raw message formats |
 | `make_oval_map.py` | builds `maps/oval_loop_{ccw,cw,both}` (the training track) from `loop_map/` |
 | `live_view.py` | the `--show` window |
+| `gym_client.py` | lockstep client for an engine started with `--gym` |
 | `evaluate.py` | runs the episodes and writes CSV, JSON and plot results |
 | `environment.yaml` | the `duckie-matrix` conda env |
 
@@ -143,11 +144,36 @@ trained with:
 
 Run with `--no-use-pose` to drive from the camera only. Lane metrics are then NaN.
 
+## Lockstep (gym) mode: faster than real time
+
+```bash
+dts matrix run --standalone --no-pull --map matrix_eval/maps/oval_loop_ccw --gym --delta-t 0.1
+python matrix_eval/evaluate.py --gym --models runs/sac_unf_s1_0310.cleanrl_model \
+    --alternate-direction --episodes 6 --max-steps 600 --tag oval_gym
+```
+
+In gym mode the engine waits for an action, advances physics by exactly `delta_t`,
+renders, and returns the next observation. Simulated time moves only when the policy
+acts, as fast as rendering allows. Keep `--delta-t 0.1`, the training step (30 Hz sim,
+`frame_skip=3`).
+
+How it works (`gym_client.py`, based on the engine source):
+
+- Each step the engine publishes one `WorldInput` on `robot/gym/in`, with pose, twist and
+  JPEG camera frame for every robot.
+- It then blocks until it gets one `WorldOutput` on `robot/gym/out`, carrying each robot's
+  `differential_pwm` and an optional `state_reset_flag`.
+- The per-sensor topics used in realtime mode don't exist in gym mode, so `probe.py`
+  returns 404s there. The map layers do exist.
+
+In gym mode, `duration_s` and speeds use simulated time (steps x `delta_t`).
+`mean_loop_hz` is steps per wall-clock second, and `sim_speedup` is simulated ÷ wall time.
+
 ## Assumptions to check on first run
 
 - **Control rate.** Training stepped at 10 Hz (30 Hz sim, `frame_skip=3`). In realtime
-  mode, `--control-hz 10` keeps that rate. In `--gym` mode, use `--control-hz 0`: the
-  loop then steps once per new camera frame.
+  mode, `--control-hz 10` keeps that rate. In `--gym` mode the engine's `delta_t` sets it,
+  so start the engine with `--delta-t 0.1`.
 - **Camera.** Frames are BGR. They are converted to RGB and resized to 640x480, the
   training camera size, before the crop and resize.
 - **Pose.** The robot pose arrives as `position` {x, y, z} in meters (z up) plus a
