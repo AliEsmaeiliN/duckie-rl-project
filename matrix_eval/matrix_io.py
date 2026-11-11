@@ -7,7 +7,7 @@ import math
 import time
 from typing import Optional, Tuple
 
-from duckietown.sdk.robots.duckiebot import DB21J
+from duckietown.sdk.robots.duckiebot import DB21J # pyright: ignore[reportMissingImports]
 
 from lane_geometry import LaneMap
 
