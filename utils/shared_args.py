@@ -76,7 +76,7 @@ class SharedDuckieArgs:
     """if toggled, applies the full sim-to-real visual enhancement stack (CLAHE, blur, contrast stretching)"""
     preprocessing_eval: Optional[bool] = None
     """Override preprocessing for evaluation. If None, inherits the training setting."""
-    reward_type: str = "unfl"
+    reward_type: str = "unf"
     """The target reward wrapper to deploy: unf or unfl"""
 
 
