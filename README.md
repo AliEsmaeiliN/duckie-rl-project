@@ -98,15 +98,6 @@ python rl/sac_continuous_action.py --seed 42 --env-id oval_loop
 
 ```
 
-### Policy Evaluation & Visual Tracking
-
-To evaluate a trained checkpoint saved down locally or streamed down from WandB:
-
-```bash
-python rl/eval_sac.py --model-path runs/models/sac_latest_step.cleanrl_model --local True
-
-```
-
 ---
 
 ## Pipeline Architecture & Design
