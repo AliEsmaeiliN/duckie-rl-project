@@ -232,7 +232,7 @@ if __name__ == "__main__":
     base_cfg = {key: False for key in env_params}
     robust_cfg = {key: True for key in env_params}
         
-    active_env_params = {} if args.curriculum_randomization else env_params.copy()
+    active_env_params = base_cfg.copy() if args.curriculum_randomization else env_params.copy()
 
     eval_preprocess = args.preprocessing if args.preprocessing_eval is None else args.preprocessing_eval
     eval_ema = args.ema if args.eval_ema is None else args.eval_ema

@@ -278,7 +278,7 @@ if __name__ == "__main__":
     eval_preprocess = args.preprocessing if args.preprocessing_eval is None else args.preprocessing_eval
     eval_ema = args.ema if args.eval_ema is None else args.eval_ema
 
-    active_env_params = {} if args.curriculum_randomization else env_params.copy()
+    active_env_params = base_cfg.copy() if args.curriculum_randomization else env_params.copy()
 
     # Training envs first: async workers are spawned before this process opens a GL context
     envs = make_vector_env([
