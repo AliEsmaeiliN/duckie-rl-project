@@ -24,12 +24,11 @@ setup(
         "": "src",
         "rl": "rl",
         "utils": "utils",
-        "path_planning": "path_planning",
         "cleanrl_utils": "cleanrl_utils"
     },
     
     # Now find_packages will look in 'src', 
-    packages=find_packages("src") + ["rl", "utils", "path_planning", "cleanrl_utils"],
+    packages=find_packages("src") + ["rl", "utils", "cleanrl_utils"],
     
     zip_safe=False,
     include_package_data=True,

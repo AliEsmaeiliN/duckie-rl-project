@@ -66,7 +66,6 @@ from .objects import CheckerboardObj, DuckiebotObj, DuckieObj, TrafficLightObj, 
 from .objmesh import get_mesh, MatInfo, ObjMesh
 from .randomization import Randomizer
 from .utils import get_subdir_path
-from path_planning.controller import Controller
 from scipy.spatial.distance import cdist
 from .dynamics import DB18Dynamics
 
@@ -171,7 +170,7 @@ DEFAULT_FRAMERATE = 30
 
 DEFAULT_MAX_STEPS = 1500
 
-DEFAULT_MAP_NAME = "udem1"
+DEFAULT_MAP_NAME = "oval_loop"
 
 DEFAULT_FRAME_SKIP = 1
 

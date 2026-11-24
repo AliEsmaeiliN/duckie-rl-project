@@ -72,14 +72,14 @@ export PYTHONPATH="${PYTHONPATH}:`pwd`"
 Verify your installation, CUDA visibility, and host OpenGL vendor configurations by executing the system testing script:
 
 ```bash
-./run_tests.py
+python debug/run_tests.py
 
 ```
 
 To drive the agent manually using keyboard control mapping inside the default `oval_loop` tracking environment:
 
 ```bash
-./manual_control.py --env-name Duckietown
+python manual_control.py
 
 ```
 
